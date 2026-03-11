@@ -1,0 +1,522 @@
+"use client"
+
+import { useEffect, useMemo, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
+import { useAuth } from "@/lib/auth-context"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, FileText, Plus } from "lucide-react"
+import { toast } from "sonner"
+
+interface Client {
+  id: string
+  name: string
+  email: string | null
+  document: string | null
+  street: string | null
+  number: string | null
+  district: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
+}
+
+interface NFeDocument {
+  id: string
+  number: string | null
+  series: string | null
+  status: string
+  client_name: string
+  total_value: number
+  created_at: string
+}
+
+export default function NFePage() {
+  const supabase = createClient()
+  const { isAdmin } = useAuth()
+
+  const [loading, setLoading] = useState(true)
+  const [issuing, setIssuing] = useState(false)
+  const [clients, setClients] = useState<Client[]>([])
+  const [docs, setDocs] = useState<NFeDocument[]>([])
+  const [open, setOpen] = useState(false)
+
+  const [form, setForm] = useState({
+    client_id: "",
+    client_name: "",
+    client_document: "",
+    client_email: "",
+    street: "",
+    number: "",
+    district: "",
+    city: "",
+    state: "",
+    zip_code: "",
+    nature_operation: "Prestação de serviços",
+    cfop: "5933",
+    description: "",
+    total_value: "",
+  })
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+
+      const [clientsRes, docsRes] = await Promise.all([
+        supabase
+          .from("clients")
+          .select("id, name, email, document, street, number, district, city, state, zip_code")
+          .order("name"),
+        supabase
+          .from("nfe_documents")
+          .select("id, number, series, status, client_name, total_value, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ])
+
+      if (!clientsRes.error && clientsRes.data) {
+        setClients(clientsRes.data as Client[])
+      }
+      if (!docsRes.error && docsRes.data) {
+        setDocs(docsRes.data as NFeDocument[])
+      }
+
+      setLoading(false)
+    }
+
+    load()
+  }, [])
+
+  const totalEmitido = useMemo(
+    () => docs.reduce((sum, n) => sum + (n.status === "emitida" ? Number(n.total_value) : 0), 0),
+    [docs],
+  )
+
+  const handleFindClientByDocument = async () => {
+    const raw = form.client_document.replace(/\D/g, "")
+    if (!raw) {
+      toast.error("Informe um CPF ou CNPJ para buscar o cliente.")
+      return
+    }
+
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, name, email, document, street, number, district, city, state, zip_code")
+      .eq("document", raw)
+      .maybeSingle()
+
+    if (error || !data) {
+      toast.error("Cliente não encontrado para este CPF/CNPJ.")
+      return
+    }
+
+    const c = data as Client
+    setForm((prev) => ({
+      ...prev,
+      client_id: c.id,
+      client_name: c.name,
+      client_email: c.email || "",
+      client_document: c.document || raw,
+      street: c.street || "",
+      number: c.number || "",
+      district: c.district || "",
+      city: c.city || "",
+      state: c.state || "",
+      zip_code: c.zip_code || "",
+    }))
+  }
+
+  const handleIssue = async () => {
+    if (!form.client_id || !form.total_value) {
+      toast.error("Selecione o cliente e informe o valor total.")
+      return
+    }
+
+    setIssuing(true)
+
+    try {
+      const total = Number(form.total_value)
+
+      const payload = {
+        client_id: form.client_id,
+        client_name: form.client_name,
+        total_value: total,
+        nature_operation: form.nature_operation,
+        cfop: form.cfop,
+        description: form.description,
+        recipient: {
+          document: form.client_document.replace(/\D/g, ""),
+          name: form.client_name,
+          email: form.client_email,
+          address: {
+            street: form.street,
+            number: form.number,
+            district: form.district,
+            city: form.city,
+            state: form.state,
+            zip_code: form.zip_code?.replace(/\D/g, ""),
+          },
+        },
+        items: [
+          {
+            description: form.description || "Serviços",
+            quantity: 1,
+            unit_value: total,
+            total_value: total,
+            cfop: form.cfop,
+          },
+        ],
+      }
+
+      const res = await fetch("/api/nfe/issue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        console.error("Erro ao emitir NF-e:", data)
+        toast.error(data.error || "Erro ao emitir NF-e")
+        return
+      }
+
+      toast.success("NF-e emitida com sucesso.")
+      if (data.nfe) {
+        setDocs((prev) => [data.nfe as NFeDocument, ...prev])
+      }
+
+      setForm({
+        client_id: "",
+        client_name: "",
+        client_document: "",
+        client_email: "",
+        street: "",
+        number: "",
+        district: "",
+        city: "",
+        state: "",
+        zip_code: "",
+        nature_operation: "Prestação de serviços",
+        cfop: "5933",
+        description: "",
+        total_value: "",
+      })
+      setOpen(false)
+    } catch (err) {
+      console.error(err)
+      toast.error("Erro inesperado ao emitir NF-e.")
+    } finally {
+      setIssuing(false)
+    }
+  }
+
+  const handleGuessUF = async () => {
+    if (!form.city || form.state) return
+
+    try {
+      const res = await fetch(`/api/geo/city-to-uf?name=${encodeURIComponent(form.city)}`)
+      const data = await res.json()
+      if (!res.ok || !data.uf) {
+        return
+      }
+      setForm((prev) => ({ ...prev, state: String(data.uf).toUpperCase() }))
+    } catch {
+      // se falhar, apenas não preenche
+    }
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">Acesso restrito a administradores.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 p-4 md:p-6">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Emissão de NF-e</h1>
+          <p className="text-sm text-muted-foreground">
+            Centralize a emissão de notas fiscais eletrônicas integradas ao Supabase.
+          </p>
+        </div>
+
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              Emitir NF-e
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Nova NF-e</DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <Label>CPF / CNPJ do cliente</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Apenas números"
+                    value={form.client_document}
+                    onChange={(e) => setForm((prev) => ({ ...prev, client_document: e.target.value }))}
+                  />
+                  <Button type="button" variant="outline" onClick={handleFindClientByDocument}>
+                    Buscar
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Cliente</Label>
+                <Select
+                  value={form.client_id}
+                  onValueChange={(value) => {
+                    const c = clients.find((cl) => cl.id === value)
+                    setForm((prev) => ({
+                      ...prev,
+                      client_id: value,
+                      client_name: c?.name || "",
+                      client_email: c?.email || "",
+                      client_document: c?.document || form.client_document,
+                      street: c?.street || form.street,
+                      number: c?.number || form.number,
+                      district: c?.district || form.district,
+                      city: c?.city || form.city,
+                      state: c?.state || form.state,
+                      zip_code: c?.zip_code || form.zip_code,
+                    }))
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o cliente" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Natureza da operação</Label>
+                <Input
+                  value={form.nature_operation}
+                  onChange={(e) => setForm((prev) => ({ ...prev, nature_operation: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CFOP</Label>
+                  <Input value={form.cfop} onChange={(e) => setForm((prev) => ({ ...prev, cfop: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor total (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={form.total_value}
+                    onChange={(e) => setForm((prev) => ({ ...prev, total_value: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Descrição dos serviços / produtos</Label>
+                <Textarea
+                  rows={3}
+                  value={form.description}
+                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CEP</Label>
+                  <Input
+                    placeholder="Apenas números"
+                    value={form.zip_code}
+                    onChange={(e) => setForm((prev) => ({ ...prev, zip_code: e.target.value }))}
+                    onBlur={async () => {
+                      const raw = form.zip_code.replace(/\D/g, "")
+                      if (!raw) return
+                      try {
+                        const res = await fetch(`/api/geo/cep?value=${encodeURIComponent(raw)}`)
+                        const data = await res.json()
+                        if (!res.ok) return
+                        setForm((prev) => ({
+                          ...prev,
+                          zip_code: data.cep || prev.zip_code,
+                          street: data.street || prev.street,
+                          district: data.district || prev.district,
+                          city: data.city || prev.city,
+                          state: (data.state || prev.state || "").toUpperCase(),
+                        }))
+                      } catch {
+                        // se falhar, não altera o formulário
+                      }
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Cidade / UF</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Cidade"
+                      value={form.city}
+                      onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+                      onBlur={handleGuessUF}
+                    />
+                    <Input
+                      placeholder="UF"
+                      className="w-20"
+                      value={form.state}
+                      onChange={(e) => setForm((prev) => ({ ...prev, state: e.target.value.toUpperCase() }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-[2fr,1fr,2fr] gap-4">
+                <div className="space-y-2">
+                  <Label>Endereço</Label>
+                  <Input
+                    value={form.street}
+                    onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Número</Label>
+                  <Input value={form.number} onChange={(e) => setForm((prev) => ({ ...prev, number: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Bairro</Label>
+                  <Input
+                    value={form.district}
+                    onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <Button onClick={handleIssue} className="w-full" disabled={issuing}>
+                {issuing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Emitindo NF-e...
+                  </>
+                ) : (
+                  "Emitir NF-e"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total emitido</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">
+              R$ {totalEmitido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Quantidade de NF-e</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold">{docs.length}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Situação</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Integração via API externa configurada com <code>NFE_API_URL</code> e <code>NFE_API_KEY</code>.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <FileText className="h-4 w-4" />
+              NF-e recentes
+            </CardTitle>
+            <CardDescription>Últimas notas emitidas pela plataforma.</CardDescription>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-10 text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Carregando notas fiscais...
+            </div>
+          ) : docs.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              Nenhuma NF-e emitida ainda. Clique em &quot;Emitir NF-e&quot; para criar a primeira.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {docs.map((nfe) => (
+                <div
+                  key={nfe.id}
+                  className="flex flex-col gap-2 rounded-md border border-border/60 bg-card px-3 py-2 text-sm md:flex-row md:items-center md:justify-between"
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium">
+                      NF-e {nfe.number || "—"}
+                      {nfe.series ? ` / Série ${nfe.series}` : ""}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {nfe.client_name} •{" "}
+                      {new Date(nfe.created_at).toLocaleString("pt-BR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold">
+                      R$ {Number(nfe.total_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    </span>
+                    <Badge
+                      variant={nfe.status === "emitida" ? "default" : "outline"}
+                      className={nfe.status === "emitida" ? "bg-emerald-600 text-white" : ""}
+                    >
+                      {nfe.status}
+                    </Badge>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
