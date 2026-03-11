@@ -14,21 +14,9 @@ import { Badge } from "@/components/ui/badge"
 import { Loader2, FileText, Plus } from "lucide-react"
 import { toast } from "sonner"
 
-interface Client {
-  id: string
-  name: string
-  email: string | null
-  document: string | null
-  street: string | null
-  number: string | null
-  district: string | null
-  city: string | null
-  state: string | null
-  zip_code: string | null
-}
-
 interface NFeDocument {
   id: string
+  client_id: string | null
   number: string | null
   series: string | null
   status: string
@@ -42,10 +30,11 @@ export default function NFePage() {
   const { isAdmin } = useAuth()
 
   const [loading, setLoading] = useState(true)
+  const [loadingModal, setLoadingModal] = useState(false)
   const [issuing, setIssuing] = useState(false)
-  const [clients, setClients] = useState<Client[]>([])
   const [docs, setDocs] = useState<NFeDocument[]>([])
   const [open, setOpen] = useState(false)
+  const [selectedDoc, setSelectedDoc] = useState<NFeDocument | null>(null)
 
   const [form, setForm] = useState({
     client_id: "",
@@ -68,23 +57,14 @@ export default function NFePage() {
     const load = async () => {
       setLoading(true)
 
-      const [clientsRes, docsRes] = await Promise.all([
-        supabase
-          .from("clients")
-          .select("id, name, email, document, street, number, district, city, state, zip_code")
-          .order("name"),
-        supabase
-          .from("nfe_documents")
-          .select("id, number, series, status, client_name, total_value, created_at")
-          .order("created_at", { ascending: false })
-          .limit(50),
-      ])
+      const { data, error } = await supabase
+        .from("nfe_documents")
+        .select("id, client_id, number, series, status, client_name, total_value, created_at")
+        .order("created_at", { ascending: false })
+        .limit(50)
 
-      if (!clientsRes.error && clientsRes.data) {
-        setClients(clientsRes.data as Client[])
-      }
-      if (!docsRes.error && docsRes.data) {
-        setDocs(docsRes.data as NFeDocument[])
+      if (!error && data) {
+        setDocs(data as NFeDocument[])
       }
 
       setLoading(false)
@@ -98,43 +78,61 @@ export default function NFePage() {
     [docs],
   )
 
-  const handleFindClientByDocument = async () => {
-    const raw = form.client_document.replace(/\D/g, "")
-    if (!raw) {
-      toast.error("Informe um CPF ou CNPJ para buscar o cliente.")
+  const handleOpenEmitModal = async (doc: NFeDocument) => {
+    if (!doc.client_id) {
+      toast.error("NF-e não está vinculada a um cliente.")
       return
     }
+
+    setLoadingModal(true)
 
     const { data, error } = await supabase
       .from("clients")
-      .select("id, name, email, document, street, number, district, city, state, zip_code")
-      .eq("document", raw)
+      .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+      .eq("id", doc.client_id)
       .maybeSingle()
 
     if (error || !data) {
-      toast.error("Cliente não encontrado para este CPF/CNPJ.")
+      setLoadingModal(false)
+      toast.error("Cliente não encontrado para esta NF-e.")
       return
     }
 
-    const c = data as Client
-    setForm((prev) => ({
-      ...prev,
-      client_id: c.id,
-      client_name: c.name,
-      client_email: c.email || "",
-      client_document: c.document || raw,
-      street: c.street || "",
-      number: c.number || "",
-      district: c.district || "",
-      city: c.city || "",
-      state: c.state || "",
-      zip_code: c.zip_code || "",
-    }))
+    const rawZip = (data.zip_code as string | null) || ""
+    const rawDoc = (data.cpf_cnpj as string | null) || ""
+
+    setSelectedDoc(doc)
+    setForm({
+      client_id: data.id as string,
+      client_name: (data.name as string) || doc.client_name,
+      client_document: rawDoc,
+      client_email: (data.email as string | null) || "",
+      street: (data.address as string | null) || "",
+      number: (data.number as string | null) || "",
+      district: (data.district as string | null) || "",
+      city: (data.city as string | null) || "",
+      state: ((data.state as string | null) || "").toUpperCase(),
+      zip_code: rawZip,
+      nature_operation: "Prestação de serviços de software (SaaS)",
+      cfop: "5933",
+      description: `Assinatura de software - valor mensal R$ ${Number(doc.total_value).toLocaleString("pt-BR", {
+        minimumFractionDigits: 2,
+      })}`,
+      total_value: String(doc.total_value ?? ""),
+    })
+
+    setLoadingModal(false)
+    setOpen(true)
   }
 
   const handleIssue = async () => {
+    if (!selectedDoc) {
+      toast.error("Selecione uma NF-e pendente para emitir.")
+      return
+    }
+
     if (!form.client_id || !form.total_value) {
-      toast.error("Selecione o cliente e informe o valor total.")
+      toast.error("Dados do cliente ou valor total ausentes.")
       return
     }
 
@@ -144,6 +142,7 @@ export default function NFePage() {
       const total = Number(form.total_value)
 
       const payload = {
+        id: selectedDoc.id,
         client_id: form.client_id,
         client_name: form.client_name,
         total_value: total,
@@ -190,7 +189,7 @@ export default function NFePage() {
 
       toast.success("NF-e emitida com sucesso.")
       if (data.nfe) {
-        setDocs((prev) => [data.nfe as NFeDocument, ...prev])
+        setDocs((prev) => prev.map((n) => (n.id === data.nfe.id ? (data.nfe as NFeDocument) : n)))
       }
 
       setForm({
@@ -209,6 +208,7 @@ export default function NFePage() {
         description: "",
         total_value: "",
       })
+      setSelectedDoc(null)
       setOpen(false)
     } catch (err) {
       console.error(err)
@@ -247,185 +247,9 @@ export default function NFePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Emissão de NF-e</h1>
           <p className="text-sm text-muted-foreground">
-            Centralize a emissão de notas fiscais eletrônicas integradas ao Supabase.
+            Centralize a emissão de notas fiscais eletrônicas geradas a partir das assinaturas.
           </p>
         </div>
-
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              Emitir NF-e
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Nova NF-e</DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <Label>CPF / CNPJ do cliente</Label>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Apenas números"
-                    value={form.client_document}
-                    onChange={(e) => setForm((prev) => ({ ...prev, client_document: e.target.value }))}
-                  />
-                  <Button type="button" variant="outline" onClick={handleFindClientByDocument}>
-                    Buscar
-                  </Button>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Cliente</Label>
-                <Select
-                  value={form.client_id}
-                  onValueChange={(value) => {
-                    const c = clients.find((cl) => cl.id === value)
-                    setForm((prev) => ({
-                      ...prev,
-                      client_id: value,
-                      client_name: c?.name || "",
-                      client_email: c?.email || "",
-                      client_document: c?.document || form.client_document,
-                      street: c?.street || form.street,
-                      number: c?.number || form.number,
-                      district: c?.district || form.district,
-                      city: c?.city || form.city,
-                      state: c?.state || form.state,
-                      zip_code: c?.zip_code || form.zip_code,
-                    }))
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Natureza da operação</Label>
-                <Input
-                  value={form.nature_operation}
-                  onChange={(e) => setForm((prev) => ({ ...prev, nature_operation: e.target.value }))}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>CFOP</Label>
-                  <Input value={form.cfop} onChange={(e) => setForm((prev) => ({ ...prev, cfop: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Valor total (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={form.total_value}
-                    onChange={(e) => setForm((prev) => ({ ...prev, total_value: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Descrição dos serviços / produtos</Label>
-                <Textarea
-                  rows={3}
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>CEP</Label>
-                  <Input
-                    placeholder="Apenas números"
-                    value={form.zip_code}
-                    onChange={(e) => setForm((prev) => ({ ...prev, zip_code: e.target.value }))}
-                    onBlur={async () => {
-                      const raw = form.zip_code.replace(/\D/g, "")
-                      if (!raw) return
-                      try {
-                        const res = await fetch(`/api/geo/cep?value=${encodeURIComponent(raw)}`)
-                        const data = await res.json()
-                        if (!res.ok) return
-                        setForm((prev) => ({
-                          ...prev,
-                          zip_code: data.cep || prev.zip_code,
-                          street: data.street || prev.street,
-                          district: data.district || prev.district,
-                          city: data.city || prev.city,
-                          state: (data.state || prev.state || "").toUpperCase(),
-                        }))
-                      } catch {
-                        // se falhar, não altera o formulário
-                      }
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Cidade / UF</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Cidade"
-                      value={form.city}
-                      onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
-                      onBlur={handleGuessUF}
-                    />
-                    <Input
-                      placeholder="UF"
-                      className="w-20"
-                      value={form.state}
-                      onChange={(e) => setForm((prev) => ({ ...prev, state: e.target.value.toUpperCase() }))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-[2fr,1fr,2fr] gap-4">
-                <div className="space-y-2">
-                  <Label>Endereço</Label>
-                  <Input
-                    value={form.street}
-                    onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Número</Label>
-                  <Input value={form.number} onChange={(e) => setForm((prev) => ({ ...prev, number: e.target.value }))} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Bairro</Label>
-                  <Input
-                    value={form.district}
-                    onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
-                  />
-                </div>
-              </div>
-
-              <Button onClick={handleIssue} className="w-full" disabled={issuing}>
-                {issuing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Emitindo NF-e...
-                  </>
-                ) : (
-                  "Emitir NF-e"
-                )}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -466,7 +290,7 @@ export default function NFePage() {
               <FileText className="h-4 w-4" />
               NF-e recentes
             </CardTitle>
-            <CardDescription>Últimas notas emitidas pela plataforma.</CardDescription>
+            <CardDescription>Notas fiscais geradas a partir das assinaturas deste painel.</CardDescription>
           </div>
         </CardHeader>
         <CardContent>
@@ -477,7 +301,7 @@ export default function NFePage() {
             </div>
           ) : docs.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma NF-e emitida ainda. Clique em &quot;Emitir NF-e&quot; para criar a primeira.
+              Nenhuma NF-e registrada ainda. Registre assinaturas para gerar notas fiscais pendentes.
             </p>
           ) : (
             <div className="space-y-2">
@@ -509,6 +333,26 @@ export default function NFePage() {
                     >
                       {nfe.status}
                     </Badge>
+                    {nfe.status === "pendente" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenEmitModal(nfe)}
+                        disabled={loadingModal || issuing}
+                      >
+                        {loadingModal && selectedDoc?.id === nfe.id ? (
+                          <>
+                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                            Carregando...
+                          </>
+                        ) : (
+                          <>
+                            <Plus className="mr-1 h-3 w-3" />
+                            Emitir NF-e
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -516,6 +360,137 @@ export default function NFePage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Emitir NF-e</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>CPF / CNPJ do cliente</Label>
+              <Input value={form.client_document} disabled />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Cliente</Label>
+              <Input value={form.client_name} disabled />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Natureza da operação</Label>
+              <Input
+                value={form.nature_operation}
+                onChange={(e) => setForm((prev) => ({ ...prev, nature_operation: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CFOP</Label>
+                <Input value={form.cfop} onChange={(e) => setForm((prev) => ({ ...prev, cfop: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Valor total (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.total_value}
+                  onChange={(e) => setForm((prev) => ({ ...prev, total_value: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Descrição dos serviços / produtos</Label>
+              <Textarea
+                rows={3}
+                value={form.description}
+                onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>CEP</Label>
+                <Input
+                  placeholder="Apenas números"
+                  value={form.zip_code}
+                  onChange={(e) => setForm((prev) => ({ ...prev, zip_code: e.target.value }))}
+                  onBlur={async () => {
+                    const raw = form.zip_code.replace(/\D/g, "")
+                    if (!raw) return
+                    try {
+                      const res = await fetch(`/api/geo/cep?value=${encodeURIComponent(raw)}`)
+                      const data = await res.json()
+                      if (!res.ok) return
+                      setForm((prev) => ({
+                        ...prev,
+                        zip_code: data.cep || prev.zip_code,
+                        street: data.street || prev.street,
+                        district: data.district || prev.district,
+                        city: data.city || prev.city,
+                        state: (data.state || prev.state || "").toUpperCase(),
+                      }))
+                    } catch {
+                    }
+                  }}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Cidade / UF</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Cidade"
+                    value={form.city}
+                    onChange={(e) => setForm((prev) => ({ ...prev, city: e.target.value }))}
+                    onBlur={handleGuessUF}
+                  />
+                  <Input
+                    placeholder="UF"
+                    className="w-20"
+                    value={form.state}
+                    onChange={(e) => setForm((prev) => ({ ...prev, state: e.target.value.toUpperCase() }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[2fr,1fr,2fr] gap-4">
+              <div className="space-y-2">
+                <Label>Endereço</Label>
+                <Input
+                  value={form.street}
+                  onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Número</Label>
+                <Input value={form.number} onChange={(e) => setForm((prev) => ({ ...prev, number: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Bairro</Label>
+                <Input
+                  value={form.district}
+                  onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <Button onClick={handleIssue} className="w-full" disabled={issuing}>
+              {issuing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Emitindo NF-e...
+                </>
+              ) : (
+                "Emitir NF-e"
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

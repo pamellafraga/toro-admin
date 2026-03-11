@@ -19,7 +19,7 @@ export function ProductsPieChart() {
           .from("contracts")
           .select("*", { count: "exact", head: true })
           .eq("product_id", p.id)
-          .eq("status", "active")
+          .in("status", ["active", "ativa"])
         return { name: p.name.replace("Gestao de ", ""), value: count || 0 }
       })
     )

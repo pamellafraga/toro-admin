@@ -23,11 +23,11 @@ export default function DashboardHome() {
     const { count: activeContracts } = await supabase
       .from("contracts")
       .select("*", { count: "exact", head: true })
-      .eq("status", "active")
+      .in("status", ["active", "ativa"])
     const { data: contractValues } = await supabase
       .from("contracts")
       .select("monthly_value")
-      .eq("status", "active")
+      .in("status", ["active", "ativa"])
     const totalRevenue = contractValues?.reduce((sum, c) => sum + Number(c.monthly_value), 0) || 0
 
     return {

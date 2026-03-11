@@ -99,7 +99,7 @@ export default function ProductDetailPage() {
     return created as Product
   })
 
-  const { data: contracts } = useSWR(product ? `contracts-${product.id}` : null, async () => {
+  const { data: contracts, mutate: mutateContracts } = useSWR(product ? `contracts-${product.id}` : null, async () => {
     if (!product) return []
     const { data } = await supabase
       .from("contracts")
@@ -220,16 +220,18 @@ export default function ProductDetailPage() {
 
       if (clientError || !createdClient) {
         console.error(clientError)
-        alert("Erro ao salvar dados do cliente.")
+        alert("Erro ao salvar dados do cliente: " + (clientError?.message || "tente novamente."))
         return
       }
 
-      // 2) criar contrato vinculado ao cliente
+      // 2) criar contrato vinculado ao cliente (DB usa: ativa/em_dia)
+      const statusMap: Record<string, string> = { active: "ativa", inactive: "inativa", suspended: "pendente", cancelled: "cancelada" }
+      const paymentMap: Record<string, string> = { paid: "em_dia", pending: "em_dia", overdue: "atrasado" }
       const payload = {
         client_id: createdClient.id,
         product_id: product.id,
-        status: newContract.status,
-        payment_status: newContract.payment_status,
+        status: statusMap[newContract.status] ?? "ativa",
+        payment_status: paymentMap[newContract.payment_status] ?? "em_dia",
         payment_day: newContract.payment_day,
         start_date: newContract.start_date,
         monthly_value: selectedValue,
@@ -291,7 +293,10 @@ export default function ProductDetailPage() {
         status: "active",
         payment_status: "paid",
       })
-      // SWR vai recarregar na próxima renderização
+      await mutateContracts()
+    } catch (err: any) {
+      console.error("Erro inesperado ao registrar assinatura:", err)
+      alert("Erro inesperado ao registrar assinatura: " + (err?.message || "verifique o console do navegador."))
     } finally {
       setSaving(false)
     }

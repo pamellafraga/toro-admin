@@ -11,11 +11,12 @@ export function RecentActivity() {
   const supabase = createClient()
 
   const { data: activities } = useSWR("recent-activity", async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("activity_log")
       .select("*")
       .order("created_at", { ascending: false })
       .limit(8)
+    if (error) return []
     return (data || []) as ActivityLog[]
   })
 
