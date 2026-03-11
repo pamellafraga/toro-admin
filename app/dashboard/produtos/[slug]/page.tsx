@@ -41,6 +41,7 @@ export default function ProductDetailPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [showNewContract, setShowNewContract] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [newContract, setNewContract] = useState({
     // dados do cliente
     client_name: "",
@@ -179,9 +180,14 @@ export default function ProductDetailPage() {
   }
 
   const handleCreateContract = async () => {
-    if (!product) return
-    if (!newContract.client_name) {
-      alert("Informe o nome do cliente.")
+    setFormError(null)
+    if (!newContract.client_name?.trim()) {
+      setFormError("Informe o nome do cliente.")
+      return
+    }
+    const cpfCnpjRaw = (newContract.client_cpf_cnpj || "").replace(/\D/g, "")
+    if (!cpfCnpjRaw || (cpfCnpjRaw.length !== 11 && cpfCnpjRaw.length !== 14)) {
+      setFormError("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.")
       return
     }
     const planValues: Record<string, number> = {
@@ -192,89 +198,44 @@ export default function ProductDetailPage() {
 
     const selectedValue = planValues[newContract.plan]
     if (!selectedValue) {
-      alert("Selecione um plano para definir o valor mensal.")
+      setFormError("Selecione um plano para definir o valor mensal.")
       return
     }
     setSaving(true)
+    setFormError(null)
     try {
-      // 1) criar cliente com dados completos
-      const clientPayload: Partial<Client> = {
-        name: newContract.client_name,
-        email: newContract.client_email || null,
-        phone: newContract.client_phone || null,
-        cpf_cnpj: newContract.client_cpf_cnpj || null,
-        address: newContract.address || null,
-        number: newContract.number || null,
-        district: newContract.district || null,
-        city: newContract.city || null,
-        state: newContract.state || null,
-        zip_code: newContract.zip_code || null,
-        notes: null,
-      }
+      const res = await fetch("/api/contracts/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product?.id || null,
+          productSlug: slug,
+          client_name: newContract.client_name.trim(),
+          client_email: newContract.client_email || "",
+          client_phone: newContract.client_phone || "",
+          client_cpf_cnpj: newContract.client_cpf_cnpj || "",
+          address: newContract.address || "",
+          number: newContract.number || "",
+          district: newContract.district || "",
+          city: newContract.city || "",
+          state: newContract.state || "",
+          zip_code: newContract.zip_code || "",
+          plan: newContract.plan,
+          payment_day: newContract.payment_day,
+          start_date: newContract.start_date,
+          status: newContract.status,
+          payment_status: newContract.payment_status,
+        }),
+      })
 
-      const { data: createdClient, error: clientError } = await supabase
-        .from("clients")
-        .insert(clientPayload)
-        .select()
-        .single()
-
-      if (clientError || !createdClient) {
-        console.error(clientError)
-        alert("Erro ao salvar dados do cliente: " + (clientError?.message || "tente novamente."))
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setFormError(data?.error || "Erro ao registrar. Tente novamente.")
         return
       }
 
-      // 2) criar contrato vinculado ao cliente (DB usa: ativa/em_dia)
-      const statusMap: Record<string, string> = { active: "ativa", inactive: "inativa", suspended: "pendente", cancelled: "cancelada" }
-      const paymentMap: Record<string, string> = { paid: "em_dia", pending: "em_dia", overdue: "atrasado" }
-      const payload = {
-        client_id: createdClient.id,
-        product_id: product.id,
-        status: statusMap[newContract.status] ?? "ativa",
-        payment_status: paymentMap[newContract.payment_status] ?? "em_dia",
-        payment_day: newContract.payment_day,
-        start_date: newContract.start_date,
-        monthly_value: selectedValue,
-        notes: null,
-      }
-      const { data: createdContracts, error } = await supabase
-        .from("contracts")
-        .insert(payload)
-        .select()
-      if (error || !createdContracts || createdContracts.length === 0) {
-        console.error(error)
-        alert("Erro ao registrar assinatura: " + (error?.message || "tente novamente."))
-        return
-      }
-
-      const contract = createdContracts[0] as Contract
-
-      // Criar automaticamente uma NF-e pendente para este contrato,
-      // para que o time administrativo possa emitir manualmente depois.
-      const nfePayload = {
-        client_id: contract.client_id,
-        client_name: newContract.client_name,
-        total_value: selectedValue,
-        nature_operation: "Prestação de serviços de software (SaaS)",
-        cfop: "5933", // ajustar conforme orientação do contador
-        status: "pendente",
-        number: null,
-        series: null,
-        provider_id: null,
-        provider_payload: {
-          contract_id: contract.id,
-          product_id: contract.product_id,
-          payment_day: contract.payment_day,
-        },
-        provider_response: null,
-      }
-
-      const { error: nfeError } = await supabase.from("nfe_documents").insert(nfePayload)
-      if (nfeError) {
-        console.error("Erro ao criar NF-e pendente:", nfeError)
-        // não bloqueia o fluxo da assinatura; fica só registrado no log
-      }
       setShowNewContract(false)
+      setFormError(null)
       setNewContract({
         client_name: "",
         client_email: "",
@@ -296,7 +257,7 @@ export default function ProductDetailPage() {
       await mutateContracts()
     } catch (err: any) {
       console.error("Erro inesperado ao registrar assinatura:", err)
-      alert("Erro inesperado ao registrar assinatura: " + (err?.message || "verifique o console do navegador."))
+      setFormError("Erro inesperado: " + (err?.message || String(err)))
     } finally {
       setSaving(false)
     }
@@ -317,7 +278,7 @@ export default function ProductDetailPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowNewContract(true)}
+          onClick={() => { setShowNewContract(true); setFormError(null) }}
           className="ml-auto flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
@@ -454,6 +415,11 @@ export default function ProductDetailPage() {
               </button>
             </div>
             <div className="space-y-4">
+              {formError && (
+                <div className="rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">
+                  {formError}
+                </div>
+              )}
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                   Dados do cliente (NF-e)
