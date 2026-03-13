@@ -55,7 +55,18 @@ export async function POST(req: Request) {
       providerId = null
     }
 
-    const basePayload = {
+    let contractIdToActivate: string | null = null
+    if (body.id) {
+      const { data: existing } = await supabase
+        .from("nfe_documents")
+        .select("provider_payload")
+        .eq("id", body.id)
+        .single()
+      const payload = existing?.provider_payload as { contract_id?: string } | null
+      if (payload?.contract_id) contractIdToActivate = payload.contract_id
+    }
+
+    const basePayload: Record<string, unknown> = {
       client_id: body.client_id,
       client_name: body.client_name,
       total_value: body.total_value,
@@ -65,7 +76,9 @@ export async function POST(req: Request) {
       number: nfeNumber,
       series: nfeSeries,
       provider_id: providerId,
-      provider_payload: body,
+      provider_payload: body.id && contractIdToActivate
+        ? { ...body, contract_id: contractIdToActivate }
+        : body,
       provider_response: providerJson,
     }
 
@@ -96,6 +109,13 @@ export async function POST(req: Request) {
         },
         { status: 500 },
       )
+    }
+
+    if (contractIdToActivate) {
+      await supabase
+        .from("contracts")
+        .update({ status: "ativa" })
+        .eq("id", contractIdToActivate)
     }
 
     return NextResponse.json({ success: true, nfe: data }, { status: 201 })

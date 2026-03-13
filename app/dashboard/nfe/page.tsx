@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,20 @@ interface NFeDocument {
   client_name: string
   total_value: number
   created_at: string
+  provider_payload?: { contract_id?: string } | null
+}
+
+type ClientRow = {
+  id: string
+  name: string | null
+  email: string | null
+  cpf_cnpj: string | null
+  address: string | null
+  number: string | null
+  district: string | null
+  city: string | null
+  state: string | null
+  zip_code: string | null
 }
 
 export default function NFePage() {
@@ -33,6 +47,8 @@ export default function NFePage() {
   const [loadingModal, setLoadingModal] = useState(false)
   const [issuing, setIssuing] = useState(false)
   const [docs, setDocs] = useState<NFeDocument[]>([])
+  const [contractValueByContractId, setContractValueByContractId] = useState<Record<string, number>>({})
+  const [clientIdByContractId, setClientIdByContractId] = useState<Record<string, string>>({})
   const [open, setOpen] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState<NFeDocument | null>(null)
 
@@ -43,6 +59,7 @@ export default function NFePage() {
     client_email: "",
     street: "",
     number: "",
+    complement: "",
     district: "",
     city: "",
     state: "",
@@ -57,16 +74,57 @@ export default function NFePage() {
     const load = async () => {
       setLoading(true)
 
-      const { data, error } = await supabase
+      const { data: rawDocs, error } = await supabase
         .from("nfe_documents")
-        .select("id, client_id, number, series, status, client_name, total_value, created_at")
+        .select("id, client_id, number, series, status, client_name, total_value, created_at, provider_payload")
         .order("created_at", { ascending: false })
-        .limit(50)
+        .limit(100)
 
-      if (!error && data) {
-        setDocs(data as NFeDocument[])
+      if (error) {
+        setLoading(false)
+        return
       }
 
+      const allDocs = (rawDocs || []) as NFeDocument[]
+      const contractIds = [...new Set(allDocs.map((d) => (d.provider_payload as { contract_id?: string } | null)?.contract_id).filter(Boolean))] as string[]
+
+      if (contractIds.length === 0) {
+        setDocs([])
+        setLoading(false)
+        return
+      }
+
+      const { data: contracts } = await supabase
+        .from("contracts")
+        .select("id, client_id, payment_status, monthly_value")
+        .in("id", contractIds)
+
+      const emDiaIds = new Set(
+        (contracts || [])
+          .filter((c) => {
+            const p = (c.payment_status ?? "").toString().toLowerCase()
+            return p === "em_dia" || p === "paid"
+          })
+          .map((c) => c.id),
+      )
+
+      const valueByContractId: Record<string, number> = {}
+      const clientIdByContract: Record<string, string> = {}
+      ;(contracts || []).forEach((c) => {
+        valueByContractId[c.id] = Number((c as { monthly_value?: number }).monthly_value ?? 0)
+        const cid = (c as { client_id?: string }).client_id
+        if (cid) clientIdByContract[c.id] = cid
+      })
+      setContractValueByContractId(valueByContractId)
+      setClientIdByContractId(clientIdByContract)
+
+      const filtered = allDocs.filter((d) => {
+        const cid = (d.provider_payload as { contract_id?: string } | null)?.contract_id
+        if (!cid) return false
+        return emDiaIds.has(cid)
+      })
+
+      setDocs(filtered)
       setLoading(false)
     }
 
@@ -79,50 +137,161 @@ export default function NFePage() {
   )
 
   const handleOpenEmitModal = async (doc: NFeDocument) => {
-    if (!doc.client_id) {
-      toast.error("NF-e não está vinculada a um cliente.")
-      return
-    }
-
     setLoadingModal(true)
+    setSelectedDoc(doc)
 
-    const { data, error } = await supabase
-      .from("clients")
-      .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
-      .eq("id", doc.client_id)
-      .maybeSingle()
+    const contractId = (doc.provider_payload as { contract_id?: string } | null)?.contract_id
+    let clientData: ClientRow | null = null
+    let contractMonthlyValue: number | null = null
 
-    if (error || !data) {
-      setLoadingModal(false)
-      toast.error("Cliente não encontrado para esta NF-e.")
-      return
+    // 1) Buscar pelo nome (API no servidor + Supabase no cliente)
+    if (doc.client_name?.trim()) {
+      const nameTrim = doc.client_name.trim()
+      try {
+        const res = await fetch(`/api/clients/search?name=${encodeURIComponent(nameTrim)}`)
+        const json = await res.json()
+        if (json?.client) clientData = json.client as ClientRow
+      } catch {
+        // ignora erro da API
+      }
+      if (!clientData) {
+        const { data: list } = await supabase
+          .from("clients")
+          .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+          .ilike("name", `%${nameTrim}%`)
+          .limit(5)
+        if (Array.isArray(list) && list.length > 0) clientData = list[0] as ClientRow
+      }
     }
 
-    const rawZip = (data.zip_code as string | null) || ""
-    const rawDoc = (data.cpf_cnpj as string | null) || ""
+    // 2) Cliente já carregado na lista (mapa contrato -> client_id)
+    const knownClientId = contractId ? clientIdByContractId[contractId] : null
+    if (!clientData && knownClientId) {
+      const res = await supabase
+        .from("clients")
+        .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+        .eq("id", knownClientId)
+        .maybeSingle()
+      if (!res.error && res.data) clientData = res.data as ClientRow
+    }
 
-    setSelectedDoc(doc)
+    // Prioridade 1b: buscar pelo contrato (se ainda não achou)
+    if (!clientData && contractId) {
+      const { data: contract } = await supabase
+        .from("contracts")
+        .select("client_id, monthly_value")
+        .eq("id", contractId)
+        .maybeSingle()
+      const c = contract as { client_id?: string; monthly_value?: number } | null
+      if (c?.monthly_value != null) contractMonthlyValue = Number(c.monthly_value)
+      const cid = c?.client_id
+      if (cid) {
+        const res = await supabase
+          .from("clients")
+          .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+          .eq("id", cid)
+          .maybeSingle()
+        if (!res.error && res.data) clientData = res.data as ClientRow
+      }
+    }
+
+    // Fallback 2: pelo client_id do documento
+    if (!clientData && doc.client_id) {
+      const res = await supabase
+        .from("clients")
+        .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+        .eq("id", doc.client_id)
+        .maybeSingle()
+      if (!res.error && res.data) clientData = res.data as ClientRow
+    }
+
+
+    if (doc.status === "pendente" && contractId && contractMonthlyValue == null) {
+      const { data: contract } = await supabase
+        .from("contracts")
+        .select("monthly_value")
+        .eq("id", contractId)
+        .maybeSingle()
+      const val = (contract as { monthly_value?: number } | null)?.monthly_value
+      if (val != null) contractMonthlyValue = Number(val)
+    }
+
+    const payload = doc.provider_payload as {
+      contract_id?: string
+      recipient?: {
+        document?: string
+        email?: string
+        street?: string
+        number?: string
+        district?: string
+        city?: string
+        state?: string
+        zip_code?: string
+      }
+    } | null
+    const recipient = payload?.recipient
+
+    const valorAtual = doc.status === "pendente"
+      ? (contractValueByContractId[contractId ?? ""] ?? contractMonthlyValue ?? Number(doc.total_value ?? 0))
+      : Number(doc.total_value ?? 0)
+
+    let rawDoc = clientData ? (String(clientData.cpf_cnpj ?? "")) : ""
+    let street = clientData ? (String(clientData.address ?? "")) : ""
+    let number = clientData ? (String(clientData.number ?? "")) : ""
+    let district = clientData ? (String(clientData.district ?? "")) : ""
+    let city = clientData ? (String(clientData.city ?? "")) : ""
+    let state = clientData ? (String(clientData.state ?? "")).toUpperCase() : ""
+    let zip_code = clientData ? (String(clientData.zip_code ?? "")) : ""
+    let clientEmail = clientData?.email ?? ""
+
+    if (recipient) {
+      rawDoc = (recipient.document ?? "").toString() || rawDoc
+      clientEmail = (recipient.email ?? "").toString() || clientEmail
+      street = (recipient.street ?? "").toString() || street
+      number = (recipient.number ?? "").toString() || number
+      district = (recipient.district ?? "").toString() || district
+      city = (recipient.city ?? "").toString() || city
+      state = (recipient.state ?? "").toString().toUpperCase() || state
+      zip_code = (recipient.zip_code ?? "").toString() || zip_code
+    }
+
+    if (!recipient && clientData && street && !city && !state && !zip_code) {
+      const parts = street.split(",").map((p) => p.trim()).filter(Boolean)
+      if (parts.length >= 2) {
+        street = parts[0]
+        number = number || parts[1] || ""
+        district = district || (parts[2] ?? "")
+        city = city || (parts[3] ?? "")
+        state = (state || (parts[4] ?? "")).toUpperCase()
+        zip_code = zip_code || (parts[5] ?? "")
+      }
+    }
+
     setForm({
-      client_id: data.id as string,
-      client_name: (data.name as string) || doc.client_name,
+      client_id: clientData?.id ?? "",
+      client_name: (clientData?.name ?? "") || doc.client_name || "",
       client_document: rawDoc,
-      client_email: (data.email as string | null) || "",
-      street: (data.address as string | null) || "",
-      number: (data.number as string | null) || "",
-      district: (data.district as string | null) || "",
-      city: (data.city as string | null) || "",
-      state: ((data.state as string | null) || "").toUpperCase(),
-      zip_code: rawZip,
+      client_email: clientEmail,
+      street,
+      number,
+      complement: "",
+      district,
+      city,
+      state,
+      zip_code,
       nature_operation: "Prestação de serviços de software (SaaS)",
       cfop: "5933",
-      description: `Assinatura de software - valor mensal R$ ${Number(doc.total_value).toLocaleString("pt-BR", {
+      description: `Assinatura de software - valor mensal R$ ${valorAtual.toLocaleString("pt-BR", {
         minimumFractionDigits: 2,
       })}`,
-      total_value: String(doc.total_value ?? ""),
+      total_value: String(valorAtual),
     })
 
     setLoadingModal(false)
     setOpen(true)
+    if (!clientData && !recipient) {
+      toast.info("Cliente não encontrado pelo vínculo. Busque pelo CPF/CNPJ para preencher os dados.")
+    }
   }
 
   const handleIssue = async () => {
@@ -131,8 +300,17 @@ export default function NFePage() {
       return
     }
 
-    if (!form.client_id || !form.total_value) {
-      toast.error("Dados do cliente ou valor total ausentes.")
+    if (!form.total_value) {
+      toast.error("Informe o valor total.")
+      return
+    }
+    const docOk = form.client_document?.replace(/\D/g, "").length === 11 || form.client_document?.replace(/\D/g, "").length === 14
+    if (!docOk) {
+      toast.error("CPF/CNPJ do cliente é obrigatório e deve ter 11 ou 14 dígitos.")
+      return
+    }
+    if (!form.client_name?.trim()) {
+      toast.error("Nome do cliente é obrigatório.")
       return
     }
 
@@ -143,7 +321,7 @@ export default function NFePage() {
 
       const payload = {
         id: selectedDoc.id,
-        client_id: form.client_id,
+        client_id: form.client_id || null,
         client_name: form.client_name,
         total_value: total,
         nature_operation: form.nature_operation,
@@ -156,6 +334,7 @@ export default function NFePage() {
           address: {
             street: form.street,
             number: form.number,
+            complement: form.complement || undefined,
             district: form.district,
             city: form.city,
             state: form.state,
@@ -199,6 +378,7 @@ export default function NFePage() {
         client_email: "",
         street: "",
         number: "",
+        complement: "",
         district: "",
         city: "",
         state: "",
@@ -231,6 +411,63 @@ export default function NFePage() {
     } catch {
       // se falhar, apenas não preenche
     }
+  }
+
+  const handleBuscarCliente = async () => {
+    let raw = form.client_document?.replace(/\D/g, "") ?? ""
+    if (raw.length !== 11 && raw.length !== 14) {
+      toast.error("Informe um CPF (11 dígitos) ou CNPJ (14 dígitos) válido.")
+      return
+    }
+    const tentar = raw.length === 11 && raw.startsWith("0") ? [raw, raw.slice(1)] : [raw]
+    let data: ClientRow | null = null
+    for (const cpf of tentar) {
+      const { data: res, error } = await supabase
+        .from("clients")
+        .select("id, name, email, cpf_cnpj, address, number, district, city, state, zip_code")
+        .eq("cpf_cnpj", cpf)
+        .maybeSingle()
+      if (!error && res) {
+        data = res as ClientRow
+        break
+      }
+    }
+    if (!data) {
+      toast.error("Cliente não encontrado com este CPF/CNPJ.")
+      return
+    }
+    const c = data
+    let street = (c.address ?? "").toString()
+    let number = (c.number ?? "").toString()
+    let district = (c.district ?? "").toString()
+    let city = (c.city ?? "").toString()
+    let state = (c.state ?? "").toString().toUpperCase()
+    let zip_code = (c.zip_code ?? "").toString()
+    if (street && !city && !state && !zip_code) {
+      const parts = street.split(",").map((p) => p.trim()).filter(Boolean)
+      if (parts.length >= 2) {
+        street = parts[0]
+        number = number || parts[1] || ""
+        district = district || (parts[2] ?? "")
+        city = city || (parts[3] ?? "")
+        state = (state || (parts[4] ?? "")).toUpperCase()
+        zip_code = zip_code || (parts[5] ?? "")
+      }
+    }
+    setForm((prev) => ({
+      ...prev,
+      client_id: c.id,
+      client_name: c.name ?? prev.client_name,
+      client_document: (c.cpf_cnpj ?? "").toString(),
+      client_email: (c.email ?? "").toString(),
+      street,
+      number,
+      district,
+      city,
+      state,
+      zip_code,
+    }))
+    toast.success("Cliente carregado.")
   }
 
   if (!isAdmin) {
@@ -325,7 +562,10 @@ export default function NFePage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="font-semibold">
-                      R$ {Number(nfe.total_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      R$ {(nfe.status === "pendente"
+                        ? (contractValueByContractId[(nfe.provider_payload as { contract_id?: string } | null)?.contract_id ?? ""] ?? Number(nfe.total_value))
+                        : Number(nfe.total_value)
+                      ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </span>
                     <Badge
                       variant={nfe.status === "emitida" ? "default" : "outline"}
@@ -362,20 +602,41 @@ export default function NFePage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl w-[96vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Emitir NF-e</DialogTitle>
+            <DialogTitle>Nova NF-e</DialogTitle>
+            <DialogDescription className="text-left">
+              Preencha os dados exigidos por lei para emissão de nota fiscal eletrônica de serviço.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label>CPF / CNPJ do cliente</Label>
-              <Input value={form.client_document} disabled />
+              <div className="flex gap-2">
+                <Input
+                  value={form.client_document}
+                  disabled={!!form.client_id}
+                  onChange={(e) => setForm((prev) => ({ ...prev, client_document: e.target.value.replace(/\D/g, "") }))}
+                  placeholder="Apenas números"
+                  className="font-mono"
+                />
+                {!form.client_id && (
+                  <Button type="button" variant="secondary" onClick={handleBuscarCliente}>
+                    Buscar
+                  </Button>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
               <Label>Cliente</Label>
-              <Input value={form.client_name} disabled />
+              <Input
+                value={form.client_name}
+                disabled={!!form.client_id}
+                onChange={(e) => !form.client_id && setForm((prev) => ({ ...prev, client_name: e.target.value }))}
+                placeholder="Selecione o cliente ou busque pelo CPF/CNPJ"
+              />
             </div>
 
             <div className="space-y-2">
@@ -383,21 +644,24 @@ export default function NFePage() {
               <Input
                 value={form.nature_operation}
                 onChange={(e) => setForm((prev) => ({ ...prev, nature_operation: e.target.value }))}
+                placeholder="Ex.: Prestação de serviços"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>CFOP</Label>
-                <Input value={form.cfop} onChange={(e) => setForm((prev) => ({ ...prev, cfop: e.target.value }))} />
+                <Input value={form.cfop} onChange={(e) => setForm((prev) => ({ ...prev, cfop: e.target.value }))} placeholder="5933" />
               </div>
               <div className="space-y-2">
                 <Label>Valor total (R$)</Label>
                 <Input
                   type="number"
                   step="0.01"
+                  min="0"
                   value={form.total_value}
                   onChange={(e) => setForm((prev) => ({ ...prev, total_value: e.target.value }))}
+                  placeholder="0,00"
                 />
               </div>
             </div>
@@ -408,6 +672,7 @@ export default function NFePage() {
                 rows={3}
                 value={form.description}
                 onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Discriminação dos serviços prestados"
               />
             </div>
 
@@ -452,6 +717,7 @@ export default function NFePage() {
                     className="w-20"
                     value={form.state}
                     onChange={(e) => setForm((prev) => ({ ...prev, state: e.target.value.toUpperCase() }))}
+                    maxLength={2}
                   />
                 </div>
               </div>
@@ -463,19 +729,30 @@ export default function NFePage() {
                 <Input
                   value={form.street}
                   onChange={(e) => setForm((prev) => ({ ...prev, street: e.target.value }))}
+                  placeholder="Logradouro"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Número</Label>
-                <Input value={form.number} onChange={(e) => setForm((prev) => ({ ...prev, number: e.target.value }))} />
+                <Input value={form.number} onChange={(e) => setForm((prev) => ({ ...prev, number: e.target.value }))} placeholder="Nº" />
               </div>
               <div className="space-y-2">
                 <Label>Bairro</Label>
                 <Input
                   value={form.district}
                   onChange={(e) => setForm((prev) => ({ ...prev, district: e.target.value }))}
+                  placeholder="Bairro"
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Complemento (opcional)</Label>
+              <Input
+                value={form.complement}
+                onChange={(e) => setForm((prev) => ({ ...prev, complement: e.target.value }))}
+                placeholder="Apto, sala, andar, etc."
+              />
             </div>
 
             <Button onClick={handleIssue} className="w-full" disabled={issuing}>

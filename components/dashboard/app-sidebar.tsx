@@ -27,7 +27,7 @@ import type { Permission } from "@/lib/types"
 const navItems: { label: string; href: string; icon: typeof Home; permission: Permission }[] = [
   { label: "Home", href: "/dashboard", icon: Home, permission: "home" },
   { label: "Produtos", href: "/dashboard/produtos", icon: Package, permission: "produtos" },
-  { label: "Marketing", href: "/dashboard/seguradoras", icon: Shield, permission: "seguradoras" },
+  { label: "Clientes", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
   { label: "Financeiro", href: "/dashboard/financeiro", icon: DollarSign, permission: "financeiro" },
   { label: "NF-e", href: "/dashboard/nfe", icon: InvoiceIcon, permission: "financeiro" },
   { label: "Chat Interno", href: "/dashboard/chat", icon: MessageCircle, permission: "chat" },

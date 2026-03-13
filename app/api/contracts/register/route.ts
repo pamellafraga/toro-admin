@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       start_date,
       status,
       payment_status,
+      origem_captacao,
     } = body
 
     if (!client_name?.trim()) {
@@ -91,26 +92,71 @@ export async function POST(req: Request) {
       )
     }
 
+    const paymentMap: Record<string, string> = {
+      paid: "em_dia",
+      pending: "pendente",
+      overdue: "atrasado",
+      cancelado: "cancelado",
+      cancelled: "cancelado",
+      expirado: "expirado",
+      expired: "expirado",
+    }
+    const paymentStatusDb = paymentMap[payment_status] ?? "em_dia"
+    const contractStatus = paymentStatusDb === "em_dia" ? "aguardando_produto" : "inativa"
+    const pagamentoPerdido = paymentStatusDb === "cancelado" || paymentStatusDb === "expirado"
+
     const parts = [address, number, district, city, state, zip_code].filter(Boolean)
     const fullAddress = parts.length ? parts.join(", ") : null
-    const clientPayload = {
+    const clientPayload: Record<string, unknown> = {
       name: client_name.trim(),
       email: (client_email || "").trim() || "",
       phone: (client_phone || "").trim() || "",
       cpf_cnpj: cpfCnpjRaw,
       address: fullAddress,
+      number: number?.trim() || null,
+      district: district?.trim() || null,
+      city: city?.trim() || null,
+      state: state?.trim() ? String(state).toUpperCase() : null,
+      zip_code: zip_code?.trim() || null,
+    }
+    if (origem_captacao != null && String(origem_captacao).trim()) {
+      clientPayload.origem_captacao = String(origem_captacao).trim()
+    }
+    if (pagamentoPerdido) {
+      clientPayload.status_lead = "perdido"
     }
 
     let clientId: string
 
     const { data: existing } = await supabase
       .from("clients")
-      .select("id")
+      .select("id, name")
       .eq("cpf_cnpj", cpfCnpjRaw)
       .maybeSingle()
 
     if (existing) {
       clientId = existing.id
+      const updatePayload: Record<string, unknown> = {
+        name: client_name.trim(),
+        email: (client_email || "").trim() || "",
+        phone: (client_phone || "").trim() || "",
+        address: fullAddress,
+        number: number?.trim() || null,
+        district: district?.trim() || null,
+        city: city?.trim() || null,
+        state: state?.trim() ? String(state).toUpperCase() : null,
+        zip_code: zip_code?.trim() || null,
+      }
+      if (origem_captacao != null && String(origem_captacao).trim()) {
+        updatePayload.origem_captacao = String(origem_captacao).trim()
+      }
+      if (pagamentoPerdido) {
+        updatePayload.status_lead = "perdido"
+      }
+      await supabase
+        .from("clients")
+        .update(updatePayload)
+        .eq("id", clientId)
     } else {
       const { data: inserted, error: clientError } = await supabase
         .from("clients")
@@ -127,31 +173,20 @@ export async function POST(req: Request) {
       clientId = inserted.id
     }
 
-    const statusMap: Record<string, string> = {
-      active: "ativa",
-      inactive: "inativa",
-      suspended: "pendente",
-      cancelled: "cancelada",
-    }
-    const paymentMap: Record<string, string> = {
-      paid: "em_dia",
-      pending: "em_dia",
-      overdue: "atrasado",
-    }
-
+    const paymentDay = Number(payment_day) || 10
+    const wasExistingClient = !!existing
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
       .insert({
         client_id: clientId,
         product_id: resolvedProductId,
-        status: statusMap[status] ?? "ativa",
-        payment_status: paymentMap[payment_status] ?? "em_dia",
-        payment_day: Number(payment_day) || 10,
+        status: contractStatus,
+        payment_status: paymentStatusDb,
         start_date: start_date || new Date().toISOString().slice(0, 10),
         monthly_value: selectedValue,
         notes: null,
       })
-      .select("id, client_id, product_id, payment_day")
+      .select("id, client_id, product_id")
       .single()
 
     if (contractError) {
@@ -161,25 +196,43 @@ export async function POST(req: Request) {
       )
     }
 
-    await supabase.from("nfe_documents").insert({
-      client_id: contract.client_id,
-      client_name: client_name.trim(),
-      total_value: selectedValue,
-      nature_operation: "Prestação de serviços de software (SaaS)",
-      cfop: "5933",
-      status: "pendente",
-      number: null,
-      series: null,
-      provider_id: null,
-      provider_payload: {
-        contract_id: contract.id,
-        product_id: contract.product_id,
-        payment_day: contract.payment_day,
-      },
-      provider_response: null,
-    })
+    // NF-e só para quem está com pagamento em dia — guarda todos os dados do cliente e da compra na solicitação
+    if (paymentStatusDb === "em_dia") {
+      await supabase.from("nfe_documents").insert({
+        client_id: contract.client_id,
+        client_name: client_name.trim(),
+        total_value: selectedValue,
+        nature_operation: "Prestação de serviços de software (SaaS)",
+        cfop: "5933",
+        status: "pendente",
+        number: null,
+        series: null,
+        provider_id: null,
+        provider_payload: {
+          contract_id: contract.id,
+          product_id: contract.product_id,
+          payment_day: paymentDay,
+          recipient: {
+            document: cpfCnpjRaw,
+            email: (client_email || "").trim() || null,
+            street: address?.trim() || null,
+            number: number?.trim() || null,
+            district: district?.trim() || null,
+            city: city?.trim() || null,
+            state: state?.trim() ? String(state).toUpperCase() : null,
+            zip_code: zip_code?.trim() || null,
+          },
+        },
+        provider_response: null,
+      })
+    }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      productId: resolvedProductId,
+      existingClient: wasExistingClient,
+      existingClientName: wasExistingClient ? ((existing as { name?: string })?.name ?? null) : null,
+    })
   } catch (err: unknown) {
     console.error("Erro ao registrar assinatura:", err)
     return NextResponse.json(

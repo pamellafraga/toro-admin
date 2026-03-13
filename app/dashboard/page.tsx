@@ -24,11 +24,14 @@ export default function DashboardHome() {
       .from("contracts")
       .select("*", { count: "exact", head: true })
       .in("status", ["active", "ativa"])
-    const { data: contractValues } = await supabase
+    const { data: contractsForRevenue } = await supabase
       .from("contracts")
-      .select("monthly_value")
-      .in("status", ["active", "ativa"])
-    const totalRevenue = contractValues?.reduce((sum, c) => sum + Number(c.monthly_value), 0) || 0
+      .select("monthly_value, payment_status")
+    const totalRevenue = (contractsForRevenue ?? []).reduce((sum, c) => {
+      const p = (c.payment_status ?? "").toString().toLowerCase()
+      if (p !== "em_dia" && p !== "paid") return sum
+      return sum + Number(c.monthly_value ?? 0)
+    }, 0)
 
     return {
       totalClients: clientsRes.count || 0,

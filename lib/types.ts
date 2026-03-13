@@ -40,6 +40,8 @@ export interface Client {
   number?: string | null
   notes: string | null
   is_active: boolean
+  origem_captacao?: string | null
+  status_lead?: string | null
   created_at: string
   updated_at: string
 }

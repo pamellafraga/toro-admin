@@ -25,6 +25,8 @@ const PAYMENT_STATUS_MAP: Record<string, { label: string; class: string; icon: t
   pending: { label: "Pendente", class: "bg-amber-500/15 text-amber-400 border-amber-500/30", icon: Clock },
   cancelado: { label: "Cancelado", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30", icon: AlertCircle },
   cancelled: { label: "Cancelado", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30", icon: AlertCircle },
+  expirado: { label: "Expirado", class: "bg-red-500/15 text-red-400 border-red-500/30", icon: AlertCircle },
+  expired: { label: "Expirado", class: "bg-red-500/15 text-red-400 border-red-500/30", icon: AlertCircle },
 }
 
 const CONTRACT_STATUS_MAP: Record<string, { label: string; class: string }> = {
@@ -75,15 +77,25 @@ export default function FinanceiroPage() {
   })
 
   // Stats
+  const isContratoAtivo = (c: { status?: string | null }) => {
+    const s = (c.status ?? "").toString().toLowerCase()
+    return s === "ativa" || s === "active" || s === "aguardando_produto"
+  }
+  const totalAtivos = contracts?.filter(isContratoAtivo).length ?? 0
+  const totalInativos = (contracts?.length ?? 0) - totalAtivos
   const activeContracts = contracts?.filter(c => c.status === "ativa" || c.status === "active") || []
-  const overdueContracts = contracts?.filter(c => c.payment_status === "atrasado" || c.payment_status === "overdue") || []
+  const contractsEmDia = contracts?.filter(c => {
+    const p = (c.payment_status ?? "").toString().toLowerCase()
+    return p === "em_dia" || p === "paid"
+  }) || []
+  const expiredContracts = contracts?.filter(c => c.payment_status === "expirado" || c.payment_status === "expired") || []
   const pendingContracts = contracts?.filter(c => c.payment_status === "pendente" || c.payment_status === "pending") || []
-  const monthlyRevenue = activeContracts.reduce((sum, c) => sum + Number(c.monthly_value), 0)
-  const overdueRevenue = overdueContracts.reduce((sum, c) => sum + Number(c.monthly_value), 0)
+  const monthlyRevenue = contractsEmDia.reduce((sum, c) => sum + Number(c.monthly_value ?? 0), 0)
+  const expiredRevenue = expiredContracts.reduce((sum, c) => sum + Number(c.monthly_value), 0)
 
-  // Revenue by product chart data
+  // Revenue by product chart data (contratos em dia)
   const revenueByProduct = products?.map(p => {
-    const productContracts = activeContracts.filter(c => c.product_id === p.id)
+    const productContracts = contractsEmDia.filter(c => c.product_id === p.id)
     return {
       name: p.name.length > 20 ? p.name.substring(0, 20) + "..." : p.name,
       fullName: p.name,
@@ -166,7 +178,7 @@ export default function FinanceiroPage() {
               <p className="text-2xl font-bold text-foreground mt-1">
                 R$ {monthlyRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-xs text-emerald-400 mt-1">{activeContracts.length} contratos ativos</p>
+              <p className="text-xs text-emerald-400 mt-1">{contractsEmDia.length} contratos em dia</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/10">
               <TrendingUp className="h-5 w-5 text-emerald-400" />
@@ -177,11 +189,11 @@ export default function FinanceiroPage() {
         <div className="glass rounded-xl p-5">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Em Atraso</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">Expirados</p>
               <p className="text-2xl font-bold text-red-400 mt-1">
-                R$ {overdueRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                R$ {expiredRevenue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-xs text-red-400/70 mt-1">{overdueContracts.length} contratos</p>
+              <p className="text-xs text-red-400/70 mt-1">{expiredContracts.length} contratos</p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
               <TrendingDown className="h-5 w-5 text-red-400" />
@@ -208,7 +220,7 @@ export default function FinanceiroPage() {
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Contratos</p>
               <p className="text-2xl font-bold text-foreground mt-1">{contracts?.length || 0}</p>
               <p className="text-xs text-muted-foreground mt-1">
-                {activeContracts.length} ativos / {(contracts?.length || 0) - activeContracts.length} inativos
+                {totalAtivos} ativos / {totalInativos} inativos
               </p>
             </div>
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
