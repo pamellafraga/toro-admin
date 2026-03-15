@@ -228,12 +228,15 @@ export function UserCards() {
                 >
                   {editingId === user.id ? (
                     <div className="flex flex-col gap-3">
-                      <input
-                        placeholder="Nome de exibição"
-                        value={editForm.display_name}
-                        onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Nome de exibição</label>
+                        <input
+                          placeholder="Ex: Pamella"
+                          value={editForm.display_name}
+                          onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                        />
+                      </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">E-mail que recebe o código de redefinição (só admin altera)</label>
                         <input
@@ -245,23 +248,32 @@ export function UserCards() {
                         />
                         <p className="mt-1 text-[11px] text-muted-foreground">Para alterar: apague o e-mail atual, digite o novo e clique em Salvar.</p>
                       </div>
-                      <input placeholder="Login" value={user.username} readOnly className="h-9 rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
-                      <select
-                        value={editForm.role}
-                        onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                      >
-                        {DASHBOARD_ROLES.map((r) => (
-                          <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                        ))}
-                      </select>
-                      <input
-                        placeholder="Nova senha (deixe em branco para não alterar)"
-                        type="password"
-                        value={editForm.new_password}
-                        onChange={(e) => setEditForm({ ...editForm, new_password: e.target.value })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (usuário para entrar — não editável)</label>
+                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>
+                        <select
+                          value={editForm.role}
+                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                        >
+                          {DASHBOARD_ROLES.map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Nova senha (deixe em branco para não alterar)</label>
+                        <input
+                          type="password"
+                          placeholder="••••••••"
+                          value={editForm.new_password}
+                          onChange={(e) => setEditForm({ ...editForm, new_password: e.target.value })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                        />
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(user.id)}
@@ -332,12 +344,15 @@ export function UserCards() {
                 >
                   {editingId === user.id ? (
                     <div className="flex flex-col gap-3">
-                      <input
-                        placeholder="Nome de exibição"
-                        value={editForm.display_name}
-                        onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Nome de exibição</label>
+                        <input
+                          placeholder="Ex: Pamella"
+                          value={editForm.display_name}
+                          onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                        />
+                      </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">E-mail que recebe o código de redefinição (só admin altera)</label>
                         <input
@@ -349,23 +364,32 @@ export function UserCards() {
                         />
                         <p className="mt-1 text-[11px] text-muted-foreground">Para alterar: apague o e-mail atual, digite o novo e clique em Salvar.</p>
                       </div>
-                      <input placeholder="Login" value={user.username} readOnly className="h-9 rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
-                      <select
-                        value={editForm.role}
-                        onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                      >
-                        {DASHBOARD_ROLES.map((r) => (
-                          <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                        ))}
-                      </select>
-                      <input
-                        placeholder="Nova senha (deixe em branco para não alterar)"
-                        type="password"
-                        value={editForm.new_password}
-                        onChange={(e) => setEditForm({ ...editForm, new_password: e.target.value })}
-                        className="h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                      />
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (usuário para entrar — não editável)</label>
+                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>
+                        <select
+                          value={editForm.role}
+                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                        >
+                          {DASHBOARD_ROLES.map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Nova senha (deixe em branco para não alterar)</label>
+                        <input
+                          type="password"
+                          placeholder="••••••••"
+                          value={editForm.new_password}
+                          onChange={(e) => setEditForm({ ...editForm, new_password: e.target.value })}
+                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                        />
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => saveEdit(user.id)}
