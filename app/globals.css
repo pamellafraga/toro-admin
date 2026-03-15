@@ -5,7 +5,7 @@
 
 /* Xpress Solutions - Paleta minimalista: fundo frio suave, azul em destaque, sidebar azul escura */
 :root {
-  --background: #f5f7fa;
+  --background: #e5e9f0;
   --foreground: #1e293b;
   --card: #ffffff;
   --card-foreground: #1e293b;
@@ -13,9 +13,9 @@
   --popover-foreground: #1e293b;
   --primary: #005176;
   --primary-foreground: #ffffff;
-  --secondary: #eef1f5;
+  --secondary: #dde2ea;
   --secondary-foreground: #334155;
-  --muted: #eef1f5;
+  --muted: #dde2ea;
   --muted-foreground: #64748b;
   --accent: rgba(0, 81, 118, 0.08);
   --accent-foreground: #005176;
