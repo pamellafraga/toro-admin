@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'comercial' | 'marketing' | 'captacao' | 'financeiro' | 'custom'
 
-export type Permission = 'home' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios'
+export type Permission = 'home' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios' | 'admin'
 
 export interface Profile {
   id: string
@@ -59,6 +59,7 @@ export interface Contract {
   notes: string | null
   created_at: string
   updated_at: string
+  origem_comercial?: string | null
   clients?: Client
   products?: Product
 }
@@ -129,7 +130,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin: ['home', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'chat', 'relatorios', 'notificacoes', 'atividades', 'usuarios'],
+  admin: ['home', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'chat', 'relatorios', 'notificacoes', 'atividades', 'usuarios', 'admin'],
   comercial: ['home', 'produtos', 'clientes', 'chat'],
   marketing: ['home', 'seguradoras', 'chat', 'notificacoes'],
   captacao: ['home', 'seguradoras', 'clientes', 'chat', 'notificacoes'],
@@ -148,6 +149,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   notificacoes: 'Notificacoes',
   atividades: 'Atividades',
   usuarios: 'Usuarios',
+  admin: 'Admin',
 }
 
 export const KANBAN_COLUMNS = [

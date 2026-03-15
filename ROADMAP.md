@@ -2,7 +2,7 @@
 
 **Este documento descreve o que FALTA implementar.** O que o projeto já tem está no [README.md](./README.md).
 
-> **Contexto (resumo):** O dashboard já tem login, esqueci minha senha (Resend), usuários com e-mail de redefinição, NF-e (emissão/cancelar/excluir), senhas (admin), histórico de atividades (clientes, contratos, NF-e, usuários) com atualização da Home e da página Atividades, confirmação em exclusões. Site e SaaS ainda não estão conectados ao Supabase.
+> **Contexto (resumo):** O dashboard já tem login (dashboard_users), esqueci minha senha (Resend), usuários com e-mail de redefinição, NF-e (emissão/cancelar/excluir), módulo Senhas/Sistemas (admin_credentials), **Comissões** (vendas por comercial no mês, % bônus e prêmio total — só Admin), histórico de atividades (clientes, contratos, NF-e, usuários) com atualização da Home e da página Atividades, confirmação em exclusões, deploy (Vercel, DEPLOY.md) e noindex/robots para não indexar o painel. Site e SaaS ainda não estão conectados ao Supabase.
 
 > **Banco de dados:** Apenas o **Dashboard** está ligado ao Supabase. Site e SaaS serão integrados via APIs / futura conexão multi-tenant.
 
@@ -13,7 +13,7 @@
 | Projeto                      | O que já existe                                                                                 | O que ainda falta principal                                                                                   | Progresso |
 |------------------------------|-------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------:|
 | 🌐 **Website institucional** | Landing pages, produtos, planos, contato, layout pronto e publicado em produção               | Fluxo de checkout/assinatura, chamada para API pública do dashboard, exibição de QR Pix/links de pagamento   | **70%**   |
-| 📊 **Dashboard admin**       | Gestão de clientes/contratos, NF-e pendente/emitida, financeiro básico, atividades, permissões | Integração Banco Inter (Pix/BolePix), webhooks, e-mails automáticos, relatórios fiscais Simples Nacional     | **60%**   |
+| 📊 **Dashboard admin**       | Gestão de clientes/contratos, NF-e pendente/emitida, financeiro básico, atividades, permissões (Admin/Comercial), **Comissões** (vendas por comercial, % bônus, prêmio), Gastos da Empresa, Usuários e Sistemas (senhas), deploy Vercel + noindex | Integração Banco Inter (Pix/BolePix), webhooks, e-mails automáticos, relatórios fiscais Simples Nacional     | **65%**   |
 | 🧩 **SaaS (app do cliente)** | Base técnica do app e estrutura inicial                                                         | Módulos da ferramenta (gestão de apólices), onboarding, criação automática de tenant/usuário após pagamento  | **20%**   |
 
 ---
@@ -142,22 +142,12 @@
 
 ### 5. Histórico de atividades e Home sempre atualizada
 
-**Objetivo:** rastrear tudo que acontece e refletir isso na Home e na página de Atividades.
+**Falta (depende da integração Banco Inter — seção 2):**
+- [ ] Registrar em `activity_log` a mudança de status de pagamento (pendente → pago → cancelado/expirado)
+- [ ] Registrar em `activity_log` a criação de cobranças no Banco Inter
+- [ ] Registrar em `activity_log` a confirmação de pagamento via webhook
 
-- **Gravação de `activity_log`**
-  - [x] Criação/edição/exclusão de clientes (página Clientes chama `/api/activity/log`; revalida cache de atividades)
-  - [x] Criação/edição/exclusão de contratos (cadastro em `contracts/register`; edição e exclusão em produtos/[slug] com log + revalidação)
-  - [ ] Mudança de status de pagamento (pendente → pago → cancelado/expirado)
-  - [ ] Criação de cobranças no Banco Inter
-  - [ ] Confirmação de pagamento via webhook
-  - [x] Emissão de NF-e
-  - [x] Cancelamento e exclusão de NF-e
-  - [x] Criação/atualização/remoção de usuários do dashboard
-  - [x] Cadastro de contratos (`contracts/register`)
-
-- **Uso nas telas**
-  - [x] Página `/dashboard/atividades` e componente `RecentActivity` na Home
-  - [x] Cards da Home usando dados do Supabase via SWR (revalidação ao focar; cache de atividades atualizado após criar/editar/excluir cliente ou contrato)
+Quando o Inter estiver integrado, chamar `logActivity` nesses três pontos.
 
 ---
 

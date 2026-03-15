@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Percent,
 } from "lucide-react"
 import type { Permission } from "@/lib/types"
 
@@ -38,6 +39,7 @@ const navItems: { label: string; href: string; icon: typeof Home; permission: Pe
   { label: "Notificações", href: "/dashboard/notificacoes", icon: Bell, permission: "notificacoes" },
   { label: "Atividades", href: "/dashboard/atividades", icon: Activity, permission: "atividades" },
   { label: "Gastos da Empresa", href: "/dashboard/gastos-empresa", icon: CreditCard, permission: "admin" },
+  { label: "Comissões", href: "/dashboard/comissoes", icon: Percent, permission: "admin" },
 ]
 
 type AppSidebarProps = { collapsed?: boolean; onToggleCollapse?: () => void }

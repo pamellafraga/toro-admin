@@ -164,6 +164,40 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    const nfeId = (data as { id?: string })?.id
+    const NFE_PDF_BUCKET = "nfe-pdfs"
+    if (nfeId) {
+      const pdfUrl = typeof providerJson.pdfUrl === "string" ? providerJson.pdfUrl.trim() : null
+      const pdfBase64 = typeof providerJson.pdfBase64 === "string" ? providerJson.pdfBase64 : null
+      let pdfBuffer: ArrayBuffer | null = null
+      if (pdfUrl) {
+        try {
+          const res = await fetch(pdfUrl)
+          if (res.ok) pdfBuffer = await res.arrayBuffer()
+        } catch (e) {
+          console.warn("Falha ao baixar PDF do provedor:", e)
+        }
+      } else if (pdfBase64) {
+        try {
+          const b64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "")
+          pdfBuffer = Buffer.from(b64, "base64").buffer
+        } catch (e) {
+          console.warn("Falha ao decodificar PDF base64:", e)
+        }
+      }
+      if (pdfBuffer && pdfBuffer.byteLength > 0) {
+        const path = `${nfeId}.pdf`
+        const { error: uploadError } = await supabase.storage
+          .from(NFE_PDF_BUCKET)
+          .upload(path, pdfBuffer, { contentType: "application/pdf", upsert: true })
+        if (!uploadError) {
+          await supabase.from("nfe_documents").update({ pdf_storage_path: path }).eq("id", nfeId)
+        } else {
+          console.warn("Falha ao fazer upload do PDF para Storage:", uploadError)
+        }
+      }
+    }
+
     if (contractIdToActivate) {
       await supabase
         .from("contracts")

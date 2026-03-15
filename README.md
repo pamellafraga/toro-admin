@@ -10,16 +10,16 @@
 
 </div>
 
-Dashboard administrativa completa para gerenciamento de locações SaaS, construída com **Next.js 15**, **React 19**, **TypeScript**, **TailwindCSS**, **Supabase** e design futurístico com tema dark nas cores da Xpress Solutions.
+Dashboard administrativa completa para gerenciamento de locações SaaS, construída com **Next.js 15**, **React 19**, **TypeScript**, **TailwindCSS**, **Supabase** e interface nas cores da Xpress Solutions (azul #005176, fundo claro #e5e9f0).
 
 ## ✨ Características Principais
 
-- 🎨 **Design Futurístico** — Interface dark mode com efeitos de glow, gradientes e animações suaves
-- 🔐 **Autenticação Segura** — Login com Supabase Auth + middleware de proteção de rotas
-- 👥 **Sistema de Permissões** — 5 perfis de acesso (Admin, Financeiro, Marketing, Suporte, Visualizador)
-- 📊 **Dashboard Interativo** — KPIs em tempo real com gráficos e estatísticas
-- 💬 **Chat em Tempo Real** — Comunicação interna da equipe
-- 🔔 **Notificações** — Sistema de alertas e avisos
+- 🎨 **Design** — Interface com paleta azul escuro (#005176), cards em destaque, sidebar e componentes com estados de hover e foco consistentes
+- 🔐 **Autenticação** — Login local (tabela `dashboard_users`) com middleware de proteção de rotas e **Esqueci minha senha** (código por e-mail via Resend)
+- 👥 **Permissões** — Perfis Admin e Comercial; apenas Admin acessa Configurações (Usuários, Sistemas/Senhas), Gastos da Empresa e Comissões
+- 📊 **Dashboard** — KPIs em tempo real (clientes, contratos, produtos, receita), gráficos (receita mensal, distribuição por produto), feed de atividades
+- 💬 **Chat Interno** — Canais em tempo real com indicador de não lidas
+- 🔔 **Notificações** — Central de alertas com contador na sidebar
 - 📱 **Responsivo** — Layout adaptável para desktop, tablet e mobile
 
 ---
@@ -37,23 +37,23 @@ Dashboard administrativa completa para gerenciamento de locações SaaS, constru
 | **Relatórios** | Exportação de dados e análises em CSV/Excel | 📊 |
 | **Notificações** | Central de alertas, avisos e lembretes do sistema | 🔔 |
 | **Atividades** | Log completo de ações realizadas no sistema | 📝 |
-| **NF-e** | Emissão, cancelamento e exclusão de notas fiscais (Admin only) | 📄 |
+| **NF-e** | Emissão, cancelamento e exclusão de notas fiscais (permissão Financeiro) | 📄 |
 | **Gastos da Empresa** | Controle de despesas operacionais (Admin only) | 💳 |
-| **Configurações** | **Gerenciamento de Usuários** — usuários do dashboard, permissões e e-mail de redefinição de senha (Admin only). **Gerenciamento dos Sistemas** — login, senha e link das ferramentas (banco de dados, hospedagem, domínios, etc.) | ⚙️ |
+| **Comissões** | Cálculo de vendas por comercial no mês, % de bônus e prêmio total (Admin only) | % |
+| **Configurações** | **Usuários** — usuários do dashboard, perfil (Admin/Comercial), e-mail para redefinição de senha (Admin only). **Sistemas** — login, senha e link das ferramentas (banco, hospedagem, domínios, etc.) | ⚙️ |
 
 ---
 
 ## 👥 Perfis de Acesso
 
+O login usa a tabela `dashboard_users` com dois perfis:
+
 | Perfil | Permissões |
 |---|---|
-| **Admin** 👑 | Acesso total: Home, Produtos, Clientes, Marketing, Financeiro, Chat, Relatórios, Notificações, Atividades, Gastos da Empresa, Senhas, Usuários |
-| **Financeiro** 💰 | Home, Produtos, Clientes, Financeiro, Relatórios, Notificações, Atividades |
-| **Marketing** 🎯 | Home, Clientes, Marketing (Seguradoras), Notificações, Atividades |
-| **Suporte** 🛟 | Home, Produtos, Clientes, Chat, Notificações, Atividades |
-| **Visualizador** 👁️ | Home, Relatórios, Notificações |
+| **Admin** 👑 | Acesso total: Home, Produtos, Clientes, Marketing (Seguradoras), Financeiro, NF-e, Chat, Relatórios, Notificações, Atividades, Gastos da Empresa, **Comissões**, Configurações (Usuários e Sistemas/Senhas) |
+| **Comercial** 💼 | Home, Produtos, Clientes, Chat. Contratos criados por ele ficam com `origem_comercial` = "Comercial - [Nome]" (usado em Comissões e filtro por comercial). |
 
-> ⚠️ **Importante:** Somente o **Admin** tem acesso aos módulos de Gastos da Empresa e **Configurações** (Gerenciamento de Usuários e Gerenciamento dos Sistemas). O sistema verifica as permissões em tempo real através do contexto de autenticação.
+> ⚠️ **Importante:** Somente **Admin** acessa Gastos da Empresa, Comissões e Configurações (Usuários e Sistemas). O sistema verifica permissões em tempo real via contexto de autenticação.
 
 ---
 
@@ -74,13 +74,12 @@ A tela de login possui um design único e moderno com:
 - **Toggle "Lembrar-me"** — Switch animado com persistência em localStorage
 - **Campo de senha com show/hide** — Ícones Eye/EyeOff para alternar visibilidade
 
-### Tema Dark do Dashboard
+### Tema do Dashboard
 
-- Paleta principal: `#020817` (fundo) + `#0ea5e9` (accent sky)
-- Sidebar com logo redondo em destaque e efeito glow
-- Cards com bordas sutis e sombras internas
-- Hover states com translate e scale suaves
-- Ícones em tamanho consistente (16px) com animações
+- Paleta: **primary** e sidebar `#005176` (azul Xpress), fundo `#e5e9f0`, cards e inputs com bordas e sombras suaves
+- Sidebar fixa com ícones, labels e estado ativo destacado; botão para recolher/expandir
+- Favicon: `public/icon.png` exibido na aba do navegador (Xpress Solutions - Dashboard)
+- Componentes com estados hover e foco consistentes; toasts (Sonner) com estilo alinhado ao tema
 
 ---
 
@@ -135,9 +134,15 @@ scripts/018_dashboard_users.sql   → Usuários do dashboard
 scripts/024_forgot_password.sql    → Esqueci minha senha (coluna email + tabela códigos)
 scripts/025_forgot_password_username.sql → Busca por username
 scripts/026_user_reset_emails.sql  → E-mails designados para redefinição (opcional)
+scripts/019_contracts_origem_comercial.sql → Coluna origem_comercial (Comissões + filtro por comercial)
+scripts/027_comissoes_docs.sql     → Apenas documentação da coluna (Comissões)
+scripts/028_commission_bonus_optional.sql   → Tabela opcional para guardar % de bônus (Comissões)
+scripts/029_nfe_documents_pdf_storage.sql  → Coluna pdf_storage_path (Visualizar PDF da NF-e)
 ```
 
-Outros scripts (012–016, 019–023) aplicam alterações em contratos, produtos, atividade e chat; execute conforme a necessidade do projeto.
+Para o botão **Visualizar** da NF-e abrir o PDF na plataforma, crie no Supabase o bucket de Storage **nfe-pdfs** (Armazenar → + Balde novo, nome: `nfe-pdfs`, privado). O app faz upload do PDF na emissão quando o provedor retornar `pdfUrl` ou `pdfBase64`; caso contrário, o link fica disponível quando houver um PDF armazenado (ex.: upload manual ou integração que envie o arquivo).
+
+Outros scripts (011–016, 020–023) aplicam alterações em contratos, produtos, clientes, atividade e chat; execute conforme a necessidade do projeto.
 
 ### 4. Criar o usuário Admin
 
@@ -195,8 +200,12 @@ Acesse: [http://localhost:3000](http://localhost:3000)
 - [x] Emissão de NF-e/NFS-e (Sistema Nacional, provedor genérico ou simulado)
 - [x] Listagem de documentos (pendentes, emitidas, canceladas)
 - [x] Cancelar NF-e emitida (status → cancelada)
-- [x] Excluir NF-e (remover registro do painel); botões apenas com ícone
-- [x] Confirmação antes de cancelar ou excluir
+- [x] Excluir NF-e (remover registro do painel); confirmação antes de cancelar ou excluir
+
+### ✅ Comissões (Admin)
+- [x] Página Comissões com filtro por mês/ano
+- [x] Tabela por comercial: nº de vendas, valor vendido, % bônus (global), prêmio total
+- [x] Dados baseados em `contracts.origem_comercial` e `created_at`; scripts 019, 027 e 028 (ver `scripts/README.md`)
 
 ### ✅ Interface e UX
 - [x] Design futurístico com tema dark
@@ -229,15 +238,10 @@ Após a instalação e configuração, siga este guia:
 
 ### 2️⃣ Criar Usuários
 
-1. No menu lateral, clique em **Usuários** (somente Admin)
+1. No menu lateral, clique em **Configurações → Usuários** (somente Admin)
 2. Clique no botão **+ Adicionar Usuário**
-3. Preencha os dados:
-   - Nome completo
-   - Login (único)
-   - Email
-   - Senha temporária
-   - Perfil de acesso (Admin, Financeiro, Marketing, Suporte, Visualizador)
-4. O novo usuário poderá fazer login com as credenciais criadas
+3. Preencha: Nome de exibição, E-mail, Login (único), Senha temporária, Perfil (Admin ou Comercial)
+4. O usuário fará login com o **Login** e a senha definida; o e-mail é usado para "Esqueci minha senha"
 
 ### 3️⃣ Cadastrar Produtos
 
@@ -345,12 +349,12 @@ pnpm dev
 **Problema:** "Credenciais inválidas" mesmo com `admin/admin123`
 
 **Solução:**
-1. Verifique se você executou o script `setup-admin.js`:
+1. Execute o script de setup do admin (se ainda não rodou):
    ```bash
    node scripts/setup-admin.js
    ```
-2. Confirme que a tabela `profiles` foi criada
-3. Verifique no Supabase Table Editor se o usuário admin existe
+2. Confirme que a tabela `dashboard_users` existe e foi populada (script `018_dashboard_users.sql` ou seed do projeto)
+3. Verifique no Supabase (Table Editor) se há um usuário com o login que você está usando
 
 ### Layout quebrado ou estilos não carregam
 
@@ -398,18 +402,14 @@ pnpm dev
 
 ## Deploy em Produção
 
-### Vercel (recomendado)
+O projeto pode ser implantado na **Vercel** com domínio próprio (ex.: `adm.xpresssolutions.com.br`). Para passo a passo completo (campos a preencher, subdomínio na Locaweb, variáveis de ambiente e como deixar o painel fora de buscas), consulte **[DEPLOY.md](./DEPLOY.md)**.
 
-1. Faça push do projeto para o GitHub
-2. Acesse [vercel.com](https://vercel.com) e importe o repositório
-3. Configure as variáveis de ambiente:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-4. Clique em **Deploy**
+- Build: `pnpm build` (lockfile pnpm; login com `useSearchParams` envolvido em `Suspense`)
+- O dashboard está configurado com `noindex/nofollow` e `robots.txt` para não ser indexado por buscadores
 
 ---
 
-## � Preview
+## Preview
 
 ### Tela de Login
 - Design futurístico com partículas animadas em canvas
@@ -424,15 +424,13 @@ pnpm dev
 - Cards de usuários ativos (Admin)
 - Feed de atividades recentes
 
-### Sidebar de Navegação
-- Logo em destaque com efeito glow
-- Menu com permissões dinâmicas
-- Hover states animados
-- Indicador visual de página ativa
+### Sidebar
+- Menu por perfil (Admin / Comercial): Home, Produtos, Clientes, Financeiro, NF-e, Chat, Relatórios, Notificações, Atividades, Gastos da Empresa, Comissões, Configurações (Usuários, Sistemas)
+- Botão recolher/expandir; área do usuário logado
 
 ---
 
-## �🛠️ Tecnologias Utilizadas
+## Tecnologias Utilizadas
 
 | Tecnologia | Versão | Uso |
 |---|:---:|---|
@@ -476,6 +474,10 @@ xpress-dashboard/
 │   │   ├── users/route.ts       → CRUD usuários do dashboard (GET/POST)
 │   │   ├── users/[id]/route.ts  → Atualizar/remover usuário (PATCH/DELETE)
 │   │   ├── activity/log/route.ts → Registro de atividades
+│   │   ├── clients/search/route.ts   → Busca de clientes (autocomplete)
+│   │   ├── contracts/register/route.ts → Cadastro de contrato (cliente + produto; origem_comercial)
+│   │   ├── products/[slug]/route.ts   → Dados do produto
+│   │   ├── products/[slug]/contracts/route.ts → Contratos do produto (filtro por comercial)
 │   │   ├── nfe/documents/route.ts     → Listagem de NF-e
 │   │   ├── nfe/documents/[id]/route.ts → Cancelar (PATCH) ou excluir (DELETE) NF-e
 │   │   └── nfe/issue/route.ts    → Emissão de NF-e
@@ -491,9 +493,10 @@ xpress-dashboard/
 │       ├── notificacoes/page.tsx → Central de notificações
 │       ├── atividades/page.tsx   → Log de atividades
 │       ├── gastos-empresa/page.tsx → Controle de despesas (Admin)
-│       ├── nfe/page.tsx          → Emissão, cancelar e excluir NF-e (Admin)
-│       ├── senhas/page.tsx       → Gerenciador de senhas (Admin)
-│       └── usuarios/page.tsx     → Gestão de usuários (Admin)
+│       ├── comissoes/page.tsx    → Vendas por comercial no mês, % bônus e prêmio (Admin)
+│       ├── nfe/page.tsx          → Emissão, cancelar e excluir NF-e
+│       ├── senhas/page.tsx       → Sistemas: login, senha e link das ferramentas (Admin)
+│       └── usuarios/page.tsx     → Gestão de usuários do dashboard (Admin)
 ├── components/
 │   ├── theme-provider.tsx        → Provider de tema dark/light
 │   ├── dashboard/
@@ -526,21 +529,17 @@ xpress-dashboard/
 │       └── admin.ts              → Cliente com service role (APIs sensíveis)
 ├── hooks/
 │   ├── use-mobile.ts             → Hook para detectar mobile
-│   └── use-toast.ts              → Hook para notificações toast
+│   ├── use-toast.ts              → Hook para notificações toast
+│   └── use-chat-unread.ts       → Contador de mensagens não lidas no chat
 ├── scripts/
-│   ├── 001_profiles.sql          → Tabela de perfis
-│   ├── 002_products.sql          → Tabela de produtos
-│   ├── 003_clients.sql           → Tabela de clientes
-│   ├── 004_contracts.sql         → Tabela de contratos
-│   ├── 005_seguradoras.sql       → Tabela de leads
-│   ├── 006_activity_log.sql      → Tabela de log
-│   ├── 007_notifications.sql     → Tabela de notificações
-│   ├── 008_chat_messages.sql     → Tabela de mensagens
-│   ├── 009_seed.sql              → Dados de exemplo
-│   └── setup-admin.js            → Script para criar admin
+│   ├── README.md                 → Ordem dos scripts e uso (Comissões, tabelas)
+│   ├── 001_profiles.sql … 028_commission_bonus_optional.sql → Ver README e lista na seção "Criar tabelas"
+│   └── setup-admin.js            → Script para criar admin inicial
 ├── public/
+│   ├── icon.png                  → Favicon da aba (Xpress Solutions - Dashboard)
 │   └── images/
 │       └── logo.png              → Logo da Xpress Solutions
+├── DEPLOY.md                     → Guia de deploy (Vercel, Locaweb, noindex)
 ├── middleware.ts                 → Middleware de proteção de rotas
 ├── components.json               → Configuração shadcn/ui
 ├── tailwind.config.ts            → Configuração Tailwind

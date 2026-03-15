@@ -249,8 +249,8 @@ export function UserCards() {
                         <p className="mt-1 text-[11px] text-muted-foreground">Para alterar: apague o e-mail atual, digite o novo e clique em Salvar.</p>
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (usuário para entrar — não editável)</label>
-                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (igual ao nome de exibição)</label>
+                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" title="Altere o Nome de exibição acima e clique em Salvar para mudar o login." />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>
@@ -365,8 +365,8 @@ export function UserCards() {
                         <p className="mt-1 text-[11px] text-muted-foreground">Para alterar: apague o e-mail atual, digite o novo e clique em Salvar.</p>
                       </div>
                       <div>
-                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (usuário para entrar — não editável)</label>
-                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" />
+                        <label className="mb-1 block text-xs font-medium text-muted-foreground">Login (igual ao nome de exibição)</label>
+                        <input value={user.username} readOnly className="h-9 w-full rounded-lg border border-border bg-muted/50 px-3 text-sm text-muted-foreground" title="Altere o Nome de exibição acima e clique em Salvar para mudar o login." />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>

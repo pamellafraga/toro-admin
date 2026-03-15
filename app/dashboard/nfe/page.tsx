@@ -25,6 +25,7 @@ interface NFeDocument {
   total_value: number
   created_at: string
   provider_payload?: { contract_id?: string } | null
+  pdf_storage_path?: string | null
 }
 
 type ClientRow = {
@@ -659,9 +660,18 @@ export default function NFePage() {
                           size="sm"
                           variant="ghost"
                           className="text-muted-foreground hover:text-foreground"
-                          onClick={() => {
-                            // TODO: quando CREFAZ estiver integrado, abrir o documento oficial (ex.: window.open(urlPdfNfe))
-                            toast.info("O documento oficial da NF-e estará disponível após a integração com CREFAZ.", { duration: 5000 })
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`/api/nfe/documents/${nfe.id}/view`, { credentials: "include" })
+                              const json = await res.json()
+                              if (res.ok && json.url) {
+                                window.open(json.url, "_blank", "noopener,noreferrer")
+                              } else {
+                                toast.info(json.error || "PDF não disponível para esta NF-e. O documento ainda não foi armazenado no painel.")
+                              }
+                            } catch {
+                              toast.error("Erro ao abrir o PDF.")
+                            }
                           }}
                         >
                           <Eye className="mr-1 h-3.5 w-3.5" />

@@ -40,8 +40,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Perfil deve ser Administrador ou Comercial." }, { status: 400 })
 
     const supabase = createAdminClient()
-    const updates: { display_name?: string; role?: string; password_hash?: string; email?: string | null; updated_at?: string } = {}
-    if (display_name !== undefined) updates.display_name = display_name
+    const updates: { display_name?: string; username?: string; role?: string; password_hash?: string; email?: string | null; updated_at?: string } = {}
+    if (display_name !== undefined) {
+      updates.display_name = display_name
+      updates.username = display_name
+    }
     if (role !== undefined) updates.role = role
     if (email !== undefined) updates.email = email
     if (new_password !== undefined && new_password !== "") updates.password_hash = hashPassword(new_password)

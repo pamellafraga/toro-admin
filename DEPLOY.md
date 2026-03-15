@@ -80,7 +80,8 @@ Assim, mesmo que alguém ache o link, os buscadores não indexam.
 1. **Não** colocar link para o painel no site xpresssolutions.com.br (menu, rodapé, etc.).
 2. **Não** cadastrar a URL do painel (ex.: adm.xpresssolutions.com.br) no Google Search Console (e nem em outras ferramentas de indexação).
 3. Enviar o link do painel **só por canal seguro** (ex.: e-mail, WhatsApp) para os admins que precisam acessar.
-4. (Opcional) Na Vercel: *Project Settings → Deployment Protection* pode ativar **Vercel Authentication** ou **Password** para mais uma camada antes da tela de login do próprio dashboard.
+4. No **Supabase** (se for usar o botão Visualizar PDF da NF-e): em *Armazenar* criar o bucket **nfe-pdfs** (privado) e rodar o script `029_nfe_documents_pdf_storage.sql`. Ver README.
+5. (Opcional) Na Vercel: *Project Settings → Deployment Protection* pode ativar **Vercel Authentication** ou **Password** para mais uma camada antes da tela de login do próprio dashboard.
 
 ---
 
