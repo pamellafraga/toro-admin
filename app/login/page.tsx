@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Eye, EyeOff, Loader2, Lock, User, ArrowRight } from "lucide-react"
@@ -93,7 +93,7 @@ function ParticleField() {
   )
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
@@ -358,5 +358,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-[#020817]">
+          <Loader2 className="h-8 w-8 animate-spin text-sky-400" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }
