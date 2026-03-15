@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth-context"
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle2,
   Clock, Search, Download, Calendar, Package, User, ChevronDown, ChevronUp,
-  CheckCircle, PauseCircle, XCircle
+  CheckCircle, PauseCircle, XCircle, LayoutGrid, List
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import useSWR from "swr"
@@ -52,9 +52,27 @@ const CONTRACT_STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; cla
 type SortField = "client" | "product" | "value" | "status" | "payment" | "date"
 type SortDir = "asc" | "desc"
 
+const PAYMENT_KANBAN_COLUMNS = [
+  { id: "em_dia", label: "Em dia", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: CheckCircle2 },
+  { id: "pendente", label: "Pendente", class: "bg-amber-500/15 text-amber-400 border-amber-500/30", icon: Clock },
+  { id: "expirado", label: "Expirado", class: "bg-red-600/15 text-red-500 border-red-600/30", icon: XCircle },
+  { id: "cancelado", label: "Cancelado", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30", icon: XCircle },
+] as const
+
+function normalizePaymentForKanban(payment_status: string | null | undefined): string {
+  const p = (payment_status ?? "").toString().toLowerCase().trim()
+  if (p === "em_dia" || p === "paid") return "em_dia"
+  if (p === "pendente" || p === "pending") return "pendente"
+  if (p === "atrasado" || p === "overdue") return "expirado"
+  if (p === "expirado" || p === "expired") return "expirado"
+  if (p === "cancelado" || p === "cancelled") return "cancelado"
+  return "pendente"
+}
+
 export default function FinanceiroPage() {
   const { hasPermission, isAdmin } = useAuth()
   const supabase = createClient()
+  const [view, setView] = useState<"list" | "kanban">("list")
   const [search, setSearch] = useState("")
   const [filterPayment, setFilterPayment] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -228,9 +246,9 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
+      {/* Filters + View toggle */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
             placeholder="Buscar por cliente, CPF/CNPJ ou email..."
@@ -239,9 +257,71 @@ export default function FinanceiroPage() {
             className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
         </div>
+        <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+          <button
+            type="button"
+            title="Listagem"
+            onClick={() => setView("list")}
+            className={cn("flex items-center gap-2 px-3 py-2 text-sm", view === "list" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary")}
+          >
+            <List className="h-4 w-4" /> Listagem
+          </button>
+          <button
+            type="button"
+            title="Kanban (por status de pagamento)"
+            onClick={() => setView("kanban")}
+            className={cn("flex items-center gap-2 px-3 py-2 text-sm", view === "kanban" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary")}
+          >
+            <LayoutGrid className="h-4 w-4" /> Kanban
+          </button>
+        </div>
       </div>
 
-      {/* Contracts Table */}
+      {view === "kanban" ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
+          {PAYMENT_KANBAN_COLUMNS.map((col) => {
+            const colContracts = filtered.filter((c) => normalizePaymentForKanban(c.payment_status) === col.id)
+            const ColIcon = col.icon
+            return (
+              <div key={col.id} className="flex flex-col min-w-[240px] rounded-xl border border-border bg-card/50 overflow-hidden">
+                <div className={cn("flex items-center justify-between px-3 py-2.5 border-b border-border", col.class)}>
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    <ColIcon className="h-4 w-4" /> {col.label}
+                  </span>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-background/80 text-xs font-bold">{colContracts.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-320px)]">
+                  {colContracts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum contrato</p>
+                  ) : (
+                    colContracts.map((contract) => (
+                      <div
+                        key={contract.id}
+                        className="rounded-lg border border-border bg-background p-3 shadow-sm hover:shadow transition-shadow"
+                      >
+                        <p className="font-medium text-foreground truncate">{contract.clients?.name || "—"}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{contract.clients?.email || contract.clients?.cpf_cnpj || ""}</p>
+                        <div className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground">
+                          <Package className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{contract.products?.name || "—"}</span>
+                        </div>
+                        <p className="text-sm font-semibold text-primary mt-2">
+                          R$ {Number(contract.monthly_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {contract.start_date ? format(new Date(contract.start_date + "T00:00:00"), "dd/MM/yyyy", { locale: ptBR }) : "—"}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+      /* Contracts Table */
       <div className="glass rounded-xl overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <p className="text-sm font-medium text-foreground">
@@ -362,6 +442,7 @@ export default function FinanceiroPage() {
           </table>
         </div>
       </div>
+      )}
     </div>
   )
 }

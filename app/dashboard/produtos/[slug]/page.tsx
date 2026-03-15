@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { Search, ArrowLeft, DollarSign, Calendar, User, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle, CheckCircle, XCircle, Clock, PauseCircle } from "lucide-react"
+import { Search, ArrowLeft, DollarSign, Calendar, User, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle, CheckCircle, XCircle, Clock, PauseCircle, LayoutGrid, List } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
@@ -47,6 +47,23 @@ const PAYMENT_MAP: Record<string, { label: string; class: string }> = {
   cancelled: { label: "Cancelado", class: "text-zinc-400" },
   expirado: { label: "Expirado", class: "text-red-400" },
   expired: { label: "Expirado", class: "text-red-400" },
+}
+
+const PAYMENT_KANBAN_COLUMNS = [
+  { id: "em_dia", label: "Em dia", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  { id: "pendente", label: "Pendente", class: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  { id: "expirado", label: "Expirado", class: "bg-red-600/15 text-red-500 border-red-600/30" },
+  { id: "cancelado", label: "Cancelado", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
+] as const
+
+function normalizePaymentForKanban(payment_status: string | null | undefined): string {
+  const p = (payment_status ?? "").toString().toLowerCase().trim()
+  if (p === "em_dia" || p === "paid") return "em_dia"
+  if (p === "pendente" || p === "pending") return "pendente"
+  if (p === "atrasado" || p === "overdue") return "expirado"
+  if (p === "expirado" || p === "expired") return "expirado"
+  if (p === "cancelado" || p === "cancelled") return "cancelado"
+  return "pendente"
 }
 
 const addOneMonthSameDay = (dateStr: string) => {
@@ -101,6 +118,7 @@ export default function ProductDetailPage() {
   const [filterStatus, setFilterStatus] = useState("all")
   const [filterMonth, setFilterMonth] = useState("")
   const [filterOrigin, setFilterOrigin] = useState("")
+  const [view, setView] = useState<"list" | "kanban">("list")
   const [showNewContract, setShowNewContract] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -762,14 +780,92 @@ export default function ProductDetailPage() {
         ))}
       </div>
 
-      {/* Lista: para comercial = mês atual + aguardando produto; para admin = filtro por mês se quiser */}
-      <p className="text-xs text-muted-foreground mb-1">
-        {isComercial
-          ? "Contratos do mês atual e aguardando produto"
-          : [filterMonth && "mês selecionado", filterOrigin && "origem selecionada"].filter(Boolean).length
-            ? "Lista filtrada"
-            : "Todos os contratos"}
-      </p>
+      {/* Lista ou Kanban por status de pagamento */}
+      <div className="flex items-center justify-between gap-4 mb-2">
+        <p className="text-xs text-muted-foreground">
+          {isComercial
+            ? "Contratos do mês atual e aguardando produto"
+            : [filterMonth && "mês selecionado", filterOrigin && "origem selecionada"].filter(Boolean).length
+              ? "Lista filtrada"
+              : "Todos os contratos"}
+        </p>
+        <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
+          <button
+            type="button"
+            title="Listagem"
+            onClick={() => setView("list")}
+            className={cn("flex items-center gap-2 px-3 py-2 text-sm", view === "list" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary")}
+          >
+            <List className="h-4 w-4" /> Listagem
+          </button>
+          <button
+            type="button"
+            title="Kanban (por status de pagamento)"
+            onClick={() => setView("kanban")}
+            className={cn("flex items-center gap-2 px-3 py-2 text-sm", view === "kanban" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary")}
+          >
+            <LayoutGrid className="h-4 w-4" /> Kanban
+          </button>
+        </div>
+      </div>
+
+      {view === "kanban" ? (
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
+          {PAYMENT_KANBAN_COLUMNS.map((col) => {
+            const colContracts = (filtered || []).filter((c) => normalizePaymentForKanban(c.payment_status) === col.id)
+            return (
+              <div key={col.id} className="flex flex-col min-w-[220px] rounded-xl border border-border bg-card/50 overflow-hidden">
+                <div className={cn("flex items-center justify-between px-3 py-2.5 border-b border-border", col.class)}>
+                  <span className="text-sm font-semibold">{col.label}</span>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-background/80 text-xs font-bold">{colContracts.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-380px)]">
+                  {colContracts.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-4 text-center">Nenhum contrato</p>
+                  ) : (
+                    colContracts.map((contract) => (
+                      <div
+                        key={contract.id}
+                        className="rounded-lg border border-border bg-background p-3 shadow-sm hover:shadow transition-shadow"
+                      >
+                        <p className="font-medium text-foreground truncate">{contract.clients?.name || "—"}</p>
+                        <p className="text-xs text-muted-foreground truncate mt-0.5">{contract.clients?.email || contract.clients?.cpf_cnpj || ""}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{contract.clients?.origem_captacao || "—"}</p>
+                        <p className="text-sm font-semibold text-primary mt-2">
+                          R$ {Number(contract.monthly_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {contract.start_date ? format(new Date(contract.start_date), "dd/MM/yyyy", { locale: ptBR }) : "—"}
+                        </p>
+                        <div className="flex gap-1 mt-2">
+                          <button
+                            type="button"
+                            onClick={() => openEditContract(contract)}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteContract(contract)}
+                            disabled={deletingId === contract.id}
+                            className="rounded p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
+                            title="Excluir"
+                          >
+                            {deletingId === contract.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
       <div className="glass rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -876,6 +972,7 @@ export default function ProductDetailPage() {
           </table>
         </div>
       </div>
+      )}
 
       {editingContract && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">

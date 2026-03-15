@@ -2,7 +2,7 @@
 
 import { Monitor, Loader2 } from "lucide-react"
 import Link from "next/link"
-import useSWR, { useSWRConfig } from "swr"
+import useSWR from "swr"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 
@@ -15,6 +15,12 @@ const PRODUCT_STATUS_OPTIONS: { value: ProductStatus; label: string }[] = [
   { value: "pausado", label: "Pausado" },
   { value: "desativado", label: "Desativado" },
 ]
+
+const PRODUCT_STATUS_STYLE: Record<ProductStatus, string> = {
+  no_ar: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  pausado: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  desativado: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+}
 
 function countByStatus(contracts: { status: string }[]) {
   const ativos = contracts.filter((c) => c.status === "ativa" || c.status === "active").length
@@ -30,11 +36,10 @@ const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
 }
 
 export default function ProdutosPage() {
-  const { mutate } = useSWRConfig()
   const { isAdmin, isComercial } = useAuth()
   // Comercial: API já retorna só contratos dele, sem filtro de data = total da vida inteira
-  const { data, isLoading } = useSWR(`api-contracts-${SLUG}`, async () => {
-    const res = await fetch(`/api/products/${SLUG}/contracts`)
+  const { data, isLoading, mutate: mutateSwr } = useSWR(`api-contracts-${SLUG}`, async () => {
+    const res = await fetch(`/api/products/${SLUG}/contracts`, { cache: "no-store" })
     const json = await res.json()
     return json as {
       product: { id: string; name: string; description: string; product_status?: string } | null
@@ -73,12 +78,18 @@ export default function ProdutosPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product_status: newStatus }),
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error || "Erro ao atualizar")
-      }
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((json as { error?: string }).error || "Erro ao atualizar")
       toast.success("Status do produto atualizado.")
-      mutate(`api-contracts-${SLUG}`)
+      const updatedProduct = (json as { product?: { id: string; name: string; description: string; product_status?: string } }).product
+      mutateSwr(
+        (current: typeof data) => {
+          if (!current) return current
+          const product = updatedProduct ?? (current.product ? { ...current.product, product_status: newStatus } : null)
+          return { ...current, product: product ?? current.product }
+        },
+        { revalidate: true }
+      )
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro ao atualizar status")
     }
@@ -160,14 +171,14 @@ export default function ProdutosPage() {
                   <select
                     value={productRow.productStatus}
                     onChange={(e) => updateProductStatus(e.target.value as ProductStatus)}
-                    className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                    className={`rounded-lg border px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none cursor-pointer ${PRODUCT_STATUS_STYLE[productRow.productStatus]}`}
                   >
                     {PRODUCT_STATUS_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>{opt.label}</option>
                     ))}
                   </select>
                 ) : (
-                  <span className="text-xs font-medium text-foreground">
+                  <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${PRODUCT_STATUS_STYLE[productRow.productStatus]}`}>
                     {PRODUCT_STATUS_LABELS[productRow.productStatus]}
                   </span>
                 )}

@@ -34,28 +34,34 @@ export async function PATCH(
       )
     }
     const supabase = await createClient()
-    const { data: bySlug } = await supabase
+    // Mesmo critério da listagem (GET /contracts): por nome, para atualizar o produto que a tela exibe
+    const { data: productRow } = await supabase
       .from("products")
       .select("id")
-      .eq("slug", slug)
+      .eq("name", "Software de Gestão")
+      .limit(1)
       .maybeSingle()
-    let productId = bySlug?.id
-    if (!productId) {
-      const { data: byName } = await supabase
-        .from("products")
-        .select("id")
-        .eq("name", "Software de Gestão")
-        .limit(1)
-        .maybeSingle()
-      if (!byName) {
-        return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
-      }
-      productId = byName.id
-      await supabase.from("products").update({ product_status, slug }).eq("id", productId)
-    } else {
-      await supabase.from("products").update({ product_status }).eq("id", productId)
+    if (!productRow?.id) {
+      return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 })
     }
-    return NextResponse.json({ success: true })
+    const productId = productRow.id
+    const { data: updated, error: updateError } = await supabase
+      .from("products")
+      .update({ product_status })
+      .eq("id", productId)
+      .select("id, name, description, product_status")
+      .single()
+    if (updateError) {
+      console.error("Erro ao atualizar product_status:", updateError)
+      return NextResponse.json(
+        { error: "Falha ao salvar no banco. Verifique se a coluna product_status existe (script 016 ou 030). Detalhe: " + updateError.message },
+        { status: 500 }
+      )
+    }
+    if (!updated) {
+      return NextResponse.json({ error: "Produto não encontrado após atualização." }, { status: 500 })
+    }
+    return NextResponse.json({ success: true, product: updated })
   } catch (err) {
     console.error("Erro ao atualizar produto:", err)
     return NextResponse.json(
