@@ -72,7 +72,7 @@ function normalizePaymentForKanban(payment_status: string | null | undefined): s
 export default function FinanceiroPage() {
   const { hasPermission, isAdmin } = useAuth()
   const supabase = createClient()
-  const [view, setView] = useState<"list" | "kanban">("list")
+  const [view, setView] = useState<"list" | "kanban">("kanban")
   const [search, setSearch] = useState("")
   const [filterPayment, setFilterPayment] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
