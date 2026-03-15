@@ -4,17 +4,16 @@ import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, CheckCircle2,
-  Clock, Search, Filter, Download, Calendar, Package, User, ChevronDown, ChevronUp
+  Clock, Search, Download, Calendar, Package, User, ChevronDown, ChevronUp,
+  CheckCircle, PauseCircle, XCircle
 } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import useSWR from "swr"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ShieldAlert } from "lucide-react"
 import type { Contract } from "@/lib/types"
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
-} from "recharts"
 
 const PAYMENT_STATUS_MAP: Record<string, { label: string; class: string; icon: typeof CheckCircle2 }> = {
   em_dia: { label: "Em Dia", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", icon: CheckCircle2 },
@@ -29,15 +28,25 @@ const PAYMENT_STATUS_MAP: Record<string, { label: string; class: string; icon: t
   expired: { label: "Expirado", class: "bg-red-500/15 text-red-400 border-red-500/30", icon: AlertCircle },
 }
 
-const CONTRACT_STATUS_MAP: Record<string, { label: string; class: string }> = {
-  ativa: { label: "Ativa", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  active: { label: "Ativa", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
-  inativa: { label: "Inativa", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
-  inactive: { label: "Inativa", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
-  pendente: { label: "Pendente", class: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
-  suspended: { label: "Suspensa", class: "bg-orange-500/15 text-orange-400 border-orange-500/30" },
-  cancelada: { label: "Cancelada", class: "bg-red-500/15 text-red-400 border-red-500/30" },
-  cancelled: { label: "Cancelada", class: "bg-red-500/15 text-red-400 border-red-500/30" },
+function normalizeProductStatus(s: string | null): string {
+  if (!s) return ""
+  const t = (s || "").toLowerCase().trim()
+  if (t === "active" || t === "ativa") return "ativa"
+  if (t === "inactive" || t === "inativa") return "inativa"
+  if (t === "cancelled" || t === "cancelada") return "cancelada"
+  if (t === "suspended" || t === "pendente") return "pendente"
+  return t || s
+}
+const CONTRACT_STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; class: string }> = {
+  ativa: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  active: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
+  aguardando_produto: { label: "Aguardando produto", Icon: Clock, class: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  inativa: { label: "Produto inativo", Icon: PauseCircle, class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
+  inactive: { label: "Produto inativo", Icon: PauseCircle, class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30" },
+  pendente: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  suspended: { label: "Produto vencido", Icon: AlertCircle, class: "bg-orange-500/15 text-orange-400 border-orange-500/30" },
+  cancelada: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/15 text-red-400 border-red-500/30" },
+  cancelled: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/15 text-red-400 border-red-500/30" },
 }
 
 type SortField = "client" | "product" | "value" | "status" | "payment" | "date"
@@ -93,17 +102,6 @@ export default function FinanceiroPage() {
   const monthlyRevenue = contractsEmDia.reduce((sum, c) => sum + Number(c.monthly_value ?? 0), 0)
   const expiredRevenue = expiredContracts.reduce((sum, c) => sum + Number(c.monthly_value), 0)
 
-  // Revenue by product chart data (contratos em dia)
-  const revenueByProduct = products?.map(p => {
-    const productContracts = contractsEmDia.filter(c => c.product_id === p.id)
-    return {
-      name: p.name.length > 20 ? p.name.substring(0, 20) + "..." : p.name,
-      fullName: p.name,
-      value: productContracts.reduce((sum, c) => sum + Number(c.monthly_value), 0),
-      count: productContracts.length,
-    }
-  }).filter(p => p.value > 0) || []
-
   // Filter & sort
   const filtered = contracts?.filter(c => {
     const matchSearch = !search ||
@@ -139,7 +137,7 @@ export default function FinanceiroPage() {
   }
 
   const exportCSV = () => {
-    const header = "Cliente,CPF/CNPJ,Produto,Status Contrato,Status Pagamento,Valor Mensal,Data Inicio\n"
+    const header = "Cliente,CPF/CNPJ,Produto,Contratacao,Status Pagamento,Valor Mensal,Data Inicio\n"
     const rows = filtered.map(c =>
       `"${c.clients?.name || ""}","${c.clients?.cpf_cnpj || ""}","${c.products?.name || ""}","${c.status}","${c.payment_status}","${c.monthly_value}","${c.start_date}"`
     ).join("\n")
@@ -230,36 +228,6 @@ export default function FinanceiroPage() {
         </div>
       </div>
 
-      {/* Chart */}
-      {revenueByProduct.length > 0 && (
-        <div className="glass rounded-xl p-6">
-          <h3 className="text-sm font-semibold text-foreground mb-4">Receita por Produto (Contratos Ativos)</h3>
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={revenueByProduct} margin={{ top: 0, right: 10, left: 10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(30,58,95,0.5)" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false}
-                  tickFormatter={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip
-                  contentStyle={{ background: "#0a1128", border: "1px solid #1e3a5f", borderRadius: "8px", color: "#e2e8f0" }}
-                  formatter={(value: number, _: string, props: { payload?: { fullName?: string; count?: number } }) => [
-                    `R$ ${value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-                    props.payload?.fullName || "Receita"
-                  ]}
-                  labelFormatter={() => ""}
-                />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                  {revenueByProduct.map((_, index) => (
-                    <Cell key={index} fill={["#0ea5e9", "#8b5cf6", "#10b981"][index % 3]} fillOpacity={0.8} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      )}
-
       {/* Filters */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -270,46 +238,6 @@ export default function FinanceiroPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-          <select
-            value={filterPayment}
-            onChange={(e) => setFilterPayment(e.target.value)}
-            className="h-10 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todos pagamentos</option>
-            <option value="em_dia">Em Dia</option>
-            <option value="paid">Em Dia (paid)</option>
-            <option value="atrasado">Atrasado</option>
-            <option value="overdue">Atrasado (overdue)</option>
-            <option value="pendente">Pendente</option>
-            <option value="pending">Pendente (pending)</option>
-          </select>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="h-10 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todos status</option>
-            <option value="ativa">Ativa</option>
-            <option value="active">Ativa (active)</option>
-            <option value="inativa">Inativa</option>
-            <option value="pendente">Pendente</option>
-            <option value="cancelada">Cancelada</option>
-          </select>
-          {products && products.length > 0 && (
-            <select
-              value={filterProduct}
-              onChange={(e) => setFilterProduct(e.target.value)}
-              className="h-10 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              <option value="all">Todos produtos</option>
-              {products.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          )}
         </div>
       </div>
 
@@ -340,7 +268,7 @@ export default function FinanceiroPage() {
                   className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors"
                   onClick={() => handleSort("status")}
                 >
-                  Status <SortIcon field="status" />
+                  Produto <SortIcon field="status" />
                 </th>
                 <th
                   className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide cursor-pointer hover:text-foreground transition-colors"
@@ -367,7 +295,9 @@ export default function FinanceiroPage() {
                 filtered.map((contract) => {
                   const payInfo = PAYMENT_STATUS_MAP[contract.payment_status] || PAYMENT_STATUS_MAP.pendente
                   const PayIcon = payInfo.icon
-                  const statusInfo = CONTRACT_STATUS_MAP[contract.status] || CONTRACT_STATUS_MAP.pendente
+                  const statusNorm = normalizeProductStatus(contract.status)
+                  const statusInfo = CONTRACT_STATUS_MAP[statusNorm] || CONTRACT_STATUS_MAP[contract.status] || CONTRACT_STATUS_MAP.pendente
+                  const StatusIcon = statusInfo.Icon
                   return (
                     <tr key={contract.id} className="border-b border-border/30 hover:bg-secondary/20 transition-colors">
                       <td className="px-4 py-3">
@@ -388,8 +318,8 @@ export default function FinanceiroPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", statusInfo.class)}>
-                          {statusInfo.label}
+                        <span title={statusInfo.label} className={cn("inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", statusInfo.class)}>
+                          <StatusIcon className="h-3.5 w-3.5 shrink-0" />
                         </span>
                       </td>
                       <td className="px-4 py-3">

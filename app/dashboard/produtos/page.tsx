@@ -4,6 +4,7 @@ import { Monitor, Loader2 } from "lucide-react"
 import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
 import { toast } from "sonner"
+import { useAuth } from "@/lib/auth-context"
 
 const SLUG = "software-gestao-apolice-seguro"
 
@@ -22,8 +23,16 @@ function countByStatus(contracts: { status: string }[]) {
   return { ativos, aguardando, inativos }
 }
 
+const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
+  no_ar: "No ar",
+  pausado: "Pausado",
+  desativado: "Desativado",
+}
+
 export default function ProdutosPage() {
   const { mutate } = useSWRConfig()
+  const { isAdmin, isComercial } = useAuth()
+  // Comercial: API já retorna só contratos dele, sem filtro de data = total da vida inteira
   const { data, isLoading } = useSWR(`api-contracts-${SLUG}`, async () => {
     const res = await fetch(`/api/products/${SLUG}/contracts`)
     const json = await res.json()
@@ -48,6 +57,7 @@ export default function ProdutosPage() {
     slug: SLUG,
     name: product?.name ?? "Software de Gestão",
     description: product?.description ?? "Apólice de Seguro - Modalidade Garantias",
+    planosLabel: "3 planos: Básico (R$ 500), Confort (R$ 800), Premium (R$ 1.500)",
     ativos,
     aguardando,
     inativos,
@@ -79,8 +89,11 @@ export default function ProdutosPage() {
       <div>
         <h2 className="text-2xl font-bold text-foreground">Produtos</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Gerenciar produtos para locação e visualizar contratações
+          Nosso único produto para locação. 3 planos: Básico, Confort e Premium.
         </p>
+        {isComercial && (
+          <p className="text-xs text-amber-400/90 mt-1">Contadores e totais são da sua história inteira (todas as vendas registradas por você).</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -90,7 +103,8 @@ export default function ProdutosPage() {
               <Monitor className="h-6 w-6 text-primary" />
             </div>
             <h3 className="text-lg font-bold text-foreground mb-1">{productRow.name}</h3>
-            <p className="text-sm text-muted-foreground mb-4">{productRow.description}</p>
+            <p className="text-sm text-muted-foreground mb-1">{productRow.description}</p>
+            <p className="text-xs text-muted-foreground/90 mb-4">{productRow.planosLabel}</p>
             <div className="flex items-center gap-6 pt-4 border-t border-border/50">
               {isLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
@@ -128,7 +142,7 @@ export default function ProdutosPage() {
             <tr className="border-b border-border/50 bg-muted/20">
               <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Produto</th>
               <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contratos Ativos</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Valor Mensal</th>
+              {isAdmin && <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Valor Mensal</th>}
               <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
               <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ação</th>
             </tr>
@@ -140,21 +154,27 @@ export default function ProdutosPage() {
             >
               <td className="px-6 py-4 font-semibold text-foreground underline-offset-2 hover:underline">{productRow.name}</td>
               <td className="px-6 py-4 text-foreground">{isLoading ? "—" : productRow.ativos}</td>
-              <td className="px-6 py-4 text-foreground">{isLoading ? "—" : productRow.monthlyValue}</td>
+              {isAdmin && <td className="px-6 py-4 text-foreground">{isLoading ? "—" : productRow.monthlyValue}</td>}
               <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                <select
-                  value={productRow.productStatus}
-                  onChange={(e) => updateProductStatus(e.target.value as ProductStatus)}
-                  className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-primary focus:outline-none cursor-pointer"
-                >
-                  {PRODUCT_STATUS_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                {isAdmin ? (
+                  <select
+                    value={productRow.productStatus}
+                    onChange={(e) => updateProductStatus(e.target.value as ProductStatus)}
+                    className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground focus:border-primary focus:outline-none cursor-pointer"
+                  >
+                    {PRODUCT_STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="text-xs font-medium text-foreground">
+                    {PRODUCT_STATUS_LABELS[productRow.productStatus]}
+                  </span>
+                )}
               </td>
               <td className="px-6 py-4">
                 <Link href={`/dashboard/produtos/${productRow.slug}`} onClick={(e) => e.stopPropagation()}>
-                  <button className="rounded-lg border border-border/50 bg-muted/20 px-4 py-1.5 text-xs font-medium text-foreground hover:bg-muted/40 transition-colors">Ver assinantes</button>
+                  <button className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Ver assinantes</button>
                 </Link>
               </td>
             </tr>

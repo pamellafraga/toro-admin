@@ -1,7 +1,19 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { logActivity } from "@/lib/activity-log"
 
-export async function POST(req: Request) {
+function getAuthFromCookie(req: NextRequest): { role?: string; displayName?: string } {
+  try {
+    const cookie = req.cookies.get("xpress_auth")?.value
+    if (!cookie) return {}
+    const parsed = JSON.parse(cookie)
+    return { role: parsed.role, displayName: parsed.displayName ?? parsed.user }
+  } catch {
+    return {}
+  }
+}
+
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const {
@@ -24,6 +36,9 @@ export async function POST(req: Request) {
       payment_status,
       origem_captacao,
     } = body
+    const auth = getAuthFromCookie(req)
+    const isComercial = auth.role === "comercial" && auth.displayName
+    const origemComercial = isComercial ? `Comercial - ${auth.displayName}` : (body.origem_comercial ?? null)
 
     if (!client_name?.trim()) {
       return NextResponse.json(
@@ -185,6 +200,7 @@ export async function POST(req: Request) {
         start_date: start_date || new Date().toISOString().slice(0, 10),
         monthly_value: selectedValue,
         notes: null,
+        origem_comercial: origemComercial || null,
       })
       .select("id, client_id, product_id")
       .single()
@@ -197,6 +213,18 @@ export async function POST(req: Request) {
     }
 
     // NF-e só para quem está com pagamento em dia — guarda todos os dados do cliente e da compra na solicitação
+    await logActivity(
+      { displayName: auth.displayName },
+      {
+        action: wasExistingClient
+          ? `Cadastrou contrato/assinatura para ${(client_name as string).trim()}`
+          : `Cadastrou novo cliente e contrato: ${(client_name as string).trim()}`,
+        entity_type: "contract",
+        entity_id: contract.id,
+        details: { client_id: clientId, product_id: resolvedProductId },
+      }
+    )
+
     if (paymentStatusDb === "em_dia") {
       await supabase.from("nfe_documents").insert({
         client_id: contract.client_id,

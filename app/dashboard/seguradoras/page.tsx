@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
-import { Search, Plus, X, Save, LayoutGrid, List, Filter } from "lucide-react"
+import { Search, Plus, X, Save, LayoutGrid, List } from "lucide-react"
 import useSWR from "swr"
 import type { Seguradora, Profile } from "@/lib/types"
 import { KANBAN_COLUMNS } from "@/lib/types"
@@ -90,16 +90,6 @@ export default function SeguradorasPage() {
           <input placeholder="Buscar por nome ou CNPJ..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <select title="Filtrar por atribuição" value={filterAssigned} onChange={(e) => setFilterAssigned(e.target.value)}
-            className="h-10 rounded-lg border border-border bg-secondary px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todos</option>
-            <option value="unassigned">Sem atribuicao</option>
-            {users?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
         </div>
       </div>
 

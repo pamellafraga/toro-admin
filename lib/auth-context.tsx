@@ -1,8 +1,9 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useRef, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useState, useRef, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
-import type { Profile, Permission } from "@/lib/types"
+import type { Profile, Permission, UserRole } from "@/lib/types"
+import { ROLE_PERMISSIONS } from "@/lib/types"
 import type { User } from "@supabase/supabase-js"
 
 interface AuthContextType {
@@ -11,6 +12,9 @@ interface AuthContextType {
   loading: boolean
   hasPermission: (permission: Permission) => boolean
   isAdmin: boolean
+  isComercial: boolean
+  /** Nome do comercial para filtrar "meus clientes" / "minhas vendas" (ex.: Lisete, Stefanie) */
+  comercialDisplayName: string | null
   refreshProfile: () => Promise<void>
 }
 
@@ -20,6 +24,8 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   hasPermission: () => true,
   isAdmin: true,
+  isComercial: false,
+  comercialDisplayName: null,
   refreshProfile: async () => {},
 })
 
@@ -60,23 +66,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const sb = supabaseRef.current
 
-    // Verificar autenticação local PRIMEIRO
+    // Verificar autenticação local (cookie ou localStorage com payload do login)
     if (isLocallyAuthenticated()) {
       isLocalAuth.current = true
-      let username = "Admin"
+      let displayName = "Admin"
+      let role: UserRole = "admin"
       try {
+        let parsed: { user?: string; displayName?: string; role?: string } = {}
         const raw = localStorage.getItem("xpress_auth")
         if (raw) {
-          const parsed = JSON.parse(raw)
-          if (parsed.user) username = parsed.user
+          try {
+            parsed = JSON.parse(raw)
+          } catch {}
         }
+        if (!parsed.role && typeof document !== "undefined") {
+          const cookieMatch = document.cookie.match(/xpress_auth=([^;]+)/)
+          if (cookieMatch) {
+            try {
+              const decoded = decodeURIComponent(cookieMatch[1].trim())
+              parsed = JSON.parse(decoded)
+            } catch {}
+          }
+        }
+        if (parsed.displayName) displayName = parsed.displayName
+        else if (parsed.user) displayName = parsed.user
+        if (parsed.role === "comercial" || parsed.role === "admin") role = parsed.role
       } catch {}
 
-      const adminProfile = { ...ADMIN_PROFILE, name: username }
-      setProfile(adminProfile)
+      const permissions = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.admin
+      const profileData: Profile = {
+        ...ADMIN_PROFILE,
+        id: role === "comercial" ? `comercial-${displayName}` : "local-admin",
+        name: displayName,
+        role,
+        permissions: permissions as Profile["permissions"],
+      }
+      setProfile(profileData)
       setLoading(false)
-
-      // Não inicializar Supabase listener para não sobrescrever
       return
     }
 
@@ -120,14 +146,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const isAdmin = true // todos os usuários autenticados são admin
-
-  const hasPermission = () => true // todos os itens visíveis para usuários autenticados
+  const role = (profile?.role ?? "admin") as UserRole
+  const isAdmin = role === "admin"
+  const isComercial = role === "comercial"
+  const permissions = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.admin
+  const hasPermission = (permission: Permission) => permissions.includes(permission)
+  const comercialDisplayName = isComercial && profile?.name ? profile.name : null
 
   const refreshProfile = async () => {}
 
+  const value = useMemo(
+    () => ({
+      user,
+      profile,
+      loading,
+      hasPermission,
+      isAdmin,
+      isComercial,
+      comercialDisplayName,
+      refreshProfile,
+    }),
+    [user, profile, loading]
+  )
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, hasPermission, isAdmin, refreshProfile }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )

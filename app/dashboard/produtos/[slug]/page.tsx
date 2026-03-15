@@ -1,9 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useParams } from "next/navigation"
-import { Search, ArrowLeft, DollarSign, Calendar, User, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { Search, ArrowLeft, DollarSign, Calendar, User, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle, CheckCircle, XCircle, Clock, PauseCircle } from "lucide-react"
+import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
 import type { Client, Contract, Product } from "@/lib/types"
@@ -12,16 +14,26 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-const STATUS_MAP: Record<string, { label: string; class: string }> = {
-  active: { label: "Ativa", class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  ativa: { label: "Ativa", class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  aguardando_produto: { label: "Aguardando produto", class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  inactive: { label: "Inativa", class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
-  inativa: { label: "Inativa", class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
-  suspended: { label: "Suspensa", class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  pendente: { label: "Pendente", class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  cancelled: { label: "Cancelada", class: "bg-red-500/10 text-red-400 border-red-500/30" },
-  cancelada: { label: "Cancelada", class: "bg-red-500/10 text-red-400 border-red-500/30" },
+/** Produto (contratação): ícone na exibição (estilo foto 3); texto só em cadastro/edição */
+function normalizeProductStatus(s: string | null): string {
+  if (!s) return ""
+  const t = (s || "").toLowerCase().trim()
+  if (t === "active" || t === "ativa") return "ativa"
+  if (t === "inactive" || t === "inativa") return "inativa"
+  if (t === "cancelled" || t === "cancelada") return "cancelada"
+  if (t === "suspended" || t === "pendente") return "pendente"
+  return t || s
+}
+const STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; class: string }> = {
+  active: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  ativa: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  aguardando_produto: { label: "Aguardando produto", Icon: Clock, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+  inactive: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
+  inativa: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
+  suspended: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+  pendente: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
+  cancelled: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/10 text-red-400 border-red-500/30" },
+  cancelada: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/10 text-red-400 border-red-500/30" },
 }
 
 const PAYMENT_MAP: Record<string, { label: string; class: string }> = {
@@ -50,30 +62,45 @@ const addOneMonthSameDay = (dateStr: string) => {
 }
 
 const ORIGEM_CAPTACAO_OPCOES = [
-  "Comercial - Lisete",
   "Website",
-  "Comercial - Pamella",
-  "Comercial - Roberto",
+  "Comercial - Stefanie",
+  "Comercial - Lisete",
 ] as const
 
-const STATUS_LEAD_OPCOES = [
-  { id: "novo", label: "Novo" },
+const STATUS_COMERCIAL_OPCOES = [
+  { id: "", label: "—" },
+  { id: "tentando_contato", label: "Tentando contato" },
+  { id: "em_conversa", label: "Em conversa" },
+  { id: "agendado", label: "Agendado" },
   { id: "contratando", label: "Contratando" },
   { id: "negociando", label: "Negociando" },
   { id: "ativo", label: "Ativo" },
   { id: "perdido", label: "Perdido" },
+  { id: "bloqueado", label: "Bloqueado" },
+  { id: "sem_interesse", label: "Sem interesse" },
 ] as const
 
-const getEtapaLead = (client: Client | null | undefined) => (client?.status_lead || "contratando") as string
+/** Status em branco = "—", não designado (igual origem); só em "Todos" */
+const getEtapaLead = (client: Client | null | undefined) => {
+  const s = (client?.status_lead ?? "") as string
+  const t = s.trim()
+  return !t || t === "novo" ? "" : t
+}
+const getEtapaLeadLabel = (client: Client | null | undefined) => {
+  const etapa = getEtapaLead(client)
+  return etapa === "" ? "—" : (STATUS_COMERCIAL_OPCOES.find((x) => x.id === etapa)?.label ?? etapa)
+}
 
 export default function ProductDetailPage() {
   const params = useParams()
   const slug = params.slug as string
   const supabase = createClient()
   const { mutate: globalMutate } = useSWRConfig()
+  const { isComercial, comercialDisplayName, isAdmin } = useAuth()
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState("all")
   const [filterMonth, setFilterMonth] = useState("")
+  const [filterOrigin, setFilterOrigin] = useState("")
   const [showNewContract, setShowNewContract] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
@@ -91,7 +118,7 @@ export default function ProductDetailPage() {
     city: "",
     state: "",
     origem_captacao: "",
-    status_lead: "contratando",
+    status_lead: "tentando_contato",
     // Contrato
     plan: "confort",
     payment_day: 10,
@@ -125,6 +152,12 @@ export default function ProductDetailPage() {
     status: "active",
     payment_status: "paid",
   })
+
+  useEffect(() => {
+    if (showNewContract && isComercial && comercialDisplayName) {
+      setNewContract((prev) => ({ ...prev, origem_captacao: `Comercial - ${comercialDisplayName}` }))
+    }
+  }, [showNewContract, isComercial, comercialDisplayName])
 
   const { data: product } = useSWR(`product-${slug}`, async () => {
     // Tenta buscar o produto pelo slug; se não existir, cria automaticamente
@@ -166,7 +199,7 @@ export default function ProductDetailPage() {
   const { data: apiData, mutate: mutateApiContracts } = useSWR(
     slug ? `api-contracts-${slug}` : null,
     async () => {
-      const res = await fetch(`/api/products/${slug}/contracts`)
+      const res = await fetch(`/api/products/${slug}/contracts`, { credentials: "include" })
       const data = await res.json()
       return data as { product: { id: string; name: string; description: string } | null; contracts: Contract[] }
     },
@@ -187,8 +220,22 @@ export default function ProductDetailPage() {
   const contracts = (contractsFromApi.length > 0 ? contractsFromApi : contractsFromClient) ?? []
   const productResolved = product || productFromApi
 
+  // Comercial: só vê mês atual (todos) + meses anteriores (apenas aguardando produto). Sem filtro por mês.
+  const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
+  const contractsVisible = isComercial
+    ? contracts.filter((c) => {
+        const monthStr = c.start_date ? String(c.start_date).slice(0, 7) : ""
+        return monthStr === currentMonthStr || c.status === "aguardando_produto"
+      })
+    : contracts
+
+  // Admin: pode filtrar por origem (cliente.origem_captacao)
+  const contractsVisibleByOrigin = !isComercial && filterOrigin
+    ? contractsVisible.filter((c) => (c.clients?.origem_captacao || "") === filterOrigin)
+    : contractsVisible
+
   const statusForFilter = (s: string) => (s === "ativa" ? "active" : s === "inativa" ? "inactive" : s === "aguardando_produto" ? "aguardando_produto" : s === "pendente" ? "suspended" : s === "cancelada" ? "cancelled" : s)
-  const filtered = contracts?.filter((c) => {
+  const filtered = contractsVisibleByOrigin?.filter((c) => {
     const matchesSearch =
       !search ||
       c.clients?.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -199,7 +246,7 @@ export default function ProductDetailPage() {
       : filterStatus === "inactive" ? c.status !== "ativa" && c.status !== "aguardando_produto"
       : statusForFilter(c.status) === filterStatus || c.status === filterStatus
     const monthStr = c.start_date ? String(c.start_date).slice(0, 7) : ""
-    const matchesMonth = !filterMonth || monthStr === filterMonth
+    const matchesMonth = isComercial ? true : !filterMonth || monthStr === filterMonth
     return matchesSearch && matchesStatus && matchesMonth
   })
 
@@ -334,6 +381,7 @@ export default function ProductDetailPage() {
     try {
       const res = await fetch("/api/contracts/register", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: product?.id || null,
@@ -465,7 +513,7 @@ export default function ProductDetailPage() {
       city,
       state,
       origem_captacao: c?.origem_captacao ?? "",
-      status_lead: (c?.status_lead as string) || "contratando",
+      status_lead: (c?.status_lead as string) ?? "",
       plan: valueToPlan(monthly),
       payment_day: Number(contract.payment_day) || 10,
       start_date: startStr,
@@ -509,13 +557,13 @@ export default function ProductDetailPage() {
           city: editForm.city?.trim() || null,
           state: editForm.state?.trim() || null,
           origem_captacao: editForm.origem_captacao?.trim() || null,
-          status_lead: editForm.payment_status === "cancelado" || editForm.payment_status === "expirado" || editForm.payment_status === "cancelled" || editForm.payment_status === "expired" ? "perdido" : editForm.status_lead,
+          status_lead: editForm.payment_status === "cancelado" || editForm.payment_status === "expirado" || editForm.payment_status === "cancelled" || editForm.payment_status === "expired" ? "perdido" : (editForm.status_lead?.trim() || null),
         })
         .eq("id", editingContract.client_id)
       const { error } = await supabase
         .from("contracts")
         .update({
-          status: editForm.status,
+          status: isAdmin ? editForm.status : (editingContract.status ?? editForm.status),
           payment_status: editForm.payment_status,
           monthly_value: value,
           start_date: startDate,
@@ -588,6 +636,9 @@ export default function ProductDetailPage() {
           <p className="text-sm text-muted-foreground mt-0.5">
             {productResolved?.description || "Apólice de Seguro - Modalidade Garantias"}
           </p>
+          {isComercial && (
+            <p className="text-xs text-amber-400/90 mt-1">Seus contratos — apenas vendas registradas por você.</p>
+          )}
         </div>
         <button
           onClick={() => { setShowNewContract(true); setFormError(null) }}
@@ -598,7 +649,7 @@ export default function ProductDetailPage() {
         </button>
       </div>
 
-      {/* Search + Filtro por mês */}
+      {/* Search + Filtro por mês (só admin; comercial não filtra por mês) */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -610,31 +661,48 @@ export default function ProductDetailPage() {
             className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-colors"
           />
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <select
-            value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="h-10 min-w-[180px] rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
-            title="Filtrar por mês de início"
-          >
-            <option value="">Todos os meses</option>
-            {monthOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
+        {!isComercial && (
+          <>
+            <div className="flex items-center gap-2 shrink-0">
+              <CalendarDays className="h-4 w-4 text-muted-foreground" />
+              <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="h-10 min-w-[180px] rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
+                title="Filtrar por mês de início"
+              >
+                <option value="">Todos os meses</option>
+                {monthOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <select
+                value={filterOrigin}
+                onChange={(e) => setFilterOrigin(e.target.value)}
+                className="h-10 min-w-[180px] rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
+                title="Filtrar por origem"
+              >
+                <option value="">Todas as origens</option>
+                {ORIGEM_CAPTACAO_OPCOES.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
-      {/* Stats: total geral (lista abaixo é filtrada por mês) */}
-      <p className="text-xs text-muted-foreground mb-1">Total geral</p>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      {/* Stats: total geral ou "Seu total" para comercial (comercial vê só lista do mês + aguardando) */}
+      <p className="text-xs text-muted-foreground mb-1">{isComercial ? "Seu total" : "Total geral"}</p>
+      <div className={cn("grid gap-4", isComercial ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-5")}>
         {[
-          { label: "Total", value: contracts?.length || 0, color: "text-foreground", filter: "all" as const },
-          { label: "Aguardando produto", value: contracts?.filter(c => c.status === "aguardando_produto").length || 0, color: "text-amber-400", filter: "aguardando_produto" as const },
-          { label: "Ativas", value: contracts?.filter(c => c.status === "ativa").length || 0, color: "text-emerald-400", filter: "active" as const },
-          { label: "Inativas", value: contracts?.filter(c => c.status !== "ativa" && c.status !== "aguardando_produto").length || 0, color: "text-red-400", filter: "inactive" as const },
-          { label: "Receita Mensal", value: (() => {
+          { label: "Total", value: contractsVisibleByOrigin?.length || 0, color: "text-foreground", filter: "all" as const },
+          { label: "Aguardando produto", value: contractsVisibleByOrigin?.filter(c => c.status === "aguardando_produto").length || 0, color: "text-amber-400", filter: "aguardando_produto" as const },
+          { label: "Produto ativo", value: contractsVisibleByOrigin?.filter(c => c.status === "ativa").length || 0, color: "text-emerald-400", filter: "active" as const },
+          { label: "Produto inativo", value: contractsVisibleByOrigin?.filter(c => c.status !== "ativa" && c.status !== "aguardando_produto").length || 0, color: "text-red-400", filter: "inactive" as const },
+          ...(isComercial ? [] : [{ label: "Receita Mensal", value: (() => {
             const paymentOk = (c: Contract) => {
               const p = (c.payment_status ?? "").toString().toLowerCase()
               return p === "em_dia" || p === "paid"
@@ -645,9 +713,9 @@ export default function ProductDetailPage() {
               if (!start) return false
               return start <= filterMonth
             }
-            const total = contracts?.filter(c => paymentOk(c) && noMes(c)).reduce((s, c) => s + Number(c.monthly_value ?? 0), 0) ?? 0
+            const total = contractsVisibleByOrigin?.filter(c => paymentOk(c) && noMes(c)).reduce((s, c) => s + Number(c.monthly_value ?? 0), 0) ?? 0
             return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-          })(), color: "text-primary", filter: null },
+          })(), color: "text-primary", filter: null as const }]),
         ].map((stat) => (
           <button
             key={stat.label}
@@ -665,8 +733,14 @@ export default function ProductDetailPage() {
         ))}
       </div>
 
-      {/* Lista: filtrada por mês quando selecionado */}
-      <p className="text-xs text-muted-foreground mb-1">{filterMonth ? "Lista do mês selecionado" : "Todos os contratos"}</p>
+      {/* Lista: para comercial = mês atual + aguardando produto; para admin = filtro por mês se quiser */}
+      <p className="text-xs text-muted-foreground mb-1">
+        {isComercial
+          ? "Contratos do mês atual e aguardando produto"
+          : [filterMonth && "mês selecionado", filterOrigin && "origem selecionada"].filter(Boolean).length
+            ? "Lista filtrada"
+            : "Todos os contratos"}
+      </p>
       <div className="glass rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -676,7 +750,7 @@ export default function ProductDetailPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">CPF/CNPJ</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Origem</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Contato</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Pagamento</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Valor</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Inicio</th>
@@ -703,16 +777,24 @@ export default function ProductDetailPage() {
                     <td className="px-4 py-3">
                       {(() => {
                         const etapa = getEtapaLead(contract.clients)
-                        const t = STATUS_LEAD_OPCOES.find((x) => x.id === etapa)
-                        const label = t ? t.label : etapa
-                        const color = etapa === "novo" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/30" : etapa === "contratando" ? "bg-amber-500/10 text-amber-400 border-amber-500/30" : etapa === "negociando" ? "bg-violet-500/10 text-violet-400 border-violet-500/30" : etapa === "ativo" ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" : etapa === "perdido" ? "bg-red-500/10 text-red-400 border-red-500/30" : "bg-secondary text-muted-foreground border-border"
+                        const label = getEtapaLeadLabel(contract.clients)
+                        const colorMap: Record<string, string> = {
+                          "": "bg-secondary text-muted-foreground border-border",
+                          tentando_contato: "bg-slate-500/10 text-slate-400 border-slate-500/30", em_conversa: "bg-sky-500/10 text-sky-400 border-sky-500/30", agendado: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
+                          contratando: "bg-amber-500/10 text-amber-400 border-amber-500/30", negociando: "bg-violet-500/10 text-violet-400 border-violet-500/30", ativo: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                          perdido: "bg-red-500/10 text-red-400 border-red-500/30", bloqueado: "bg-black/15 text-gray-900 border-gray-800/40", sem_interesse: "bg-gray-500/10 text-gray-700 border-gray-500/30",
+                        }
+                        const color = colorMap[etapa] ?? "bg-secondary text-muted-foreground border-border"
                         return <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", color)}>{label}</span>
                       })()}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-medium", STATUS_MAP[contract.status]?.class ?? "bg-secondary text-muted-foreground border-border")}>
-                        {STATUS_MAP[contract.status]?.label ?? contract.status}
-                      </span>
+                      {(() => {
+                        const status = normalizeProductStatus(contract.status)
+                        const info = STATUS_MAP[status] ?? STATUS_MAP[contract.status] ?? { label: contract.status, Icon: PauseCircle, class: "bg-secondary text-muted-foreground border-border" }
+                        const Icon = info.Icon
+                        return <span title={info.label} className={cn("inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", info.class)}><Icon className="h-3.5 w-3.5 shrink-0" /></span>
+                      })()}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
@@ -863,14 +945,26 @@ export default function ProductDetailPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Status</p>
-                  <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}>
-                    <option value="aguardando_produto">Aguardando produto</option>
-                    <option value="ativa">Ativa</option>
-                    <option value="inativa">Inativa</option>
-                    <option value="pendente">Suspensa</option>
-                    <option value="cancelada">Cancelada</option>
-                  </select>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Produto</p>
+                  {isAdmin ? (
+                    <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}>
+                      <option value="aguardando_produto">Aguardando produto</option>
+                      <option value="ativa">Produto ativo</option>
+                      <option value="inativa">Produto inativo</option>
+                      <option value="pendente">Produto vencido</option>
+                      <option value="cancelada">Produto cancelado</option>
+                    </select>
+                  ) : (
+                    <div className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 text-sm text-muted-foreground" title={STATUS_MAP[normalizeProductStatus(editForm.status)]?.label ?? editForm.status}>
+                      {(() => {
+                        const status = normalizeProductStatus(editForm.status)
+                        const info = STATUS_MAP[status] ?? STATUS_MAP[editForm.status]
+                        if (!info) return editForm.status
+                        const Icon = info.Icon
+                        return <><Icon className="h-3.5 w-3.5 shrink-0" /></>
+                      })()}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Situação do pagamento</p>
@@ -892,7 +986,7 @@ export default function ProductDetailPage() {
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">Contato</p>
                   <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.status_lead} onChange={(e) => setEditForm((p) => ({ ...p, status_lead: e.target.value }))}>
-                    {STATUS_LEAD_OPCOES.map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}
+                    {STATUS_COMERCIAL_OPCOES.map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}
                   </select>
                 </div>
               </div>
@@ -1125,19 +1219,26 @@ export default function ProductDetailPage() {
                   />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Status</p>
-                  <select
-                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                    value={newContract.status}
-                    onChange={(e) =>
-                      setNewContract((prev) => ({ ...prev, status: e.target.value }))
-                    }
-                  >
-                    <option value="active">Ativa</option>
-                    <option value="inactive">Inativa</option>
-                    <option value="suspended">Suspensa</option>
-                    <option value="cancelled">Cancelada</option>
-                  </select>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">Produto</p>
+                  {isAdmin ? (
+                    <select
+                      className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                      value={newContract.status}
+                      onChange={(e) =>
+                        setNewContract((prev) => ({ ...prev, status: e.target.value }))
+                      }
+                    >
+                      <option value="active">Produto ativo</option>
+                      <option value="aguardando_produto">Aguardando produto</option>
+                      <option value="inactive">Produto inativo</option>
+                      <option value="suspended">Produto vencido</option>
+                      <option value="cancelled">Produto cancelado</option>
+                    </select>
+                  ) : (
+                    <div className="flex h-10 items-center rounded-lg border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+                      Aguardando produto (apenas admin pode alterar)
+                    </div>
+                  )}
                 </div>
               </div>
 <div>

@@ -23,48 +23,55 @@ export function ProductsPieChart() {
         return { name: p.name.replace("Gestao de ", ""), value: count || 0 }
       })
     )
-    return results
+    return results.filter((r) => r.value > 0)
   })
 
   return (
     <div className="glass rounded-xl p-6">
-      <h3 className="mb-4 text-lg font-semibold text-foreground">Contratacoes por Produto</h3>
+      <h3 className="mb-4 text-lg font-semibold text-foreground">Contratações por Produto</h3>
       <div className="h-60">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={chartData || []}
-              cx="50%"
-              cy="50%"
-              innerRadius={50}
-              outerRadius={80}
-              paddingAngle={5}
-              dataKey="value"
-            >
-              {(chartData || []).map((_, index) => (
-                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-              ))}
-            </Pie>
-            <Tooltip
-              contentStyle={{
-                background: "#0a1128",
-                border: "1px solid #1e3a5f",
-                borderRadius: "8px",
-                color: "#e2e8f0",
-                fontSize: "12px",
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        {chartData && chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={50}
+                outerRadius={80}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {chartData.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip
+                contentStyle={{
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  color: "var(--card-foreground)",
+                  fontSize: "12px",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            Nenhuma contratação ativa por produto
+          </div>
+        )}
       </div>
       <div className="flex flex-col gap-2 mt-2">
         {(chartData || []).map((item, i) => (
-          <div key={item.name} className="flex items-center justify-between text-sm">
+          <div key={`${item.name}-${i}`} className="flex items-center justify-between text-sm">
             <div className="flex items-center gap-2">
-              <span className="h-3 w-3 rounded-full" style={{ background: COLORS[i] }} />
-              <span className="text-muted-foreground">{item.name}</span>
+              <span className="h-3 w-3 rounded-full shrink-0" style={{ background: COLORS[i] }} />
+              <span className="text-muted-foreground truncate">{item.name}</span>
             </div>
-            <span className="font-medium text-foreground">{item.value}</span>
+            <span className="font-medium text-foreground shrink-0">{item.value}</span>
           </div>
         ))}
       </div>

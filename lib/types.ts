@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'marketing' | 'captacao' | 'financeiro' | 'custom'
+export type UserRole = 'admin' | 'comercial' | 'marketing' | 'captacao' | 'financeiro' | 'custom'
 
 export type Permission = 'home' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios'
 
@@ -87,7 +87,8 @@ export interface ActivityLog {
   action: string
   entity_type: string | null
   entity_id: string | null
-  details: string | null
+  /** JSONB no banco: pode vir como objeto ou string */
+  details: Record<string, unknown> | string | null
   created_at: string
 }
 
@@ -120,6 +121,7 @@ export interface ProductStats {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   admin: 'Administrador',
+  comercial: 'Comercial',
   marketing: 'Marketing',
   captacao: 'Captacao',
   financeiro: 'Financeiro',
@@ -128,6 +130,7 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   admin: ['home', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'chat', 'relatorios', 'notificacoes', 'atividades', 'usuarios'],
+  comercial: ['home', 'produtos', 'clientes', 'chat'],
   marketing: ['home', 'seguradoras', 'chat', 'notificacoes'],
   captacao: ['home', 'seguradoras', 'clientes', 'chat', 'notificacoes'],
   financeiro: ['home', 'produtos', 'clientes', 'financeiro', 'relatorios', 'notificacoes'],

@@ -3,41 +3,41 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Xpress Solutions - Dark Futuristic Theme */
+/* Xpress Solutions - Paleta organizada: fundo suave, blocos claros, texto legível, um primário */
 :root {
-  --background: #050a18;
-  --foreground: #e2e8f0;
-  --card: #0a1128;
-  --card-foreground: #e2e8f0;
-  --popover: #0a1128;
-  --popover-foreground: #e2e8f0;
-  --primary: #0ea5e9;
+  --background: #f0f2f5;
+  --foreground: #1f2937;
+  --card: #ffffff;
+  --card-foreground: #1f2937;
+  --popover: #ffffff;
+  --popover-foreground: #1f2937;
+  --primary: #2563eb;
   --primary-foreground: #ffffff;
-  --secondary: #0f1d3a;
-  --secondary-foreground: #cbd5e1;
-  --muted: #0f1d3a;
-  --muted-foreground: #64748b;
-  --accent: #0ea5e9;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --destructive-foreground: #fecaca;
-  --border: #1e3a5f;
-  --input: #1e3a5f;
-  --ring: #0ea5e9;
-  --chart-1: #0ea5e9;
-  --chart-2: #06b6d4;
+  --secondary: #f3f4f6;
+  --secondary-foreground: #374151;
+  --muted: #f9fafb;
+  --muted-foreground: #6b7280;
+  --accent: #eff6ff;
+  --accent-foreground: #1e40af;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #2563eb;
+  --chart-1: #2563eb;
+  --chart-2: #0d9488;
   --chart-3: #8b5cf6;
   --chart-4: #10b981;
   --chart-5: #f59e0b;
-  --radius: 0.75rem;
-  --sidebar: #070e20;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-primary: #0ea5e9;
+  --radius: 0.5rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1f2937;
+  --sidebar-primary: #2563eb;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #0f1d3a;
-  --sidebar-accent-foreground: #e2e8f0;
-  --sidebar-border: #1e3a5f;
-  --sidebar-ring: #0ea5e9;
+  --sidebar-accent: #f3f4f6;
+  --sidebar-accent-foreground: #1f2937;
+  --sidebar-border: #e5e7eb;
+  --sidebar-ring: #2563eb;
 }
 
 @theme inline {
@@ -90,44 +90,44 @@
   }
 }
 
-/* Glass morphism utility */
+/* Cards / blocos com fundo claro e borda sutil */
 .glass {
-  background: rgba(10, 17, 40, 0.6);
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(14, 165, 233, 0.15);
+  background: #ffffff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .glass-strong {
-  background: rgba(10, 17, 40, 0.85);
-  -webkit-backdrop-filter: blur(24px);
-  backdrop-filter: blur(24px);
-  border: 1px solid rgba(14, 165, 233, 0.2);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
 }
 
-/* Glow effects */
+/* Efeitos leves e sincronizados */
 .glow-blue {
-  box-shadow: 0 0 20px rgba(14, 165, 233, 0.15), 0 0 60px rgba(14, 165, 233, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .glow-blue-sm {
-  box-shadow: 0 0 10px rgba(14, 165, 233, 0.1), 0 0 30px rgba(14, 165, 233, 0.03);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 }
 
-/* Scrollbar styling */
+/* Scrollbar discreta */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #050a18;
+  background: #f3f4f6;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e3a5f;
+  background: #d1d5db;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #0ea5e9;
+  background: #9ca3af;
 }
 
 /* ─── Global smooth transitions ──────────────────────────── */
@@ -140,9 +140,9 @@
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
 }
 .card-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 0 28px rgba(14, 165, 233, 0.18), 0 8px 32px rgba(0,0,0,0.4);
-  border-color: rgba(14, 165, 233, 0.35) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  border-color: #d1d5db !important;
 }
 
 /* ─── Glass cards auto-animate on hover ───────────────────── */
@@ -150,9 +150,8 @@
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
 }
 .glass:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 22px rgba(14, 165, 233, 0.14), 0 6px 24px rgba(0,0,0,0.35);
-  border-color: rgba(14, 165, 233, 0.28);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-color: #d1d5db;
 }
 
 /* ─── Buttons: scale + press ──────────────────────────────── */
@@ -218,37 +217,37 @@ tr:hover .row-action {
   transition: opacity 0.18s ease;
 }
 
-/* ─── Input focus glow ────────────────────────────────────── */
+/* ─── Input focus - anel único e limpo ─────────────────────── */
 input:focus,
 textarea:focus,
 select:focus {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.12), 0 0 12px rgba(14, 165, 233, 0.08);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  border-color: #2563eb;
 }
 
-/* ─── Shimmer animation ───────────────────────────────────── */
+/* ─── Shimmer sutil ───────────────────────────────────────── */
 @keyframes shimmer {
   0%   { background-position: -200% center; }
   100% { background-position: 200% center; }
 }
 .shimmer {
-  background: linear-gradient(90deg, transparent 0%, rgba(14,165,233,0.12) 50%, transparent 100%);
+  background: linear-gradient(90deg, transparent 0%, rgba(243, 244, 246, 0.8) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2.5s ease infinite;
 }
 
-/* ─── Pulse glow ──────────────────────────────────────────── */
+/* ─── Pulse discreto ───────────────────────────────────────── */
 @keyframes pulse-glow {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(14,165,233,0.3); }
-  50%       { opacity: 0.7; box-shadow: 0 0 14px rgba(14,165,233,0.6); }
+  0%, 100% { opacity: 1; }
+  50%     { opacity: 0.9; }
 }
 .pulse-glow {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
-/* ─── Glow on hover upgrade ───────────────────────────────── */
 .hover\:glow-blue:hover {
-  box-shadow: 0 0 24px rgba(14, 165, 233, 0.22), 0 0 60px rgba(14, 165, 233, 0.07) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
 }
 
 /* ─── Badge / status pill pop ─────────────────────────────── */
@@ -262,8 +261,8 @@ select:focus {
 /* ─── Futuristic grid background ─────────────────────────── */
 .grid-bg {
   background-image: 
-    linear-gradient(rgba(14, 165, 233, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(14, 165, 233, 0.03) 1px, transparent 1px);
+    linear-gradient(#e5e7eb 1px, transparent 1px),
+    linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
   background-size: 40px 40px;
 }
 
@@ -276,11 +275,6 @@ select:focus {
   animation: float 3s ease-in-out infinite;
 }
 
-/* ─── Sidebar logo glow pulse ─────────────────────────────── */
-@keyframes logo-pulse {
-  0%, 100% { box-shadow: 0 0 10px rgba(14,165,233,0.25); }
-  50%       { box-shadow: 0 0 20px rgba(14,165,233,0.5); }
-}
 .logo-glow {
-  animation: logo-pulse 3s ease-in-out infinite;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }

@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, FileText, Plus } from "lucide-react"
+import { Loader2, FileText, Plus, Eye } from "lucide-react"
 import { toast } from "sonner"
 
 interface NFeDocument {
@@ -47,8 +47,11 @@ export default function NFePage() {
   const [loadingModal, setLoadingModal] = useState(false)
   const [issuing, setIssuing] = useState(false)
   const [docs, setDocs] = useState<NFeDocument[]>([])
+  const [allNfeDocs, setAllNfeDocs] = useState<NFeDocument[]>([])
   const [contractValueByContractId, setContractValueByContractId] = useState<Record<string, number>>({})
   const [clientIdByContractId, setClientIdByContractId] = useState<Record<string, string>>({})
+  const [contractProductByContractId, setContractProductByContractId] = useState<Record<string, string>>({})
+  const [contractPlanByContractId, setContractPlanByContractId] = useState<Record<string, string>>({})
   const [open, setOpen] = useState(false)
   const [selectedDoc, setSelectedDoc] = useState<NFeDocument | null>(null)
 
@@ -73,67 +76,70 @@ export default function NFePage() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
+      try {
+        const res = await fetch("/api/nfe/documents", { credentials: "include" })
+        if (!res.ok) {
+          setLoading(false)
+          return
+        }
+        const json = await res.json()
+        const allDocs = (json.documents || []) as NFeDocument[]
+        const contracts = json.contracts || []
 
-      const { data: rawDocs, error } = await supabase
-        .from("nfe_documents")
-        .select("id, client_id, number, series, status, client_name, total_value, created_at, provider_payload")
-        .order("created_at", { ascending: false })
-        .limit(100)
+        const emDiaIds = new Set(
+          contracts
+            .filter((c: { payment_status?: string }) => {
+              const p = (c.payment_status ?? "").toString().toLowerCase()
+              return p === "em_dia" || p === "paid"
+            })
+            .map((c: { id: string }) => c.id),
+        )
 
-      if (error) {
+        const valueByContractId: Record<string, number> = {}
+        const clientIdByContract: Record<string, string> = {}
+        const productByContractId: Record<string, string> = {}
+        const planByContractId: Record<string, string> = {}
+        contracts.forEach((c: { id: string; monthly_value?: number; client_id?: string; product_name?: string | null; plan_label?: string }) => {
+          valueByContractId[c.id] = Number(c.monthly_value ?? 0)
+          if (c.client_id) clientIdByContract[c.id] = c.client_id
+          if (c.product_name) productByContractId[c.id] = c.product_name
+          if (c.plan_label) planByContractId[c.id] = c.plan_label
+        })
+        setContractValueByContractId(valueByContractId)
+        setClientIdByContractId(clientIdByContract)
+        setContractProductByContractId(productByContractId)
+        setContractPlanByContractId(planByContractId)
+
+        setAllNfeDocs(allDocs)
+        const filtered = allDocs.filter((d) => {
+          const cid = (d.provider_payload as { contract_id?: string } | null)?.contract_id
+          if (!cid) return false
+          return emDiaIds.has(cid)
+        })
+        setDocs(filtered)
+      } finally {
         setLoading(false)
-        return
       }
-
-      const allDocs = (rawDocs || []) as NFeDocument[]
-      const contractIds = [...new Set(allDocs.map((d) => (d.provider_payload as { contract_id?: string } | null)?.contract_id).filter(Boolean))] as string[]
-
-      if (contractIds.length === 0) {
-        setDocs([])
-        setLoading(false)
-        return
-      }
-
-      const { data: contracts } = await supabase
-        .from("contracts")
-        .select("id, client_id, payment_status, monthly_value")
-        .in("id", contractIds)
-
-      const emDiaIds = new Set(
-        (contracts || [])
-          .filter((c) => {
-            const p = (c.payment_status ?? "").toString().toLowerCase()
-            return p === "em_dia" || p === "paid"
-          })
-          .map((c) => c.id),
-      )
-
-      const valueByContractId: Record<string, number> = {}
-      const clientIdByContract: Record<string, string> = {}
-      ;(contracts || []).forEach((c) => {
-        valueByContractId[c.id] = Number((c as { monthly_value?: number }).monthly_value ?? 0)
-        const cid = (c as { client_id?: string }).client_id
-        if (cid) clientIdByContract[c.id] = cid
-      })
-      setContractValueByContractId(valueByContractId)
-      setClientIdByContractId(clientIdByContract)
-
-      const filtered = allDocs.filter((d) => {
-        const cid = (d.provider_payload as { contract_id?: string } | null)?.contract_id
-        if (!cid) return false
-        return emDiaIds.has(cid)
-      })
-
-      setDocs(filtered)
-      setLoading(false)
     }
 
     load()
   }, [])
 
-  const totalEmitido = useMemo(
-    () => docs.reduce((sum, n) => sum + (n.status === "emitida" ? Number(n.total_value) : 0), 0),
-    [docs],
+  const totalGeradas = useMemo(
+    () => allNfeDocs.filter((d) => (d.status ?? "").toString().toLowerCase() === "emitida").length,
+    [allNfeDocs],
+  )
+  const totalPendentes = useMemo(
+    () => allNfeDocs.filter((d) => (d.status ?? "").toString().toLowerCase() === "pendente").length,
+    [allNfeDocs],
+  )
+  const totalExpiradasCanceladas = useMemo(
+    () =>
+      allNfeDocs.filter((d) => {
+        const s = (d.status ?? "").toString().toLowerCase()
+        return s !== "emitida" && s !== "pendente"
+      }).length,
+    [allNfeDocs],
   )
 
   const handleOpenEmitModal = async (doc: NFeDocument) => {
@@ -355,6 +361,7 @@ export default function NFePage() {
       const res = await fetch("/api/nfe/issue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       })
 
@@ -492,30 +499,26 @@ export default function NFePage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total emitido</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total de NF-e geradas</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              R$ {totalEmitido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </p>
+            <p className="text-2xl font-bold">{totalGeradas}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Quantidade de NF-e</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Quantidade de NF-e pendentes</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{docs.length}</p>
+            <p className="text-2xl font-bold">{totalPendentes}</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Situação</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">NF-e expiradas / canceladas</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Integração via API externa configurada com <code>NFE_API_URL</code> e <code>NFE_API_KEY</code>.
-            </p>
+            <p className="text-2xl font-bold">{totalExpiradasCanceladas}</p>
           </CardContent>
         </Card>
       </div>
@@ -547,7 +550,7 @@ export default function NFePage() {
                   key={nfe.id}
                   className="flex flex-col gap-2 rounded-md border border-border/60 bg-card px-3 py-2 text-sm md:flex-row md:items-center md:justify-between"
                 >
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0">
                     <p className="font-medium">
                       NF-e {nfe.number || "—"}
                       {nfe.series ? ` / Série ${nfe.series}` : ""}
@@ -559,8 +562,21 @@ export default function NFePage() {
                         timeStyle: "short",
                       })}
                     </p>
+                    {(() => {
+                      const cid = (nfe.provider_payload as { contract_id?: string } | null)?.contract_id
+                      const product = cid ? contractProductByContractId[cid] : null
+                      const plan = cid ? contractPlanByContractId[cid] : null
+                      if (!product && !plan) return null
+                      return (
+                        <p className="text-xs text-muted-foreground">
+                          {product && <span>{product}</span>}
+                          {product && plan && " · "}
+                          {plan && <span>Plano {plan}</span>}
+                        </p>
+                      )
+                    })()}
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className="font-semibold">
                       R$ {(nfe.status === "pendente"
                         ? (contractValueByContractId[(nfe.provider_payload as { contract_id?: string } | null)?.contract_id ?? ""] ?? Number(nfe.total_value))
@@ -573,6 +589,20 @@ export default function NFePage() {
                     >
                       {nfe.status}
                     </Badge>
+                    {nfe.status === "emitida" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          // TODO: quando CREFAZ estiver integrado, abrir o documento oficial (ex.: window.open(urlPdfNfe))
+                          toast.info("O documento oficial da NF-e estará disponível após a integração com CREFAZ.", { duration: 5000 })
+                        }}
+                      >
+                        <Eye className="mr-1 h-3.5 w-3.5" />
+                        Visualizar
+                      </Button>
+                    )}
                     {nfe.status === "pendente" && (
                       <Button
                         size="sm"

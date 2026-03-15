@@ -2,13 +2,15 @@
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Plus, Trash2, Eye, EyeOff, Copy, Check } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Copy, Check, Pencil, Loader2 } from "lucide-react"
+import useSWR from "swr"
+import { toast } from "sonner"
 
 interface Password {
   id: string
@@ -21,11 +23,43 @@ interface Password {
   createdAt: Date
 }
 
+const credentialsApi = "/api/admin/credentials"
+
 export default function SenhasPage() {
   const { isAdmin } = useAuth()
-  const [passwords, setPasswords] = useState<Password[]>([])
+
+  const { data: passwords = [], mutate, isLoading } = useSWR(
+    isAdmin ? credentialsApi : null,
+    async (url: string) => {
+      const res = await fetch(url, { credentials: "include" })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error(j.error || "Erro ao carregar credenciais.")
+      }
+      const data = await res.json()
+      return (data || []).map((row: { id: string; service: string; login: string; password: string; url?: string; notes?: string; category: string; created_at: string }) => ({
+        id: row.id,
+        service: row.service,
+        login: row.login,
+        password: row.password,
+        url: row.url,
+        notes: row.notes,
+        category: row.category,
+        createdAt: new Date(row.created_at),
+      })) as Password[]
+    },
+    {
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      errorRetryCount: 0,
+      dedupingInterval: 5000,
+    }
+  )
+
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [formData, setFormData] = useState({
     service: "",
@@ -38,36 +72,76 @@ export default function SenhasPage() {
 
   const categories = ["FERRAMENTAS", "DOMÍNIOS", "HOSPEDAGENS", "OUTROS"]
 
-  const handleAddPassword = () => {
-    if (!formData.service || !formData.login || !formData.password) {
-      alert("Por favor, preencha os campos obrigatórios: Serviço, Login e Senha")
+  const handleAddPassword = async () => {
+    if (!formData.service?.trim() || !formData.login?.trim() || !formData.password?.trim()) {
+      toast.error("Preencha Serviço, Login e Senha.")
       return
     }
-
-    const newPassword: Password = {
-      id: Date.now().toString(),
-      service: formData.service,
-      login: formData.login,
-      password: formData.password,
-      url: formData.url,
-      notes: formData.notes,
-      category: formData.category,
-      createdAt: new Date(),
+    setSaving(true)
+    try {
+      const res = await fetch(credentialsApi, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          id: editingId || undefined,
+          service: formData.service.trim(),
+          login: formData.login.trim(),
+          password: formData.password,
+          url: formData.url?.trim() || null,
+          notes: formData.notes?.trim() || null,
+          category: formData.category,
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(j.error || "Erro ao salvar.")
+      }
+      toast.success(editingId ? "Acesso atualizado." : "Acesso cadastrado.")
+      setEditingId(null)
+      setFormData({ service: "", login: "", password: "", url: "", notes: "", category: "FERRAMENTAS" })
+      setIsDialogOpen(false)
+      await mutate()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao salvar."
+      toast.error(msg)
+    } finally {
+      setSaving(false)
     }
-
-    setPasswords([...passwords, newPassword])
-    setFormData({ service: "", login: "", password: "", url: "", notes: "", category: "FERRAMENTAS" })
-    setIsDialogOpen(false)
   }
 
-  const handleDeletePassword = (id: string) => {
-    if (confirm("Tem certeza que deseja deletar este acesso?")) {
-      setPasswords(passwords.filter((pwd) => pwd.id !== id))
-      setVisiblePasswords((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(id)
-        return newSet
+  const handleEditPassword = (pwd: Password) => {
+    setEditingId(pwd.id)
+    setFormData({
+      service: pwd.service,
+      login: pwd.login,
+      password: pwd.password,
+      url: pwd.url || "",
+      notes: pwd.notes || "",
+      category: pwd.category,
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleDeletePassword = async (id: string) => {
+    if (!confirm("Tem certeza que deseja deletar este acesso?")) return
+    try {
+      const res = await fetch(`${credentialsApi}?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
       })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(j.error || "Erro ao remover.")
+      setVisiblePasswords((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      toast.success("Acesso removido.")
+      await mutate()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Erro ao remover."
+      toast.error(msg)
     }
   }
 
@@ -102,6 +176,14 @@ export default function SenhasPage() {
     )
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[40vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
@@ -109,17 +191,20 @@ export default function SenhasPage() {
           <h1 className="text-3xl font-bold tracking-tight">Senhas de Administração</h1>
           <p className="text-muted-foreground mt-2">Gerenciador seguro de acessos para ferramentas, domínios e hospedagens</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open)
+          if (!open) setEditingId(null)
+        }}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="gap-2" onClick={() => { setEditingId(null); setFormData({ service: "", login: "", password: "", url: "", notes: "", category: "FERRAMENTAS" }) }}>
               <Plus className="h-4 w-4" />
               Adicionar Acesso
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Adicionar Novo Acesso</DialogTitle>
-              <DialogDescription>Adicione um novo acesso de ferramenta, domínio ou hospedagem</DialogDescription>
+              <DialogTitle>{editingId ? "Editar Acesso" : "Adicionar Novo Acesso"}</DialogTitle>
+              <DialogDescription>{editingId ? "Altere os dados do acesso." : "Adicione um novo acesso de ferramenta, domínio ou hospedagem."}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
@@ -185,8 +270,8 @@ export default function SenhasPage() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 />
               </div>
-              <Button onClick={handleAddPassword} className="w-full">
-                Salvar Acesso
+              <Button onClick={handleAddPassword} className="w-full" disabled={saving}>
+                {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</> : "Salvar Acesso"}
               </Button>
             </div>
           </DialogContent>
@@ -206,76 +291,87 @@ export default function SenhasPage() {
               </Card>
             ) : (
               <Card>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="border-b">
-                      <TableHead className="w-[25%]">Serviço</TableHead>
-                      <TableHead className="w-[25%]">Login</TableHead>
-                      <TableHead className="w-[20%]">Senha</TableHead>
-                      <TableHead className="w-[20%]">Ações</TableHead>
-                      <TableHead className="w-[10%]">Remover</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {group.items.map((pwd) => (
-                      <TableRow key={pwd.id} className="border-b">
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{pwd.service}</p>
-                            {pwd.notes && <p className="text-xs text-muted-foreground">{pwd.notes}</p>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono text-sm">{pwd.login}</div>
-                          {pwd.url && (
-                            <a href={pwd.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-500 hover:underline">
-                              {pwd.url.replace("https://", "").replace("http://", "").substring(0, 30)}...
-                            </a>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm">
-                              {visiblePasswords.has(pwd.id) ? pwd.password : "••••••••"}
-                            </span>
-                            <button
-                              onClick={() => togglePasswordVisibility(pwd.id)}
-                              className="text-muted-foreground hover:text-foreground transition-colors"
-                              title="Mostrar/Ocultar senha"
-                            >
-                              {visiblePasswords.has(pwd.id) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                            <button
-                              onClick={() => copyToClipboard(pwd.password, pwd.id)}
-                              className="text-muted-foreground hover:text-foreground transition-colors"
-                              title="Copiar senha"
-                            >
-                              {copiedId === pwd.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => copyToClipboard(pwd.login, `login-${pwd.id}`)}
-                            className="text-muted-foreground hover:text-foreground transition-colors"
-                            title="Copiar login"
-                          >
-                            {copiedId === `login-${pwd.id}` ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-                          </button>
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => handleDeletePassword(pwd.id)}
-                            className="text-destructive hover:text-destructive/80 transition-colors"
-                            title="Deletar acesso"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </TableCell>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="border-b bg-muted/40 hover:bg-muted/40">
+                        <TableHead className="whitespace-nowrap py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground w-[22%]">Serviço</TableHead>
+                        <TableHead className="whitespace-nowrap py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground w-[20%]">Observações</TableHead>
+                        <TableHead className="whitespace-nowrap py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground w-[24%]">Login</TableHead>
+                        <TableHead className="whitespace-nowrap py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground w-[20%]">Senha</TableHead>
+                        <TableHead className="whitespace-nowrap py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground w-[14%] text-center">Editar / Remover</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {group.items.map((pwd) => (
+                        <TableRow key={pwd.id} className="border-b hover:bg-muted/20">
+                          <TableCell className="py-2.5 align-middle whitespace-nowrap">
+                            <span className="font-medium" title={pwd.service}>{pwd.service}</span>
+                          </TableCell>
+                          <TableCell className="py-2.5 align-middle whitespace-nowrap">
+                            <span className="text-sm text-muted-foreground" title={pwd.notes || ""}>{pwd.notes || "—"}</span>
+                          </TableCell>
+                          <TableCell className="py-2.5 align-middle whitespace-nowrap">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-sm truncate min-w-0" title={pwd.login}>{pwd.login}</span>
+                              {pwd.url && (
+                                <a href={pwd.url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs text-primary hover:underline" title={pwd.url}>
+                                  ({pwd.url.replace(/^https?:\/\//, "").split("/")[0]})
+                                </a>
+                              )}
+                              <button
+                                onClick={() => copyToClipboard(pwd.login, `login-${pwd.id}`)}
+                                className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Copiar login"
+                              >
+                                {copiedId === `login-${pwd.id}` ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2.5 align-middle">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap">
+                              <span className="font-mono text-sm truncate max-w-[120px]">
+                                {visiblePasswords.has(pwd.id) ? pwd.password : "••••••••"}
+                              </span>
+                              <button
+                                onClick={() => togglePasswordVisibility(pwd.id)}
+                                className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Mostrar/Ocultar senha"
+                              >
+                                {visiblePasswords.has(pwd.id) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                              <button
+                                onClick={() => copyToClipboard(pwd.password, pwd.id)}
+                                className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Copiar senha"
+                              >
+                                {copiedId === pwd.id ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                              </button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-2.5 align-middle">
+                            <div className="flex items-center justify-center gap-1">
+                              <button
+                                onClick={() => handleEditPassword(pwd)}
+                                className="inline-flex p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+                                title="Editar acesso"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeletePassword(pwd.id)}
+                                className="inline-flex p-0.5 text-destructive hover:text-destructive/80 transition-colors"
+                                title="Remover acesso"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </Card>
             )}
           </div>

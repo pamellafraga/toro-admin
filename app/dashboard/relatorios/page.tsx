@@ -36,7 +36,7 @@ export default function RelatoriosPage() {
       } else if (type === "contracts") {
         const { data } = await supabase.from("contracts").select("*, clients(name, cpf_cnpj), products(name)").order("created_at", { ascending: false })
         if (!data || data.length === 0) { toast.error("Nenhum dado para exportar"); return }
-        csvContent = "Cliente,CPF/CNPJ,Produto,Status,Pagamento,Valor Mensal,Inicio,Fim\n"
+        csvContent = "Cliente,CPF/CNPJ,Produto,Contratacao,Pagamento,Valor Mensal,Inicio,Fim\n"
         data.forEach(c => {
           csvContent += `"${c.clients?.name || ''}","${c.clients?.cpf_cnpj || ''}","${c.products?.name || ''}","${c.status}","${c.payment_status}","${c.monthly_value}","${c.start_date}","${c.end_date || ''}"\n`
         })

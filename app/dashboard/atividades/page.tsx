@@ -22,8 +22,8 @@ export default function AtividadesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Historico de Atividades</h2>
-        <p className="text-sm text-muted-foreground mt-1">Registro de acoes realizadas no sistema</p>
+        <h2 className="text-2xl font-bold text-foreground">Histórico de Atividades</h2>
+        <p className="text-sm text-muted-foreground mt-1">Registro geral do que cada usuário fez no sistema (adm e comercial)</p>
       </div>
 
       <div className="glass rounded-xl p-6">
@@ -38,7 +38,11 @@ export default function AtividadesPage() {
                   </div>
                   <div className="flex-1 rounded-lg bg-secondary/30 p-4">
                     <p className="text-sm font-medium text-foreground">{act.action}</p>
-                    {act.details && <p className="text-xs text-muted-foreground mt-1">{act.details}</p>}
+                    {act.details != null && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {typeof act.details === "string" ? act.details : JSON.stringify(act.details)}
+                      </p>
+                    )}
                     <div className="flex items-center gap-4 mt-2">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <User className="h-3 w-3" />

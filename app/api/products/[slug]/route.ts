@@ -1,11 +1,29 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+function getAuthFromCookie(req: NextRequest): { role?: string } {
+  try {
+    const cookie = req.cookies.get("xpress_auth")?.value
+    if (!cookie) return {}
+    const parsed = JSON.parse(cookie)
+    return { role: parsed.role }
+  } catch {
+    return {}
+  }
+}
+
 export async function PATCH(
-  req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    const auth = getAuthFromCookie(req)
+    if (auth.role !== "admin") {
+      return NextResponse.json(
+        { error: "Apenas administradores podem alterar o status do produto" },
+        { status: 403 }
+      )
+    }
     const { slug } = await params
     const body = await req.json()
     const { product_status } = body as { product_status?: string }

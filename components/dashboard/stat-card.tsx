@@ -24,7 +24,7 @@ export function StatCard({ title, value, subtitle, icon: Icon, trend, className 
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           {trend && (
             <p className={cn("text-xs font-medium", trend.positive ? "text-emerald-400" : "text-red-400")}>
-              {trend.positive ? "+" : ""}{trend.value}% vs mes anterior
+              {trend.positive ? "+" : ""}{trend.value}% vs mês anterior
             </p>
           )}
         </div>

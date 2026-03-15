@@ -30,16 +30,17 @@ export function RevenueChart() {
                 <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e3a5f" vertical={false} />
-            <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-            <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+            <XAxis dataKey="month" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+            <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$ ${(v/1000).toFixed(0)}k`} />
             <Tooltip
               contentStyle={{
-                background: "#0a1128",
-                border: "1px solid #1e3a5f",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
                 borderRadius: "8px",
-                color: "#e2e8f0",
+                color: "var(--card-foreground)",
                 fontSize: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               }}
               formatter={(value: number) => [`R$ ${value.toLocaleString("pt-BR")}`, "Receita"]}
             />

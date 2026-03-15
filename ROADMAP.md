@@ -1,11 +1,26 @@
 ## 🚀 Roadmap Xpress — Ecossistema SaaS
 
-Lista viva do que ainda falta implementar para ligar **Site**, **Dashboard Administrativo** e **Ferramenta SaaS**, incluindo **pagamentos**, **NF-e** e **automações**.
-
-Marque os itens conforme forem concluídos — a ideia é ser seu **painel de controle técnico** do produto.
+Lista viva do que já foi feito e do que falta implementar para ligar **Site**, **Dashboard Administrativo** e **Ferramenta SaaS**, incluindo **pagamentos**, **NF-e** e **automações**.
 
 > **Banco de dados (estado atual)**  
 > Por enquanto **apenas o Dashboard administrativo** está ligado ao banco (Supabase). O **site institucional** e o **SaaS (app do cliente)** ainda não estão conectados ao Supabase; a integração deles virá via APIs do dashboard e, no caso do SaaS, futura conexão ao mesmo Supabase (multi-tenant).
+
+> **Automações**  
+> Por enquanto as automações ficam no próprio código (rotas do dashboard, Resend, webhooks). Se no futuro os fluxos ficarem muitos ou complexos (muitos webhooks, muitos e-mails, integrações que mudam com frequência), **reavaliar** a adoção de **n8n** para centralizar e facilitar sem deploys.
+
+---
+
+### ✅ Já feito (dashboard)
+
+| Área | O que foi feito |
+|------|------------------|
+| **Autenticação** | Login por cookie (`xpress_auth`); APIs sensíveis (credenciais, NF-e) checam esse cookie. |
+| **Senhas (admin)** | Tabela `admin_credentials`, script `017_admin_credentials.sql`; API `GET/POST/DELETE /api/admin/credentials` com **service role** (bypass RLS); página `/dashboard/senhas` consome essa API (não usa Supabase direto no cliente). |
+| **NF-e / NFS-e** | `POST /api/nfe/issue` com validação **Zod** (`lib/schemas/nfe.ts`), auth por cookie e **admin client**; `GET /api/nfe/documents` para listagem; página `/dashboard/nfe` usa essas APIs. Integração **Sistema Nacional NFS-e (Porto Alegre)** com lib `nfse-brazil-national` (certificado A1, variáveis `NFSENACIONAL_*`). Fallback: provedor genérico (`NFE_API_*`) ou modo simulado. |
+| **Validação** | **Zod** em uso: schema de emissão NF-e; padrão definido para usar Zod em todas as entradas de API. |
+| **JWT** | Pacote **jose** instalado para uso futuro (tokens Base64URL, HMAC/RS256). |
+| **UX** | Botões de emissão NF-e e salvamento de senhas desabilitados durante a request (evita duplo envio). SWR na página de Senhas com `revalidateOnFocus: false` e `errorRetryCount: 0`. |
+| **Docs** | `.env.example` com variáveis Supabase (service role), NFS-e Nacional e provedor genérico NF-e. |
 
 ---
 
@@ -30,7 +45,7 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 - **Endpoint público no dashboard**
   - [ ] Criar `POST /api/public/contracts/register-from-site`
-  - [ ] Validar payload vindo do site (sanitização, required fields)
+  - [ ] Validar payload vindo do site com **Zod** (sanitização, required fields, mensagens amigáveis)
   - [ ] Criar ou atualizar `clients` no Supabase
   - [ ] Criar `contracts` com:
     - [ ] Plano correto (mapa site → planos internos)
@@ -42,7 +57,7 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 ### 2. Pagamento com Banco Inter (Pix / BolePix)
 
-**Objetivo:** gerar cobrança automática no Inter e atualizar o contrato assim que o pagamento cair.**
+**Objetivo:** gerar cobrança automática no Inter e atualizar o contrato assim que o pagamento cair.
 
 - **Integração com Banco Inter PJ**
   - [ ] Criar variáveis de ambiente no dashboard: `INTER_CLIENT_ID`, `INTER_CLIENT_SECRET`, `INTER_CERT_PATH` (ou equivalente conforme docs oficiais)
@@ -60,7 +75,7 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 - **Webhook do Inter (pagamento confirmado)**
   - [ ] Criar endpoint `POST /api/inter/webhook`
-  - [ ] Validar assinatura/autorização do Inter (segurança)
+  - [ ] Validar assinatura/autorização do Inter (segurança), usando **Zod** para o payload recebido
   - [ ] Encontrar cobrança/contrato pelo `txid` ou identificador acordado
   - [ ] Atualizar:
     - [ ] `contracts.payment_status` → `em_dia` / `paid`
@@ -77,9 +92,12 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 ### 3. NF-e, Simples Nacional e apuração
 
-**Objetivo:** emissão de NF-e alinhada com o Simples Nacional e pronta para o contador.**
+**Objetivo:** emissão de NF-e alinhada com o Simples Nacional e pronta para o contador.
 
 - **Revisar fluxo atual de emissão (`/api/nfe/issue`)**
+  - [x] Integração **Sistema Nacional NFS-e (Porto Alegre/RS)** implementada  
+        - Uso da API nacional (gov.br/nfse) com lib `nfse-brazil-national`; certificado A1 (PFX) em `NFSENACIONAL_CERT_PFX_BASE64` + `NFSENACIONAL_CERT_SENHA`; CNPJ/razão em `.env`. Prioridade: 1) Nacional, 2) provedor genérico (`NFE_API_*`), 3) simulado.
+        - Nota autorizada e armazenada no ambiente da SEFAZ/Governo; chave de acesso e número gravados no banco.
   - [ ] Garantir que o valor usado seja o valor atual do contrato (mensalidade correta)
   - [ ] Incluir descrição clara do serviço (SaaS / assinatura, plano, periodicidade)
   - [ ] Validar CFOP e demais campos exigidos pelo modelo de NF-e / NFS-e usado
@@ -110,12 +128,15 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 ### 4. E-mail automático para o cliente (NF-e + acesso ao produto)
 
-**Objetivo:** após emitir a NF-e, o cliente recebe tudo por e-mail sem ação manual.**
+**Objetivo:** após emitir a NF-e, o cliente recebe tudo por e-mail sem ação manual.
 
 - **Provedor de e-mail transacional**
-  - [ ] Escolher provedor (Resend, SendGrid, AWS SES, Mailgun, etc.)
-  - [ ] Configurar variáveis de ambiente (`EMAIL_API_KEY`, remetente padrão, etc.)
-  - [ ] Implementar helper `sendInvoiceEmail(options)` no backend do dashboard
+  - [ ] Escolher provedor (preferência: **Resend**; alternativas: SendGrid, AWS SES, Mailgun, etc.)
+  - [ ] Configurar variáveis de ambiente para o provedor escolhido  
+        - Resend: `RESEND_API_KEY`, `EMAIL_FROM_DEFAULT`  
+        - Atualizar `.env.example` e documentação rápida no `README`
+  - [ ] Implementar helper `sendInvoiceEmail(options)` no backend do dashboard (ex.: `lib/email/send-invoice.ts`) usando Resend
+  - [ ] Preparar helper genérico `sendProductEmail(options)` para futuros e-mails de produto/contrato
 
 - **Disparo após emissão bem-sucedida da NF-e**
   - [ ] Em `/api/nfe/issue`, após resposta OK da API externa:
@@ -140,7 +161,7 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 ### 5. Histórico de atividades e Home sempre atualizada
 
-**Objetivo:** rastrear tudo que acontece e refletir isso na Home e na página de Atividades.**
+**Objetivo:** rastrear tudo que acontece e refletir isso na Home e na página de Atividades.
 
 - **Gravação de `activity_log`**
   - [ ] Criação/edição/exclusão de clientes
@@ -159,17 +180,41 @@ Marque os itens conforme forem concluídos — a ideia é ser seu **painel de co
 
 ### 6. Organização, segurança e documentação interna
 
-**Objetivo:** manter o painel seguro e fácil de manter ao longo do tempo.**
+**Objetivo:** manter o painel seguro e fácil de manter ao longo do tempo.
+
+- **n8n (automações)** — *opcional no futuro*
+  - Decisão atual: manter automações no código (APIs, Resend, webhooks diretos). Se os fluxos crescerem muito ou ficarem difíceis de manter, reavaliar adoção de n8n (self-hosted ou n8n.cloud) para centralizar webhooks, e-mails e integrações.
+
+- **Padrão de autenticação e validação (stack Node)**
+  - [x] **Zod** em uso no dashboard: schema de emissão NF-e (`lib/schemas/nfe.ts`); padrão definido para validar todo input de API.
+  - [x] Dependência **jose** (JWT) instalada para uso em tokens (login, APIs públicas, webhooks).
+  - [ ] **JWT**: centralizar criação/verificação de token em `lib/auth/jwt.ts` e usar em APIs públicas e webhooks (hoje auth é cookie no dashboard).
+  - [ ] Estender **Zod** em todas as rotas que recebem body/query (`/api/public/**`, webhooks, etc.).
+  - [ ] Documentar no `README` o padrão JWT + Zod para replicar no site e no SaaS.
 
 - **Proteção de rotas do dashboard**
   - [ ] Middleware garantindo login obrigatório em `/dashboard/**`
   - [ ] Uso de `role` e `permissions` para controlar acesso a módulos (financeiro, NF-e, atividades, usuários)
 
 - **Segurança das rotas públicas**
-  - [ ] Validar inputs de `/api/public/**` e limitar o que é exposto
+  - [ ] Validar inputs de `/api/public/**` e limitar o que é exposto (Zod obrigatório)
   - [ ] Proteger webhook `/api/inter/webhook` contra chamadas não autorizadas
+  - [ ] Implementar **rate limiting** para endpoints sensíveis (login, criação de contratos, NF-e, cobranças)  
+        - [ ] Middleware de rate limit por IP/usuário (ex.: 5–10 req/min)  
+        - [x] Proteção contra uso abusivo de botões no front (desabilitar enquanto a request anterior não termina) — já aplicado em NF-e e Senhas
 
 - **Documentação interna**
   - [ ] Referenciar este `ROADMAP.md` no `README.md`
   - [ ] Manter anotações rápidas de decisões (provedor de NF-e, provedor de e-mail, detalhes da integração com Inter, etc.)
 
+---
+
+### 📋 Resumo — O que falta (prioridade)
+
+1. **Site ↔ Dashboard:** checkout no site, endpoint `POST /api/public/contracts/register-from-site`, validação Zod.
+2. **Banco Inter:** credenciais, geração de cobrança Pix/BolePix, webhook de pagamento, atualização de status nos contratos.
+3. **NF-e:** valor/descrição sempre alinhados ao contrato; relatório para contador; ajustes de UX na página (pendente x emitida).
+4. **E-mail:** Resend (ou outro), `sendInvoiceEmail` após emitir NF-e, `sendProductEmail` para produto/contrato.
+5. **Atividades:** gravar `activity_log` em todas as ações relevantes; exibir em `/dashboard/atividades` e na Home.
+6. **Segurança:** middleware de login em `/dashboard/**`; rate limiting em APIs sensíveis; centralizar JWT; documentar no README.
+7. **n8n:** por enquanto não; reavaliar se automações ficarem muitas ou complexas.

@@ -1,16 +1,16 @@
 "use client"
 
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
+import { useChatUnreadCount } from "@/hooks/use-chat-unread"
 import { cn } from "@/lib/utils"
 import {
   Home,
   Package,
   Users,
-  Shield,
   MessageCircle,
   FileText,
   Bell,
@@ -21,6 +21,8 @@ import {
   CreditCard,
   Key,
   FileText as InvoiceIcon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react"
 import type { Permission } from "@/lib/types"
 
@@ -38,11 +40,30 @@ const navItems: { label: string; href: string; icon: typeof Home; permission: Pe
   { label: "Senhas", href: "/dashboard/senhas", icon: Key, permission: "admin" },
 ]
 
-export function AppSidebar() {
+type AppSidebarProps = { collapsed?: boolean; onToggleCollapse?: () => void }
+
+export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, hasPermission, isAdmin } = useAuth()
   const supabase = createClient()
+  const chatUnreadCount = useChatUnreadCount()
+  const [notificationUnread, setNotificationUnread] = useState(0)
+
+  useEffect(() => {
+    const fetchUnread = async () => {
+      if (!profile?.id) return
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", profile.id)
+        .eq("is_read", false)
+      setNotificationUnread(count ?? 0)
+    }
+    fetchUnread()
+    const interval = setInterval(fetchUnread, 30000)
+    return () => clearInterval(interval)
+  }, [profile?.id, supabase])
 
   const handleLogout = async () => {
     localStorage.removeItem("xpress_auth")
@@ -61,51 +82,42 @@ export function AppSidebar() {
 
   return (
     <aside
-      className="fixed left-0 top-0 z-40 h-screen w-56 flex flex-col border-r border-sidebar-border bg-sidebar"
+      className={cn(
+        "fixed left-6 top-10 bottom-10 z-40 flex flex-col border border-sidebar-border bg-sidebar shadow-sm transition-[width] duration-200 ease-out rounded-2xl",
+        collapsed ? "w-16" : "w-56"
+      )}
     >
-      {/* Logo / Brand */}
-      <div className="relative flex items-center gap-3 border-b border-sidebar-border px-4 py-3 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary/8 via-transparent to-transparent pointer-events-none" />
-        <Link href="/dashboard" className="relative flex items-center gap-3 group">
-          {/* Logo em moldura redonda */}
-          <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-sidebar-accent overflow-hidden logo-glow group-hover:scale-105 transition-all duration-300">
-            <Image
-              src="/images/logo.png"
-              alt="Xpress Solutions"
-              width={32}
-              height={32}
-              className="object-cover scale-125"
-              priority
-            />
-          </div>
-          {/* Nome */}
-          <div className="flex flex-col leading-tight">
-            <span className="text-sm font-bold text-foreground tracking-wide">Xpress</span>
-            <span className="text-[10px] font-medium text-primary tracking-widest uppercase">Solutions</span>
-          </div>
-        </Link>
-      </div>
-
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-2 py-4">
+      {/* Navigation (logo/nome da empresa ficam no topo do dashboard) */}
+      <nav className="flex-1 overflow-y-auto px-2 pt-4 pb-2">
         <ul className="flex flex-col gap-1">
           {filteredNav.map((item) => {
             const isActive =
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href))
+            const isChat = item.href === "/dashboard/chat"
+            const showUnread = isChat && chatUnreadCount > 0
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  title={collapsed ? item.label : undefined}
                   className={cn(
-                    "group/nav flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                    "group/nav flex items-center rounded-lg text-sm font-medium transition-all duration-200",
+                    collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
                     isActive
-                      ? "bg-primary/10 text-primary shadow-[inset_0_0_12px_rgba(14,165,233,0.08)]"
-                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hover:shadow-[inset_0_0_10px_rgba(14,165,233,0.06)] hover:translate-x-0.5"
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hover:translate-x-0.5"
                   )}
                 >
-                  <item.icon className={cn("h-4 w-4 shrink-0 transition-transform duration-200 group-hover/nav:scale-110", isActive && "text-primary")} />
-                  <span className="truncate">{item.label}</span>
+                  <span className="relative inline-flex shrink-0">
+                    <item.icon className={cn("h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110", isActive && "text-primary")} />
+                    {showUnread && (
+                      <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground ring-2 ring-sidebar">
+                        {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
+                      </span>
+                    )}
+                  </span>
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </Link>
               </li>
             )
@@ -115,10 +127,12 @@ export function AppSidebar() {
             <li>
               <Link
                 href="/dashboard/usuarios"
+                title={collapsed ? "Usuários" : undefined}
                 className={cn(
-                  "group/nav flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                  "group/nav flex items-center rounded-lg text-sm font-medium transition-all duration-200",
+                  collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
                   pathname.startsWith("/dashboard/usuarios")
-                    ? "bg-primary/10 text-primary shadow-[inset_0_0_12px_rgba(14,165,233,0.08)]"
+                    ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hover:translate-x-0.5"
                 )}
               >
@@ -128,23 +142,75 @@ export function AppSidebar() {
                     pathname.startsWith("/dashboard/usuarios") && "text-primary"
                   )}
                 />
-                <span className="truncate">Usuários</span>
+                {!collapsed && <span className="truncate">Usuários</span>}
               </Link>
             </li>
           )}
         </ul>
       </nav>
 
-      {/* Logout */}
-      <div className="border-t border-sidebar-border p-3">
-        <button
-          onClick={handleLogout}
-          className="group/logout flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200"
+      {/* Sair em cima, Notificações embaixo; depois usuário logado */}
+      <div className="border-t border-sidebar-border p-3 space-y-2">
+        <div className="flex flex-col gap-1">
+          <button
+            onClick={handleLogout}
+            title={collapsed ? "Sair" : undefined}
+            className={cn(
+              "group/logout flex w-full items-center text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
+              collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"
+            )}
+          >
+            <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/logout:scale-110 group-hover/logout:-translate-x-0.5" />
+            {!collapsed && <span>Sair</span>}
+          </button>
+          <Link
+            href="/dashboard/notificacoes"
+            title={collapsed ? "Notificações" : undefined}
+            className={cn(
+              "group/bell relative flex w-full items-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-primary transition-all duration-200",
+              collapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"
+            )}
+          >
+            <Bell className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/bell:scale-110" />
+            {!collapsed && <span>Notificações</span>}
+            {notificationUnread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-sidebar">
+                {notificationUnread > 9 ? "9+" : notificationUnread}
+              </span>
+            )}
+          </Link>
+        </div>
+        {/* Usuário logado: nome + perfil (para todos os usuários) */}
+        <div
+          className={cn(
+            "flex items-center rounded-lg border border-sidebar-border/50 bg-sidebar-accent/50 p-2",
+            collapsed ? "justify-center" : "gap-3"
+          )}
+          title={collapsed ? `${profile?.name ?? ""} · ${profile?.role ?? ""}` : undefined}
         >
-          <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/logout:scale-110 group-hover/logout:-translate-x-0.5" />
-          <span>Sair</span>
-        </button>
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-sm">
+            {profile?.name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-foreground truncate">{profile?.name}</p>
+              <p className="text-xs text-muted-foreground capitalize truncate">{profile?.role}</p>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Botão minimizar / expandir */}
+      {onToggleCollapse && (
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          title={collapsed ? "Expandir menu" : "Recolher menu"}
+          className="absolute -right-3 top-1/2 z-50 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-sidebar shadow-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+        >
+          {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
+      )}
     </aside>
   )
 }

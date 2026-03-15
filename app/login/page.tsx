@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Eye, EyeOff, Loader2, Lock, User, ArrowRight } from "lucide-react"
 
@@ -102,6 +102,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const resetSuccess = searchParams.get("reset") === "ok"
 
   // Load saved credentials on mount
   useEffect(() => {
@@ -132,22 +134,28 @@ export default function LoginPage() {
         body: JSON.stringify({ username, password }),
       })
 
+      const data = await response.json()
       if (!response.ok) {
-        const data = await response.json()
         setError(data.error || "Credenciais inválidas")
         setLoading(false)
         return
       }
 
-      // Save or clear credentials based on "remember me"
       if (rememberMe) {
         localStorage.setItem("xpress_remember", JSON.stringify({ login: username.trim(), pass: password }))
       } else {
         localStorage.removeItem("xpress_remember")
       }
 
-      // Store login session in localStorage too
-      localStorage.setItem("xpress_auth", JSON.stringify({ user: username.trim(), authenticated: true }))
+      localStorage.setItem(
+        "xpress_auth",
+        JSON.stringify({
+          user: data.user ?? username.trim(),
+          displayName: data.displayName ?? data.user ?? username.trim(),
+          role: data.role ?? "admin",
+          authenticated: true,
+        })
+      )
 
       // Redirect to dashboard
       router.push("/dashboard")
@@ -205,27 +213,16 @@ export default function LoginPage() {
           <div className="absolute bottom-0 right-0 h-px w-8 bg-gradient-to-l from-[#0ea5e9]/20 to-transparent" />
 
           <div className="relative px-8 py-10 sm:px-10 sm:py-12">
-            {/* Logo area */}
-            <div className="mb-10 flex flex-col items-center gap-3">
-              <div className="relative">
-                {/* Logo glow */}
-                <div className="absolute -inset-4 rounded-full bg-[#0ea5e9]/5 blur-2xl" />
-                <Image
-                  src="/images/logo.png"
-                  alt="Xpress Solutions"
-                  width={200}
-                  height={65}
-                  className="relative object-contain drop-shadow-[0_0_20px_rgba(14,165,233,0.3)]"
-                  priority
-                />
-              </div>
-              <div className="flex items-center gap-2 mt-1">
-                <div className="h-px w-8 bg-gradient-to-r from-transparent to-[#0ea5e9]/30" />
-                <span className="text-xs font-medium tracking-[0.25em] uppercase text-[#0ea5e9]/60">
-                  Painel Administrativo
-                </span>
-                <div className="h-px w-8 bg-gradient-to-l from-transparent to-[#0ea5e9]/30" />
-              </div>
+            {/* Logo — só a imagem, sem moldura nem texto */}
+            <div className="mb-10 flex justify-center">
+              <Image
+                src="/logox.png"
+                alt="Xpress Solutions"
+                width={200}
+                height={65}
+                className="object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.2)]"
+                priority
+              />
             </div>
 
             {/* Form */}
@@ -279,7 +276,7 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember me toggle */}
+              {/* Remember me + Esqueci minha senha */}
               <div className="flex items-center justify-between">
                 <button
                   type="button"
@@ -303,8 +300,21 @@ export default function LoginPage() {
                     Lembrar-me
                   </span>
                 </button>
+                <a
+                  href="/login/forgot-password"
+                  className="text-xs font-medium text-[#0ea5e9] hover:text-sky-300 transition-colors"
+                >
+                  Esqueci minha senha
+                </a>
               </div>
 
+              {/* Sucesso após redefinir senha */}
+              {resetSuccess && (
+                <div className="flex items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3">
+                  <div className="h-2 w-2 flex-shrink-0 rounded-full bg-sky-400" />
+                  <p className="text-sm text-sky-200">Senha alterada com sucesso. Faça login com a nova senha.</p>
+                </div>
+              )}
               {/* Error */}
               {error && (
                 <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
