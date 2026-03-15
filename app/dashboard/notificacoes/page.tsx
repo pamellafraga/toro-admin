@@ -47,6 +47,7 @@ export default function NotificacoesPage() {
   }
 
   const deleteNotification = async (id: string) => {
+    if (!confirm("Tem certeza que deseja excluir esta notificação?")) return
     await supabase.from("notifications").delete().eq("id", id)
     mutate()
   }

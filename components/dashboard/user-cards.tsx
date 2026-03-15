@@ -5,7 +5,7 @@ import { Plus, Pencil, X, Save, Trash2, Loader2 } from "lucide-react"
 import { ROLE_LABELS, type UserRole } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 
 export interface DashboardUser {
   id: string
@@ -25,6 +25,7 @@ export function UserCards() {
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  const { mutate: globalMutate } = useSWRConfig()
   const { data: users = [], mutate } = useSWR<DashboardUser[]>("dashboard-users", async () => {
     const res = await fetch("/api/users")
     if (!res.ok) {
@@ -80,6 +81,8 @@ export function UserCards() {
       }
       toast.success("Usuário atualizado com sucesso")
       setEditingId(null)
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
       mutate()
     } finally {
       setSaving(false)
@@ -87,7 +90,7 @@ export function UserCards() {
   }
 
   const handleRemove = async (id: string, displayName: string) => {
-    if (!confirm(`Remover o usuário "${displayName}"? Esta ação não pode ser desfeita.`)) return
+    if (!confirm(`Tem certeza que deseja excluir o usuário "${displayName}"? Esta ação não pode ser desfeita.`)) return
     setDeletingId(id)
     try {
       const res = await fetch(`/api/users/${id}`, { method: "DELETE" })
@@ -130,6 +133,8 @@ export function UserCards() {
       toast.success("Usuário cadastrado com sucesso")
       setShowAddUser(false)
       setNewUser({ username: "", password: "", display_name: "", email: "", role: "comercial" })
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
       mutate()
     } finally {
       setSaving(false)

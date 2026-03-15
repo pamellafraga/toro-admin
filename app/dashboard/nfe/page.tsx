@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { useSWRConfig } from "swr"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, FileText, Plus, Eye } from "lucide-react"
+import { Loader2, FileText, Plus, Eye, Trash2, XCircle } from "lucide-react"
 import { toast } from "sonner"
 
 interface NFeDocument {
@@ -42,10 +43,13 @@ type ClientRow = {
 export default function NFePage() {
   const supabase = createClient()
   const { isAdmin } = useAuth()
+  const { mutate: globalMutate } = useSWRConfig()
 
   const [loading, setLoading] = useState(true)
   const [loadingModal, setLoadingModal] = useState(false)
   const [issuing, setIssuing] = useState(false)
+  const [actioningId, setActioningId] = useState<string | null>(null)
+  const [actionType, setActionType] = useState<"cancelar" | "excluir" | null>(null)
   const [docs, setDocs] = useState<NFeDocument[]>([])
   const [allNfeDocs, setAllNfeDocs] = useState<NFeDocument[]>([])
   const [contractValueByContractId, setContractValueByContractId] = useState<Record<string, number>>({})
@@ -73,57 +77,117 @@ export default function NFePage() {
     total_value: "",
   })
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const res = await fetch("/api/nfe/documents", { credentials: "include" })
-        if (!res.ok) {
-          setLoading(false)
-          return
-        }
-        const json = await res.json()
-        const allDocs = (json.documents || []) as NFeDocument[]
-        const contracts = json.contracts || []
-
-        const emDiaIds = new Set(
-          contracts
-            .filter((c: { payment_status?: string }) => {
-              const p = (c.payment_status ?? "").toString().toLowerCase()
-              return p === "em_dia" || p === "paid"
-            })
-            .map((c: { id: string }) => c.id),
-        )
-
-        const valueByContractId: Record<string, number> = {}
-        const clientIdByContract: Record<string, string> = {}
-        const productByContractId: Record<string, string> = {}
-        const planByContractId: Record<string, string> = {}
-        contracts.forEach((c: { id: string; monthly_value?: number; client_id?: string; product_name?: string | null; plan_label?: string }) => {
-          valueByContractId[c.id] = Number(c.monthly_value ?? 0)
-          if (c.client_id) clientIdByContract[c.id] = c.client_id
-          if (c.product_name) productByContractId[c.id] = c.product_name
-          if (c.plan_label) planByContractId[c.id] = c.plan_label
-        })
-        setContractValueByContractId(valueByContractId)
-        setClientIdByContractId(clientIdByContract)
-        setContractProductByContractId(productByContractId)
-        setContractPlanByContractId(planByContractId)
-
-        setAllNfeDocs(allDocs)
-        const filtered = allDocs.filter((d) => {
-          const cid = (d.provider_payload as { contract_id?: string } | null)?.contract_id
-          if (!cid) return false
-          return emDiaIds.has(cid)
-        })
-        setDocs(filtered)
-      } finally {
+  const loadDocuments = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch("/api/nfe/documents", { credentials: "include" })
+      if (!res.ok) {
         setLoading(false)
+        return
       }
-    }
+      const json = await res.json()
+      const allDocs = (json.documents || []) as NFeDocument[]
+      const contracts = json.contracts || []
 
-    load()
+      const emDiaIds = new Set(
+        contracts
+          .filter((c: { payment_status?: string }) => {
+            const p = (c.payment_status ?? "").toString().toLowerCase()
+            return p === "em_dia" || p === "paid"
+          })
+          .map((c: { id: string }) => c.id),
+      )
+
+      const valueByContractId: Record<string, number> = {}
+      const clientIdByContract: Record<string, string> = {}
+      const productByContractId: Record<string, string> = {}
+      const planByContractId: Record<string, string> = {}
+      contracts.forEach((c: { id: string; monthly_value?: number; client_id?: string; product_name?: string | null; plan_label?: string }) => {
+        valueByContractId[c.id] = Number(c.monthly_value ?? 0)
+        if (c.client_id) clientIdByContract[c.id] = c.client_id
+        if (c.product_name) productByContractId[c.id] = c.product_name
+        if (c.plan_label) planByContractId[c.id] = c.plan_label
+      })
+      setContractValueByContractId(valueByContractId)
+      setClientIdByContractId(clientIdByContract)
+      setContractProductByContractId(productByContractId)
+      setContractPlanByContractId(planByContractId)
+
+      setAllNfeDocs(allDocs)
+      const filtered = allDocs.filter((d) => {
+        const cid = (d.provider_payload as { contract_id?: string } | null)?.contract_id
+        if (!cid) return false
+        return emDiaIds.has(cid)
+      })
+      setDocs(filtered)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadDocuments()
   }, [])
+
+  const handleCancelar = async (nfe: NFeDocument) => {
+    if (nfe.status !== "emitida") return
+    if (!confirm(`Cancelar a NF-e ${nfe.number || nfe.id}? O status será alterado para "cancelada".`)) return
+    setActioningId(nfe.id)
+    setActionType("cancelar")
+    try {
+      const res = await fetch(`/api/nfe/documents/${nfe.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ action: "cancelar" }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao cancelar NF-e")
+        return
+      }
+      toast.success("NF-e cancelada.")
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
+      await loadDocuments()
+    } catch {
+      toast.error("Erro ao cancelar NF-e.")
+    } finally {
+      setActioningId(null)
+      setActionType(null)
+    }
+  }
+
+  const handleExcluir = async (nfe: NFeDocument) => {
+    const msg = nfe.status === "emitida"
+      ? `Tem certeza que deseja excluir a NF-e ${nfe.number || nfe.id} do painel? O registro será removido da lista (a nota na SEFAZ não é alterada).`
+      : nfe.status === "pendente"
+        ? "Tem certeza que deseja excluir esta NF-e pendente? O registro será removido e não será possível emitir esta nota."
+        : "Tem certeza que deseja excluir este registro?"
+    if (!confirm(msg)) return
+    setActioningId(nfe.id)
+    setActionType("excluir")
+    try {
+      const res = await fetch(`/api/nfe/documents/${nfe.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "Erro ao excluir NF-e")
+        return
+      }
+      toast.success("NF-e excluída.")
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
+      await loadDocuments()
+    } catch {
+      toast.error("Erro ao excluir NF-e.")
+    } finally {
+      setActioningId(null)
+      setActionType(null)
+    }
+  }
 
   const totalGeradas = useMemo(
     () => allNfeDocs.filter((d) => (d.status ?? "").toString().toLowerCase() === "emitida").length,
@@ -590,36 +654,98 @@ export default function NFePage() {
                       {nfe.status}
                     </Badge>
                     {nfe.status === "emitida" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          // TODO: quando CREFAZ estiver integrado, abrir o documento oficial (ex.: window.open(urlPdfNfe))
-                          toast.info("O documento oficial da NF-e estará disponível após a integração com CREFAZ.", { duration: 5000 })
-                        }}
-                      >
-                        <Eye className="mr-1 h-3.5 w-3.5" />
-                        Visualizar
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            // TODO: quando CREFAZ estiver integrado, abrir o documento oficial (ex.: window.open(urlPdfNfe))
+                            toast.info("O documento oficial da NF-e estará disponível após a integração com CREFAZ.", { duration: 5000 })
+                          }}
+                        >
+                          <Eye className="mr-1 h-3.5 w-3.5" />
+                          Visualizar
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                          onClick={() => handleCancelar(nfe)}
+                          disabled={!!actioningId}
+                          title="Cancelar NF-e"
+                        >
+                          {actioningId === nfe.id && actionType === "cancelar" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <XCircle className="h-4 w-4" />
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleExcluir(nfe)}
+                          disabled={!!actioningId}
+                          title="Excluir NF-e"
+                        >
+                          {actioningId === nfe.id && actionType === "excluir" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </>
                     )}
                     {nfe.status === "pendente" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenEmitModal(nfe)}
+                          disabled={loadingModal || issuing}
+                        >
+                          {loadingModal && selectedDoc?.id === nfe.id ? (
+                            <>
+                              <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                              Carregando...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="mr-1 h-3 w-3" />
+                              Emitir NF-e
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => handleExcluir(nfe)}
+                          disabled={!!actioningId}
+                          title="Excluir NF-e"
+                        >
+                          {actioningId === nfe.id && actionType === "excluir" ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </>
+                    )}
+                    {nfe.status !== "emitida" && nfe.status !== "pendente" && (
                       <Button
-                        size="sm"
+                        size="icon"
                         variant="outline"
-                        onClick={() => handleOpenEmitModal(nfe)}
-                        disabled={loadingModal || issuing}
+                        className="h-8 w-8 shrink-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleExcluir(nfe)}
+                        disabled={!!actioningId}
+                        title="Excluir NF-e"
                       >
-                        {loadingModal && selectedDoc?.id === nfe.id ? (
-                          <>
-                            <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                            Carregando...
-                          </>
+                        {actioningId === nfe.id && actionType === "excluir" ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
-                          <>
-                            <Plus className="mr-1 h-3 w-3" />
-                            Emitir NF-e
-                          </>
+                          <Trash2 className="h-4 w-4" />
                         )}
                       </Button>
                     )}

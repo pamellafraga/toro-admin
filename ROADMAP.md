@@ -1,28 +1,12 @@
 ## 🚀 Roadmap Xpress — Ecossistema SaaS
 
-Lista viva do que já foi feito e do que falta implementar para ligar **Site**, **Dashboard Administrativo** e **Ferramenta SaaS**, incluindo **pagamentos**, **NF-e** e **automações**.
+**Este documento descreve o que FALTA implementar.** O que o projeto já tem está no [README.md](./README.md).
 
-> **Banco de dados (estado atual)**  
-> Por enquanto **apenas o Dashboard administrativo** está ligado ao banco (Supabase). O **site institucional** e o **SaaS (app do cliente)** ainda não estão conectados ao Supabase; a integração deles virá via APIs do dashboard e, no caso do SaaS, futura conexão ao mesmo Supabase (multi-tenant).
+> **Contexto (resumo):** O dashboard já tem login, esqueci minha senha (Resend), usuários com e-mail de redefinição, NF-e (emissão/cancelar/excluir), senhas (admin), histórico de atividades (clientes, contratos, NF-e, usuários) com atualização da Home e da página Atividades, confirmação em exclusões. Site e SaaS ainda não estão conectados ao Supabase.
 
-> **Automações**  
-> Por enquanto as automações ficam no próprio código (rotas do dashboard, Resend, webhooks). Se no futuro os fluxos ficarem muitos ou complexos (muitos webhooks, muitos e-mails, integrações que mudam com frequência), **reavaliar** a adoção de **n8n** para centralizar e facilitar sem deploys.
+> **Banco de dados:** Apenas o **Dashboard** está ligado ao Supabase. Site e SaaS serão integrados via APIs / futura conexão multi-tenant.
 
----
-
-### ✅ Já feito (dashboard)
-
-| Área | O que foi feito |
-|------|------------------|
-| **Autenticação** | Login por cookie (`xpress_auth`); APIs sensíveis (credenciais, NF-e) checam esse cookie. |
-| **Senhas (admin)** | Tabela `admin_credentials`, script `017_admin_credentials.sql`; API `GET/POST/DELETE /api/admin/credentials` com **service role** (bypass RLS); página `/dashboard/senhas` consome essa API (não usa Supabase direto no cliente). |
-| **NF-e / NFS-e** | `POST /api/nfe/issue` com validação **Zod** (`lib/schemas/nfe.ts`), auth por cookie e **admin client**; `GET /api/nfe/documents` para listagem; página `/dashboard/nfe` usa essas APIs. Integração **Sistema Nacional NFS-e (Porto Alegre)** com lib `nfse-brazil-national` (certificado A1, variáveis `NFSENACIONAL_*`). Fallback: provedor genérico (`NFE_API_*`) ou modo simulado. |
-| **Validação** | **Zod** em uso: schema de emissão NF-e; padrão definido para usar Zod em todas as entradas de API. |
-| **JWT** | Pacote **jose** instalado para uso futuro (tokens Base64URL, HMAC/RS256). |
-| **UX** | Botões de emissão NF-e e salvamento de senhas desabilitados durante a request (evita duplo envio). SWR na página de Senhas com `revalidateOnFocus: false` e `errorRetryCount: 0`. |
-| **Docs** | `.env.example` com variáveis Supabase (service role), NFS-e Nacional e provedor genérico NF-e. |
-
----
+> **Automações:** Hoje no código (Resend, webhooks). Se ficar complexo, reavaliar n8n.
 
 ### 🔍 Visão geral dos 3 repositórios
 
@@ -121,7 +105,7 @@ Lista viva do que já foi feito e do que falta implementar para ligar **Site**, 
   - [ ] Documentação rápida: "como usar estes dados no PGDAS-D"
 
 - **Ajustes na página `/dashboard/nfe`**
-  - [ ] Deixar claro status `pendente` x `emitida`
+  - [x] Status `pendente` x `emitida` (e cancelada) claros; botões Cancelar (só emitida) e Excluir (ícone apenas); confirmação antes de cancelar/excluir
   - [ ] Antes de emitir, recalcular valor e descrição com base no contrato mais recente
 
 ---
@@ -131,11 +115,8 @@ Lista viva do que já foi feito e do que falta implementar para ligar **Site**, 
 **Objetivo:** após emitir a NF-e, o cliente recebe tudo por e-mail sem ação manual.
 
 - **Provedor de e-mail transacional**
-  - [ ] Escolher provedor (preferência: **Resend**; alternativas: SendGrid, AWS SES, Mailgun, etc.)
-  - [ ] Configurar variáveis de ambiente para o provedor escolhido  
-        - Resend: `RESEND_API_KEY`, `EMAIL_FROM_DEFAULT`  
-        - Atualizar `.env.example` e documentação rápida no `README`
-  - [ ] Implementar helper `sendInvoiceEmail(options)` no backend do dashboard (ex.: `lib/email/send-invoice.ts`) usando Resend
+  - [x] **Resend** em uso para **Esqueci minha senha** (`lib/send-email.ts`); variáveis `RESEND_API_KEY`, `EMAIL_FROM_DEFAULT` no `.env.example`
+  - [ ] Implementar helper `sendInvoiceEmail(options)` no backend (ex.: `lib/email/send-invoice.ts`) usando Resend para enviar NF-e ao cliente após emissão
   - [ ] Preparar helper genérico `sendProductEmail(options)` para futuros e-mails de produto/contrato
 
 - **Disparo após emissão bem-sucedida da NF-e**
@@ -164,17 +145,19 @@ Lista viva do que já foi feito e do que falta implementar para ligar **Site**, 
 **Objetivo:** rastrear tudo que acontece e refletir isso na Home e na página de Atividades.
 
 - **Gravação de `activity_log`**
-  - [ ] Criação/edição/exclusão de clientes
-  - [ ] Criação/edição/cancelamento de contratos
+  - [x] Criação/edição/exclusão de clientes (página Clientes chama `/api/activity/log`; revalida cache de atividades)
+  - [x] Criação/edição/exclusão de contratos (cadastro em `contracts/register`; edição e exclusão em produtos/[slug] com log + revalidação)
   - [ ] Mudança de status de pagamento (pendente → pago → cancelado/expirado)
   - [ ] Criação de cobranças no Banco Inter
   - [ ] Confirmação de pagamento via webhook
-  - [ ] Emissão de NF-e
+  - [x] Emissão de NF-e
+  - [x] Cancelamento e exclusão de NF-e
+  - [x] Criação/atualização/remoção de usuários do dashboard
+  - [x] Cadastro de contratos (`contracts/register`)
 
 - **Uso nas telas**
-  - [ ] Página `/dashboard/atividades` mostrando corretamente o histórico
-  - [ ] Componente `RecentActivity` na Home trazendo últimos eventos relevantes
-  - [ ] Cards da Home (clientes, contratos, produtos, receita) usando dados em tempo real do Supabase
+  - [x] Página `/dashboard/atividades` e componente `RecentActivity` na Home
+  - [x] Cards da Home usando dados do Supabase via SWR (revalidação ao focar; cache de atividades atualizado após criar/editar/excluir cliente ou contrato)
 
 ---
 
@@ -204,7 +187,7 @@ Lista viva do que já foi feito e do que falta implementar para ligar **Site**, 
         - [x] Proteção contra uso abusivo de botões no front (desabilitar enquanto a request anterior não termina) — já aplicado em NF-e e Senhas
 
 - **Documentação interna**
-  - [ ] Referenciar este `ROADMAP.md` no `README.md`
+  - [x] Referenciar este `ROADMAP.md` no `README.md`
   - [ ] Manter anotações rápidas de decisões (provedor de NF-e, provedor de e-mail, detalhes da integração com Inter, etc.)
 
 ---
@@ -213,8 +196,8 @@ Lista viva do que já foi feito e do que falta implementar para ligar **Site**, 
 
 1. **Site ↔ Dashboard:** checkout no site, endpoint `POST /api/public/contracts/register-from-site`, validação Zod.
 2. **Banco Inter:** credenciais, geração de cobrança Pix/BolePix, webhook de pagamento, atualização de status nos contratos.
-3. **NF-e:** valor/descrição sempre alinhados ao contrato; relatório para contador; ajustes de UX na página (pendente x emitida).
-4. **E-mail:** Resend (ou outro), `sendInvoiceEmail` após emitir NF-e, `sendProductEmail` para produto/contrato.
-5. **Atividades:** gravar `activity_log` em todas as ações relevantes; exibir em `/dashboard/atividades` e na Home.
+3. **NF-e:** valor/descrição sempre alinhados ao contrato; relatório para contador. (Cancelar/excluir e UX na página já feitos.)
+4. **E-mail:** `sendInvoiceEmail` após emitir NF-e ao cliente; `sendProductEmail` para produto/contrato. (Resend já em uso para Esqueci minha senha.)
+5. **Atividades:** pendente apenas logs ligados a pagamento (mudança de status, webhook Inter, cobranças). Clientes, contratos, NF-e e usuários já registram e atualizam Home/Atividades.
 6. **Segurança:** middleware de login em `/dashboard/**`; rate limiting em APIs sensíveis; centralizar JWT; documentar no README.
 7. **n8n:** por enquanto não; reavaliar se automações ficarem muitas ou complexas.

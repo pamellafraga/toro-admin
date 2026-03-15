@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import { createClient } from "@/lib/supabase/client"
 import useSWR from "swr"
 
-const COLORS = ["#0ea5e9", "#06b6d4", "#8b5cf6"]
+const COLORS = ["#005176", "#006992", "#a78bfa"]
 
 export function ProductsPieChart() {
   const supabase = createClient()

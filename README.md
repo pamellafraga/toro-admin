@@ -37,9 +37,9 @@ Dashboard administrativa completa para gerenciamento de locações SaaS, constru
 | **Relatórios** | Exportação de dados e análises em CSV/Excel | 📊 |
 | **Notificações** | Central de alertas, avisos e lembretes do sistema | 🔔 |
 | **Atividades** | Log completo de ações realizadas no sistema | 📝 |
+| **NF-e** | Emissão, cancelamento e exclusão de notas fiscais (Admin only) | 📄 |
 | **Gastos da Empresa** | Controle de despesas operacionais (Admin only) | 💳 |
-| **Senhas** | Gerenciador de credenciais e acessos (Admin only) | 🔑 |
-| **Usuários** | Gerenciamento de usuários e permissões (Admin only) | ⚙️ |
+| **Configurações** | **Gerenciamento de Usuários** — usuários do dashboard, permissões e e-mail de redefinição de senha (Admin only). **Gerenciamento dos Sistemas** — login, senha e link das ferramentas (banco de dados, hospedagem, domínios, etc.) | ⚙️ |
 
 ---
 
@@ -53,7 +53,7 @@ Dashboard administrativa completa para gerenciamento de locações SaaS, constru
 | **Suporte** 🛟 | Home, Produtos, Clientes, Chat, Notificações, Atividades |
 | **Visualizador** 👁️ | Home, Relatórios, Notificações |
 
-> ⚠️ **Importante:** Somente o **Admin** tem acesso aos módulos de Gastos da Empresa, Senhas e Usuários. O sistema verifica as permissões em tempo real através do contexto de autenticação.
+> ⚠️ **Importante:** Somente o **Admin** tem acesso aos módulos de Gastos da Empresa e **Configurações** (Gerenciamento de Usuários e Gerenciamento dos Sistemas). O sistema verifica as permissões em tempo real através do contexto de autenticação.
 
 ---
 
@@ -98,16 +98,26 @@ A tela de login possui um design único e moderno com:
 2. Vá em **Settings → API** e copie:
    - `Project URL`
    - `anon public key`
-3. Crie o arquivo `.env.local` na raiz do projeto:
+3. Crie o arquivo `.env.local` na raiz do projeto (use `.env.example` como referência):
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://SEU_PROJETO.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=SUA_CHAVE_ANON
+SUPABASE_SERVICE_ROLE_KEY=SUA_SERVICE_ROLE_KEY
+
+# Opcional: Esqueci minha senha (Resend)
+RESEND_API_KEY=re_xxxx
+EMAIL_FROM_DEFAULT=noreply@seudominio.com
+
+# Opcional: NF-e (provedor genérico ou Sistema Nacional NFS-e)
+# NFE_API_URL=...
+# NFE_API_KEY=...
+# NFSENACIONAL_* (ver .env.example)
 ```
 
 ### 3. Criar as tabelas no banco
 
-Execute os scripts SQL em ordem no **SQL Editor** do Supabase:
+Execute os scripts SQL em ordem no **SQL Editor** do Supabase (consulte a pasta `scripts/` para a lista completa):
 
 ```
 scripts/001_profiles.sql      → Perfis de usuários
@@ -119,7 +129,15 @@ scripts/006_activity_log.sql  → Log de atividades
 scripts/007_notifications.sql → Notificações
 scripts/008_chat_messages.sql → Chat interno
 scripts/009_seed.sql          → Dados de exemplo (opcional)
+scripts/010_nfe_documents.sql → Documentos NF-e
+scripts/017_admin_credentials.sql → Credenciais (Senhas)
+scripts/018_dashboard_users.sql   → Usuários do dashboard
+scripts/024_forgot_password.sql    → Esqueci minha senha (coluna email + tabela códigos)
+scripts/025_forgot_password_username.sql → Busca por username
+scripts/026_user_reset_emails.sql  → E-mails designados para redefinição (opcional)
 ```
+
+Outros scripts (012–016, 019–023) aplicam alterações em contratos, produtos, atividade e chat; execute conforme a necessidade do projeto.
 
 ### 4. Criar o usuário Admin
 
@@ -150,8 +168,10 @@ Acesse: [http://localhost:3000](http://localhost:3000)
 
 ### ✅ Autenticação e Segurança
 - [x] Login com Supabase Auth
+- [x] Esqueci minha senha — fluxo completo (código por e-mail via Resend, redefinição por username)
+- [x] E-mail de redefinição configurável por usuário no painel Usuários (só admin altera)
 - [x] Middleware de proteção de rotas
-- [x] Sistema de permissões granular por perfil
+- [x] Sistema de permissões granular por perfil (Admin, Comercial)
 - [x] Logout com limpeza de sessão
 - [x] Persistência de login com "Lembrar-me"
 - [x] Context API para gerenciar estado de autenticação
@@ -167,9 +187,16 @@ Acesse: [http://localhost:3000](http://localhost:3000)
 ### ✅ Gestão de Dados
 - [x] CRUD completo de produtos
 - [x] CRUD completo de clientes
-- [x] Sistema de contratos vinculados
-- [x] Log de atividades com rastreamento
+- [x] Sistema de contratos vinculados (criar, editar, excluir por produto)
+- [x] Log de atividades: criação/edição/exclusão de clientes, contratos, NF-e e usuários; feed na Home e página Atividades atualizados após cada ação
 - [x] Notificações em tempo real
+
+### ✅ NF-e
+- [x] Emissão de NF-e/NFS-e (Sistema Nacional, provedor genérico ou simulado)
+- [x] Listagem de documentos (pendentes, emitidas, canceladas)
+- [x] Cancelar NF-e emitida (status → cancelada)
+- [x] Excluir NF-e (remover registro do painel); botões apenas com ícone
+- [x] Confirmação antes de cancelar ou excluir
 
 ### ✅ Interface e UX
 - [x] Design futurístico com tema dark
@@ -178,6 +205,7 @@ Acesse: [http://localhost:3000](http://localhost:3000)
 - [x] Componentes shadcn/ui customizados
 - [x] Toast notifications com Sonner
 - [x] Loading states e skeleton loaders
+- [x] Confirmação "Tem certeza que deseja excluir?" em todas as exclusões (clientes, usuários, contratos, NF-e, notificações, senhas)
 
 ### ✅ Sistema de Chat
 - [x] Chat interno em tempo real
@@ -433,13 +461,24 @@ xpress-dashboard/
 │   ├── layout.tsx                → Layout raiz com providers
 │   ├── globals.css               → Estilos globais
 │   ├── login/
-│   │   └── page.tsx              → Tela de login futurística com animações
+│   │   ├── page.tsx              → Tela de login com link "Esqueci minha senha"
+│   │   └── forgot-password/
+│   │       └── page.tsx          → Esqueci minha senha (código por e-mail)
 │   ├── setup/
 │   │   └── page.tsx              → Setup inicial do sistema
 │   ├── api/
 │   │   ├── login/route.ts        → Endpoint de autenticação
 │   │   ├── logout/route.ts       → Endpoint de logout
-│   │   └── setup-admin/route.ts  → Criação do admin inicial
+│   │   ├── setup-admin/route.ts  → Criação do admin inicial
+│   │   ├── auth/
+│   │   │   ├── forgot-password/route.ts → Solicitação de código de redefinição
+│   │   │   └── reset-password/route.ts  → Redefinição de senha com código
+│   │   ├── users/route.ts       → CRUD usuários do dashboard (GET/POST)
+│   │   ├── users/[id]/route.ts  → Atualizar/remover usuário (PATCH/DELETE)
+│   │   ├── activity/log/route.ts → Registro de atividades
+│   │   ├── nfe/documents/route.ts     → Listagem de NF-e
+│   │   ├── nfe/documents/[id]/route.ts → Cancelar (PATCH) ou excluir (DELETE) NF-e
+│   │   └── nfe/issue/route.ts    → Emissão de NF-e
 │   └── dashboard/
 │       ├── layout.tsx            → Layout do dashboard com sidebar
 │       ├── page.tsx              → Home (KPIs, gráficos, usuários)
@@ -452,6 +491,7 @@ xpress-dashboard/
 │       ├── notificacoes/page.tsx → Central de notificações
 │       ├── atividades/page.tsx   → Log de atividades
 │       ├── gastos-empresa/page.tsx → Controle de despesas (Admin)
+│       ├── nfe/page.tsx          → Emissão, cancelar e excluir NF-e (Admin)
 │       ├── senhas/page.tsx       → Gerenciador de senhas (Admin)
 │       └── usuarios/page.tsx     → Gestão de usuários (Admin)
 ├── components/
@@ -476,10 +516,14 @@ xpress-dashboard/
 │   ├── auth-context.tsx          → Contexto de autenticação e permissões
 │   ├── utils.ts                  → Funções utilitárias (cn, classNames)
 │   ├── types.ts                  → Tipos TypeScript globais
+│   ├── activity-log.ts           → Helper para registrar atividades
+│   ├── send-email.ts             → Envio de e-mail (Resend) para redefinição de senha
+│   ├── password-reset-email-map.ts → Mapeamento fallback de e-mails por username
 │   └── supabase/
 │       ├── client.ts             → Cliente Supabase para client components
 │       ├── server.ts             → Cliente Supabase para server components
-│       └── middleware.ts         → Cliente para middleware
+│       ├── middleware.ts         → Cliente para middleware
+│       └── admin.ts              → Cliente com service role (APIs sensíveis)
 ├── hooks/
 │   ├── use-mobile.ts             → Hook para detectar mobile
 │   └── use-toast.ts              → Hook para notificações toast
@@ -506,51 +550,7 @@ xpress-dashboard/
 
 ---
 
-## 🚀 Sugestões de Melhorias Futuras
-
-Funcionalidades que podem ser implementadas para enriquecer o sistema:
-
-### 📅 Gestão e Automação
-1. **Renovação automática de contratos** — Alertas de vencimento com 30/15/7 dias de antecedência
-2. **Cronograma de tarefas** — Sistema de tasks com lembretes e atribuição
-3. **Templates de email** — Editor de templates para comunicação com clientes
-4. **Workflow de aprovações** — Fluxo de aprovação para descontos e propostas especiais
-
-### 💳 Financeiro e Pagamentos
-5. **Integração com gateways** — Stripe, Asaas, PagSeguro para cobranças automáticas
-6. **Emissão de boletos** — Geração automática de boletos bancários
-7. **Reconciliação bancária** — Import de OFX/CSV para conciliação
-8. **Controle de comissões** — Cálculo e gestão de comissões de vendas
-
-### 📊 Analytics e Relatórios
-9. **Dashboard avançado** — Churn rate, LTV, MRR/ARR, CAC com histórico
-10. **Previsão de receita** — Análise preditiva baseada em histórico
-11. **Heatmaps de uso** — Análise de comportamento dos usuários
-12. **Relatórios agendados** — Envio automático de relatórios por email
-
-### 📱 Integrações e Comunicação
-13. **API REST completa** — Endpoints para integrações externas
-14. **Webhooks** — Notificações em tempo real de eventos do sistema
-15. **WhatsApp Business API** — Envio de boletos e lembretes via WhatsApp
-16. **Integração com CRM** — Sincronização com HubSpot, Pipedrive, RD Station
-
-### 🔧 Ferramentas e Produtividade
-17. **Módulo de propostas** — Geração de PDF personalizado com logo e dados
-18. **Sistema de tickets** — Abertura e acompanhamento de suporte
-19. **Base de conhecimento** — Wiki interna para documentação
-20. **Importação em massa** — Upload CSV para importar clientes/contratos
-
-### 📱 Mobile e Experiência
-21. **App mobile** — React Native para iOS/Android
-22. **PWA** — Progressive Web App com notificações push
-23. **Modo offline** — Sincronização quando reconectar
-24. **Assinatura digital** — Contratos assinados digitalmente
-
-### 🔒 Segurança e Compliance
-25. **Auditoria completa** — Histórico detalhado de todas as alterações
-26. **2FA/MFA** — Autenticação de dois fatores
-27. **Backup automático** — Backups diários com retenção configurável
-28. **LGPD Compliance** — Ferramentas para conformidade com LGPD
+O que ainda falta implementar (Site ↔ Dashboard, Banco Inter, e-mail automático, etc.) está descrito no **[ROADMAP.md](./ROADMAP.md)**.
 
 ---
 

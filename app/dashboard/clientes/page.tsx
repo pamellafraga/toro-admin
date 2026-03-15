@@ -8,7 +8,7 @@ import {
   Clock, PauseCircle, AlertCircle
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
-import useSWR from "swr"
+import useSWR, { useSWRConfig } from "swr"
 import type { Client } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -149,6 +149,7 @@ export default function ClientesPage() {
         ? `clients-list-admin-${adminClientesTab}`
         : "clients-list"
 
+  const { mutate: globalMutate } = useSWRConfig()
   const { data: clients, mutate } = useSWR(
     clientesListKey,
     async () => {
@@ -257,8 +258,11 @@ export default function ClientesPage() {
         await fetch("/api/activity/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ action: `Adicionou o contato ${newClient.name}`, entity_type: "client" }),
         })
+        globalMutate("recent-activity")
+        globalMutate("all-activities")
       } catch {}
       toast.success("Cliente salvo com sucesso")
       setShowAdd(false)
@@ -344,8 +348,11 @@ export default function ClientesPage() {
         await fetch("/api/activity/log", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ action: `Importou ${ok} contato(s)`, entity_type: "client", details: { count: ok, errors: err } }),
         })
+        globalMutate("recent-activity")
+        globalMutate("all-activities")
       } catch {}
       toast.success(`${ok} contato(s) importado(s).${err ? ` ${err} falha(s).` : ""}`)
     }
@@ -417,8 +424,11 @@ export default function ClientesPage() {
       await fetch("/api/activity/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ action: `Atualizou o contato ${editForm.name}`, entity_type: "client", entity_id: editingId }),
       })
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
     } catch {}
     setEditingId(null)
     mutate()
@@ -430,7 +440,7 @@ export default function ClientesPage() {
   }
 
   const handleDelete = async (client: Client) => {
-    if (!confirm(`Excluir o cliente "${client.name}"? Contratos e NF-e vinculados também serão removidos.`)) return
+    if (!confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Contratos e NF-e vinculados também serão removidos.`)) return
     const { error } = await supabase.from("clients").delete().eq("id", client.id)
     if (error) {
       toast.error("Erro ao excluir: " + error.message)
@@ -440,8 +450,11 @@ export default function ClientesPage() {
       await fetch("/api/activity/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ action: `Excluiu o cliente ${client.name}`, entity_type: "client", entity_id: client.id }),
       })
+      globalMutate("recent-activity")
+      globalMutate("all-activities")
     } catch {}
     toast.success("Cliente excluído.")
     mutate()

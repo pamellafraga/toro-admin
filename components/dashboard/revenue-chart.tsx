@@ -26,8 +26,8 @@ export function RevenueChart() {
           <AreaChart data={mockData} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
             <defs>
               <linearGradient id="colorReceita" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.35} />
+                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
@@ -44,7 +44,7 @@ export function RevenueChart() {
               }}
               formatter={(value: number) => [`R$ ${value.toLocaleString("pt-BR")}`, "Receita"]}
             />
-            <Area type="monotone" dataKey="receita" stroke="#0ea5e9" strokeWidth={2} fill="url(#colorReceita)" />
+            <Area type="monotone" dataKey="receita" stroke="var(--primary)" strokeWidth={2} fill="url(#colorReceita)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>

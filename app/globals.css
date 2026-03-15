@@ -3,41 +3,41 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Xpress Solutions - Paleta organizada: fundo suave, blocos claros, texto legível, um primário */
+/* Xpress Solutions - Paleta minimalista: fundo frio suave, azul em destaque, sidebar azul escura */
 :root {
-  --background: #f0f2f5;
-  --foreground: #1f2937;
+  --background: #f5f7fa;
+  --foreground: #1e293b;
   --card: #ffffff;
-  --card-foreground: #1f2937;
+  --card-foreground: #1e293b;
   --popover: #ffffff;
-  --popover-foreground: #1f2937;
-  --primary: #2563eb;
+  --popover-foreground: #1e293b;
+  --primary: #005176;
   --primary-foreground: #ffffff;
-  --secondary: #f3f4f6;
-  --secondary-foreground: #374151;
-  --muted: #f9fafb;
-  --muted-foreground: #6b7280;
-  --accent: #eff6ff;
-  --accent-foreground: #1e40af;
+  --secondary: #eef1f5;
+  --secondary-foreground: #334155;
+  --muted: #eef1f5;
+  --muted-foreground: #64748b;
+  --accent: rgba(0, 81, 118, 0.08);
+  --accent-foreground: #005176;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-  --ring: #2563eb;
-  --chart-1: #2563eb;
-  --chart-2: #0d9488;
-  --chart-3: #8b5cf6;
-  --chart-4: #10b981;
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #005176;
+  --chart-1: #005176;
+  --chart-2: #006992;
+  --chart-3: #a78bfa;
+  --chart-4: #fb923c;
   --chart-5: #f59e0b;
   --radius: 0.5rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1f2937;
-  --sidebar-primary: #2563eb;
+  --sidebar: #005176;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #006992;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f3f4f6;
-  --sidebar-accent-foreground: #1f2937;
-  --sidebar-border: #e5e7eb;
-  --sidebar-ring: #2563eb;
+  --sidebar-accent: rgba(255, 255, 255, 0.12);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.12);
+  --sidebar-ring: #006992;
 }
 
 @theme inline {
@@ -90,19 +90,21 @@
   }
 }
 
-/* Cards / blocos com fundo claro e borda sutil */
+/* Cards / blocos: glassmorphism sutil, sombras neutras e difusas (como na referência) */
 .glass {
-  background: #ffffff;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.88);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .glass-strong {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
 /* Efeitos leves e sincronizados */
@@ -120,14 +122,14 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f3f4f6;
+  background: var(--muted);
 }
 ::-webkit-scrollbar-thumb {
-  background: #d1d5db;
+  background: #cbd5e1;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: #94a3b8;
 }
 
 /* ─── Global smooth transitions ──────────────────────────── */
@@ -141,8 +143,8 @@
 }
 .card-hover:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #d1d5db !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06), 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-color: #cbd5e1 !important;
 }
 
 /* ─── Glass cards auto-animate on hover ───────────────────── */
@@ -150,8 +152,8 @@
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
 }
 .glass:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  border-color: #d1d5db;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 2px 6px rgba(0, 0, 0, 0.04);
+  border-color: #cbd5e1;
 }
 
 /* ─── Buttons: scale + press ──────────────────────────────── */
@@ -217,13 +219,13 @@ tr:hover .row-action {
   transition: opacity 0.18s ease;
 }
 
-/* ─── Input focus - anel único e limpo ─────────────────────── */
+/* ─── Input focus - anel único e limpo (teal) ───────────────── */
 input:focus,
 textarea:focus,
 select:focus {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
-  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(0, 81, 118, 0.25);
+  border-color: var(--primary);
 }
 
 /* ─── Shimmer sutil ───────────────────────────────────────── */
@@ -260,9 +262,9 @@ select:focus {
 
 /* ─── Futuristic grid background ─────────────────────────── */
 .grid-bg {
-  background-image: 
-    linear-gradient(#e5e7eb 1px, transparent 1px),
-    linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 

@@ -23,6 +23,7 @@ import {
   FileText as InvoiceIcon,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react"
 import type { Permission } from "@/lib/types"
 
@@ -37,7 +38,6 @@ const navItems: { label: string; href: string; icon: typeof Home; permission: Pe
   { label: "Notificações", href: "/dashboard/notificacoes", icon: Bell, permission: "notificacoes" },
   { label: "Atividades", href: "/dashboard/atividades", icon: Activity, permission: "atividades" },
   { label: "Gastos da Empresa", href: "/dashboard/gastos-empresa", icon: CreditCard, permission: "admin" },
-  { label: "Senhas", href: "/dashboard/senhas", icon: Key, permission: "admin" },
 ]
 
 type AppSidebarProps = { collapsed?: boolean; onToggleCollapse?: () => void }
@@ -79,6 +79,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
   }
 
   const filteredNav = navItems.filter((item) => hasPermission(item.permission))
+  const [configOpen, setConfigOpen] = useState(pathname.startsWith("/dashboard/usuarios") || pathname.startsWith("/dashboard/senhas"))
 
   return (
     <aside
@@ -105,12 +106,12 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
                     "group/nav flex items-center rounded-lg text-sm font-medium transition-all duration-200",
                     collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
                     isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hover:translate-x-0.5"
+                      ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
                   )}
                 >
                   <span className="relative inline-flex shrink-0">
-                    <item.icon className={cn("h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110", isActive && "text-primary")} />
+                    <item.icon className={cn("h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110", isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground")} />
                     {showUnread && (
                       <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground ring-2 ring-sidebar">
                         {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
@@ -124,27 +125,91 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
           })}
 
           {isAdmin && (
-            <li>
-              <Link
-                href="/dashboard/usuarios"
-                title={collapsed ? "Usuários" : undefined}
-                className={cn(
-                  "group/nav flex items-center rounded-lg text-sm font-medium transition-all duration-200",
-                  collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
-                  pathname.startsWith("/dashboard/usuarios")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground hover:translate-x-0.5"
-                )}
-              >
-                <Settings
-                  className={cn(
-                    "h-4 w-4 shrink-0 transition-transform duration-200 group-hover/nav:scale-110",
-                    pathname.startsWith("/dashboard/usuarios") && "text-primary"
+            <>
+              {collapsed ? (
+                <>
+                  <li>
+                    <Link
+                      href="/dashboard/usuarios"
+                      title="Configurações – Usuários"
+                      className={cn(
+                        "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
+                        pathname.startsWith("/dashboard/usuarios")
+                          ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <Users className="h-4 w-4" />
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/dashboard/senhas"
+                      title="Configurações – Sistemas"
+                      className={cn(
+                        "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
+                        pathname.startsWith("/dashboard/senhas")
+                          ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <Key className="h-4 w-4" />
+                    </Link>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <button
+                      type="button"
+                      onClick={() => setConfigOpen((o) => !o)}
+                      className={cn(
+                        "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <Settings className="h-4 w-4 shrink-0" />
+                      <span className="truncate flex-1 text-left">Configurações</span>
+                      <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", configOpen && "rotate-180")} />
+                    </button>
+                  </li>
+                  {configOpen && (
+                    <>
+                      <li className="pl-6">
+                        <Link
+                          href="/dashboard/usuarios"
+                          title="Usuários"
+                          className={cn(
+                            "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                            pathname.startsWith("/dashboard/usuarios")
+                              ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
+                          )}
+                        >
+                          <Users className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Usuários</span>
+                        </Link>
+                      </li>
+                      <li className="pl-6">
+                        <Link
+                          href="/dashboard/senhas"
+                          title="Sistemas (login, senha, link das ferramentas)"
+                          className={cn(
+                            "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
+                            pathname.startsWith("/dashboard/senhas")
+                              ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
+                          )}
+                        >
+                          <Key className="h-4 w-4 shrink-0" />
+                          <span className="truncate">Sistemas</span>
+                        </Link>
+                      </li>
+                    </>
                   )}
-                />
-                {!collapsed && <span className="truncate">Usuários</span>}
-              </Link>
-            </li>
+                </>
+              )}
+            </>
           )}
         </ul>
       </nav>
@@ -156,7 +221,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
             onClick={handleLogout}
             title={collapsed ? "Sair" : undefined}
             className={cn(
-              "group/logout flex w-full items-center text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
+              "group/logout flex w-full items-center text-sm font-medium text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
               collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"
             )}
           >
@@ -167,7 +232,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
             href="/dashboard/notificacoes"
             title={collapsed ? "Notificações" : undefined}
             className={cn(
-              "group/bell relative flex w-full items-center rounded-lg text-muted-foreground hover:bg-sidebar-accent hover:text-primary transition-all duration-200",
+              "group/bell relative flex w-full items-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary transition-all duration-200",
               collapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"
             )}
           >
@@ -188,13 +253,13 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
           )}
           title={collapsed ? `${profile?.name ?? ""} · ${profile?.role ?? ""}` : undefined}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20 text-primary font-semibold text-sm">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/40 text-sidebar-primary-foreground font-semibold text-sm">
             {profile?.name?.charAt(0)?.toUpperCase() || "U"}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-foreground truncate">{profile?.name}</p>
-              <p className="text-xs text-muted-foreground capitalize truncate">{profile?.role}</p>
+              <p className="text-sm font-medium text-sidebar-foreground truncate">{profile?.name}</p>
+              <p className="text-xs text-sidebar-foreground/80 capitalize truncate">{profile?.role}</p>
             </div>
           )}
         </div>
@@ -206,7 +271,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
           type="button"
           onClick={onToggleCollapse}
           title={collapsed ? "Expandir menu" : "Recolher menu"}
-          className="absolute -right-3 top-1/2 z-50 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-sidebar shadow-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition-colors"
+          className="absolute -right-3 top-1/2 z-50 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar-border bg-sidebar shadow-md text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
         >
           {collapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
         </button>

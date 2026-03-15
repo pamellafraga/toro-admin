@@ -70,6 +70,7 @@ export default function DashboardHome() {
           title="Receita Mensal"
           value={`R$ ${(stats?.monthlyRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           icon={TrendingUp}
+          valueClassName="text-primary"
         />
       </div>
 

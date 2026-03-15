@@ -16,9 +16,9 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/relatorios": "Relatórios",
   "/dashboard/notificacoes": "Notificações",
   "/dashboard/atividades": "Atividades",
-  "/dashboard/usuarios": "Usuários",
+  "/dashboard/usuarios": "Gerenciamento de Usuários",
   "/dashboard/gastos-empresa": "Gastos da Empresa",
-  "/dashboard/senhas": "Senhas",
+  "/dashboard/senhas": "Gerenciamento dos Sistemas",
 }
 
 export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {

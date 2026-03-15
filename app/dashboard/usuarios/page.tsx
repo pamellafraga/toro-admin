@@ -20,8 +20,8 @@ export default function UsuariosPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Gerenciamento de Usuarios</h2>
-        <p className="text-sm text-muted-foreground mt-1">Adicione, edite e configure permissoes de acesso</p>
+        <h2 className="text-2xl font-bold text-foreground">Gerenciamento de Usuários</h2>
+        <p className="text-sm text-muted-foreground mt-1">Adicione, edite e configure permissões de acesso ao dashboard</p>
       </div>
       <UserCards />
     </div>

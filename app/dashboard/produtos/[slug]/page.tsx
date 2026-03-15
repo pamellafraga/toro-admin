@@ -591,6 +591,20 @@ export default function ProductDetailPage() {
           await supabase.from("nfe_documents").update(nfeUpdate).eq("id", nfe.id)
         }
       }
+      try {
+        await fetch("/api/activity/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            action: `Atualizou o contrato de ${editForm.client_name?.trim() || (editingContract.clients as { name?: string } | null)?.name || "cliente"}`,
+            entity_type: "contract",
+            entity_id: editingContract.id,
+          }),
+        })
+        globalMutate("recent-activity")
+        globalMutate("all-activities")
+      } catch {}
       toast.success("Contrato e cliente atualizados.")
       setEditingContract(null)
       await mutateContracts()
@@ -605,11 +619,26 @@ export default function ProductDetailPage() {
   }
 
   const handleDeleteContract = async (contract: Contract) => {
-    if (!confirm("Excluir este contrato? O cliente permanece cadastrado; apenas a assinatura será removida.")) return
+    if (!confirm("Tem certeza que deseja excluir este contrato? O cliente permanece cadastrado; apenas a assinatura será removida.")) return
     setDeletingId(contract.id)
+    const clientName = (contract.clients as { name?: string } | null)?.name ?? "cliente"
     try {
       const { error } = await supabase.from("contracts").delete().eq("id", contract.id)
       if (error) throw error
+      try {
+        await fetch("/api/activity/log", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            action: `Excluiu o contrato do cliente ${clientName}`,
+            entity_type: "contract",
+            entity_id: contract.id,
+          }),
+        })
+        globalMutate("recent-activity")
+        globalMutate("all-activities")
+      } catch {}
       toast.success("Contrato excluído. O cliente continua na lista de Clientes.")
       await mutateContracts()
       await mutateApiContracts()
