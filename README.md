@@ -114,6 +114,28 @@ EMAIL_FROM_DEFAULT=noreply@seudominio.com
 # NFSENACIONAL_* (ver .env.example)
 ```
 
+#### Multi-tenancy (ferramenta Apolicer)
+
+Para a ferramenta **Apolicer** descobrir em qual banco Supabase conectar cada assinante, use a API central:
+
+- **Endpoint:** `GET /api/tenant-config/:slug` (ex.: `GET /api/tenant-config/empresa-ativa`).
+- **Autenticação:** header `Authorization: Bearer <token>`. O token deve ser o mesmo configurado em **`CENTRAL_API_TOKEN`** (`.env.local`). A ferramenta Apolicer usa o mesmo valor em `VITE_CENTRAL_API_TOKEN`.
+
+**Testar no navegador ou no Postman:**
+- **URL:** `http://localhost:3000/api/tenant-config/empresa-ativa` (troque `empresa-ativa` por um slug que exista na tabela `tenants` com `ferramenta = 'apolicer'` e `ativo = true`, e com registro em `tenant_databases`).
+- **Header:** `Authorization: Bearer SECRETA-API-APOLICER` (ou o valor de `CENTRAL_API_TOKEN` no `.env.local`).
+- Resposta 200: `{ "tenantId", "slug", "supabaseUrl", "supabaseAnonKey" }` (camelCase).
+- **Resposta (200):** `{ "tenantId", "slug", "supabaseUrl", "supabaseAnonKey" }`
+- **404:** tenant não encontrado, inativo ou sem banco configurado.
+- **401:** token ausente ou inválido.
+
+Opcionalmente, você pode definir **`CENTRAL_TRUSTED_IPS`** (IPs separados por vírgula). Requisições vindas desses IPs são aceitas mesmo sem o header `Authorization`.
+
+Tabelas necessárias no banco **desta** dashboard: `tenants` (id, nome, slug, ferramenta, ativo) e `tenant_databases` (tenant_id, supabase_url, supabase_anon). Consulte a documentação do projeto ou scripts SQL para criação.
+
+**Onde inserir a lógica para criar tenant ao ativar um assinante Apolicer:**  
+Não existe hoje um fluxo específico de "ativar assinatura Apolicer" neste dashboard. O fluxo de **Registrar assinatura** (`/api/contracts/register` e a tela em Produtos → [produto] → "Registrar nova assinatura") é genérico para contratos do produto principal (ex.: Software de Gestão). Para multi-tenancy Apolicer, ao ativar um assinante é necessário: (1) **Inserir em `tenants`**: `nome`, `slug` (único, ex.: `empresa-silva`), `ferramenta = 'apolicer'`, `ativo = true`. (2) **Inserir em `tenant_databases`**: `tenant_id` (o UUID retornado), `supabase_url` e `supabase_anon` do projeto Supabase desse cliente. O projeto Supabase do tenant pode ser criado manualmente no painel do Supabase ou via API de gestão; esta dashboard apenas armazena a URL e a chave anon em `tenant_databases`. Pode-se criar uma nova API (ex.: `POST /api/tenants`), uma tela em Configurações ou um passo extra no fluxo de vendas para preencher essas tabelas quando um cliente passar a usar a ferramenta Apolicer.
+
 ### 3. Criar as tabelas no banco
 
 Execute os scripts SQL em ordem no **SQL Editor** do Supabase (consulte a pasta `scripts/` para a lista completa):
