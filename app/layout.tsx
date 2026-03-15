@@ -10,6 +10,7 @@ export const metadata: Metadata = {
   title: 'Xpress Solutions - Dashboard',
   description: 'Painel administrativo Xpress Solutions - Gestao de produtos SaaS',
   robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
+  icons: { icon: '/icon.png' },
 }
 
 export const viewport: Viewport = {
