@@ -21,7 +21,7 @@ const COMERCIAL_FORBIDDEN_PATHS = [
 ]
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
-  const { loading, profile, isComercial } = useAuth()
+  const { loading, profile, isComercial, hasPermission } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
@@ -52,7 +52,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       const forbidden = COMERCIAL_FORBIDDEN_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"))
       if (forbidden) router.replace("/dashboard")
     }
-  }, [loading, profile, isComercial, pathname, router])
+    if (!loading && profile && pathname?.startsWith("/dashboard/chamados") && !hasPermission("chamados")) {
+      router.replace("/dashboard")
+    }
+  }, [loading, profile, isComercial, pathname, router, hasPermission])
 
   // Sempre renderiza o layout com sidebar - ela se popula quando auth carrega
   return (

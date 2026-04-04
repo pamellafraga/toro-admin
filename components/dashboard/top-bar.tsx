@@ -7,6 +7,7 @@ import Link from "next/link"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
+  "/dashboard/chamados": "Chamados",
   "/dashboard/produtos": "Produtos",
   "/dashboard/clientes": "Clientes",
   "/dashboard/seguradoras": "Marketing",

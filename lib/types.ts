@@ -1,6 +1,24 @@
 export type UserRole = 'admin' | 'comercial' | 'marketing' | 'captacao' | 'financeiro' | 'custom'
 
-export type Permission = 'home' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios' | 'admin'
+export type Permission = 'home' | 'chamados' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios' | 'admin'
+
+/** Chamados de suporte interno (ferramentas dos clientes → painel da TI). */
+export type SupportTicketStatus = 'aberto' | 'em_andamento' | 'resolvido' | 'fechado'
+export type SupportTicketPriority = 'baixa' | 'normal' | 'alta' | 'urgente'
+
+export interface InternalSupportTicket {
+  id: string
+  created_at: string
+  updated_at: string
+  source_tool: string | null
+  client_identifier: string | null
+  client_email: string | null
+  subject: string
+  message: string
+  status: SupportTicketStatus
+  priority: SupportTicketPriority
+  external_user_id: string | null
+}
 
 export interface Profile {
   id: string
@@ -140,6 +158,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   home: 'Home',
+  chamados: 'Chamados',
   produtos: 'Produtos',
   clientes: 'Clientes',
   seguradoras: 'Seguradoras',

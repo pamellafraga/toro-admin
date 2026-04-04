@@ -9,6 +9,7 @@ import { useChatUnreadCount } from "@/hooks/use-chat-unread"
 import { cn } from "@/lib/utils"
 import {
   Home,
+  Headphones,
   Package,
   Users,
   MessageCircle,
@@ -30,6 +31,7 @@ import type { Permission } from "@/lib/types"
 
 const navItems: { label: string; href: string; icon: typeof Home; permission: Permission }[] = [
   { label: "Home", href: "/dashboard", icon: Home, permission: "home" },
+  { label: "Chamados", href: "/dashboard/chamados", icon: Headphones, permission: "chamados" },
   { label: "Produtos", href: "/dashboard/produtos", icon: Package, permission: "produtos" },
   { label: "Clientes", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
   { label: "Financeiro", href: "/dashboard/financeiro", icon: DollarSign, permission: "financeiro" },

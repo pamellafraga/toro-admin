@@ -1,9 +1,10 @@
 "use client"
 
-import { createContext, useContext, useEffect, useMemo, useState, useRef, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, useCallback, useState, useRef, type ReactNode } from "react"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile, Permission, UserRole } from "@/lib/types"
 import { ROLE_PERMISSIONS } from "@/lib/types"
+import { userHasChamadosAccess } from "@/lib/chamados-access"
 import type { User } from "@supabase/supabase-js"
 
 interface AuthContextType {
@@ -71,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLocalAuth.current = true
       let displayName = "Admin"
       let role: UserRole = "admin"
+      let loginUsername = ""
       try {
         let parsed: { user?: string; displayName?: string; role?: string } = {}
         const raw = localStorage.getItem("xpress_auth")
@@ -90,10 +92,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         if (parsed.displayName) displayName = parsed.displayName
         else if (parsed.user) displayName = parsed.user
+        if (parsed.user) loginUsername = parsed.user
         if (parsed.role === "comercial" || parsed.role === "admin") role = parsed.role
       } catch {}
 
-      const permissions = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.admin
+      let permissions = [...(ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.admin)] as Permission[]
+      if (userHasChamadosAccess(displayName, loginUsername) && !permissions.includes("chamados")) {
+        const homeIdx = permissions.indexOf("home")
+        if (homeIdx >= 0) permissions.splice(homeIdx + 1, 0, "chamados")
+        else permissions.unshift("chamados")
+      }
       const profileData: Profile = {
         ...ADMIN_PROFILE,
         id: role === "comercial" ? `comercial-${displayName}` : "local-admin",
@@ -113,8 +121,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const sessionUser = data?.session?.user ?? null
         setUser(sessionUser)
         if (sessionUser) {
-          // Tratar qualquer usuário Supabase como admin nesta aplicação
-          const adminProfile = { ...ADMIN_PROFILE, name: sessionUser.email?.split("@")[0] || "Admin", id: sessionUser.id }
+          const meta = sessionUser.user_metadata as { name?: string } | undefined
+          const fromEmail = sessionUser.email?.split("@")[0] || "Admin"
+          const displayName = meta?.name?.trim() || fromEmail
+          let perms = [...ROLE_PERMISSIONS.admin] as Permission[]
+          if (userHasChamadosAccess(displayName, fromEmail) && !perms.includes("chamados")) {
+            const hi = perms.indexOf("home")
+            if (hi >= 0) perms.splice(hi + 1, 0, "chamados")
+            else perms.unshift("chamados")
+          }
+          const adminProfile = {
+            ...ADMIN_PROFILE,
+            name: displayName,
+            id: sessionUser.id,
+            permissions: perms as Profile["permissions"],
+          }
           setProfile(adminProfile)
         }
       } catch {}
@@ -129,7 +150,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const newUser = session?.user ?? null
         setUser(newUser)
         if (newUser) {
-          const adminProfile = { ...ADMIN_PROFILE, name: newUser.email?.split("@")[0] || "Admin", id: newUser.id }
+          const meta = newUser.user_metadata as { name?: string } | undefined
+          const fromEmail = newUser.email?.split("@")[0] || "Admin"
+          const displayName = meta?.name?.trim() || fromEmail
+          let perms = [...ROLE_PERMISSIONS.admin] as Permission[]
+          if (userHasChamadosAccess(displayName, fromEmail) && !perms.includes("chamados")) {
+            const hi = perms.indexOf("home")
+            if (hi >= 0) perms.splice(hi + 1, 0, "chamados")
+            else perms.unshift("chamados")
+          }
+          const adminProfile = {
+            ...ADMIN_PROFILE,
+            name: displayName,
+            id: newUser.id,
+            permissions: perms as Profile["permissions"],
+          }
           setProfile(adminProfile)
         } else {
           setProfile(null)
@@ -149,8 +184,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const role = (profile?.role ?? "admin") as UserRole
   const isAdmin = role === "admin"
   const isComercial = role === "comercial"
-  const permissions = ROLE_PERMISSIONS[role] ?? ROLE_PERMISSIONS.admin
-  const hasPermission = (permission: Permission) => permissions.includes(permission)
+  const permissions = (profile?.permissions ??
+    ROLE_PERMISSIONS[role] ??
+    ROLE_PERMISSIONS.admin) as Permission[]
+  const hasPermission = useCallback(
+    (permission: Permission) => permissions.includes(permission),
+    [permissions]
+  )
   const comercialDisplayName = isComercial && profile?.name ? profile.name : null
 
   const refreshProfile = async () => {}
@@ -166,7 +206,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       comercialDisplayName,
       refreshProfile,
     }),
-    [user, profile, loading]
+    [user, profile, loading, hasPermission, isAdmin, isComercial, comercialDisplayName]
   )
 
   return (
