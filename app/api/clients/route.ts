@@ -2,7 +2,11 @@ import { NextRequest } from "next/server"
 import { isAuthenticated, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { mapClientRow } from "@/lib/clients/map-client-row"
-import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
+import {
+  duplicateClientMessage,
+  findDuplicateClient,
+  hasClientIdentity,
+} from "@/lib/clients/duplicate-check"
 import {
   insertClient,
   listClientsForDashboard,
@@ -103,6 +107,13 @@ export async function POST(req: NextRequest) {
 
     const email = String(body.email ?? "").trim()
     const phone = String(body.phone ?? "").trim() || null
+
+    if (!hasClientIdentity({ cpfCnpj: cpfCnpj, phone, email })) {
+      return jsonError(
+        "Informe CPF/CNPJ, telefone ou e-mail. Contatos precisam de um identificador único.",
+        400,
+      )
+    }
 
     const duplicate = await findDuplicateClient({
       cpfCnpj: cpfCnpj,

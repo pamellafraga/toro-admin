@@ -208,7 +208,16 @@ export default function ClientesPage() {
       toast.error(newClient.customer_type === "empresa" ? "Razão social obrigatória" : "Nome completo obrigatório")
       return
     }
+    const phoneDigits = (newClient.phone || "").replace(/\D/g, "")
+    const emailTrim = newClient.email.trim()
     const docDigits = (newClient.cpf_cnpj || "").replace(/\D/g, "")
+    const hasDoc =
+      (newClient.customer_type === "empresa" && docDigits.length === 14) ||
+      (newClient.customer_type === "profissional_liberal" && docDigits.length === 11)
+    if (!hasDoc && phoneDigits.length < 10 && (!emailTrim || !emailTrim.includes("@"))) {
+      toast.error("Informe CPF/CNPJ, telefone ou e-mail para evitar contatos duplicados.")
+      return
+    }
     if (newClient.customer_type === "empresa" && docDigits.length > 0 && docDigits.length !== 14) {
       toast.error("CNPJ inválido")
       return
@@ -252,7 +261,8 @@ export default function ClientesPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        toast.error("Erro ao salvar: " + ((err as { error?: string }).error || res.statusText))
+        const msg = (err as { error?: string }).error || res.statusText
+        toast.error(res.status === 409 ? msg : `Erro ao salvar: ${msg}`)
         return
       }
       try {
@@ -313,8 +323,9 @@ export default function ClientesPage() {
       const r = rows[i]
       const cpfCnpj = r.cpf_cnpj && (r.cpf_cnpj.length === 11 || r.cpf_cnpj.length === 14) ? r.cpf_cnpj : `import-${ts}-${i}`
       const payload: Record<string, unknown> = {
+        customer_type: "empresa",
         name: r.name,
-        email: r.email || null,
+        email: r.email || "",
         phone: r.phone || null,
         cpf_cnpj: cpfCnpj,
         company: r.company_name || null,
@@ -445,11 +456,19 @@ export default function ClientesPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        return { error: { message: (err as { error?: string }).error || res.statusText } }
+        return {
+          error: {
+            message: (err as { error?: string }).error || res.statusText,
+            status: res.status,
+          },
+        }
       }
       return { error: null }
     })()
-    if (error) { toast.error("Erro ao atualizar: " + error.message); return }
+    if (error) {
+      toast.error(error.status === 409 ? error.message : `Erro ao atualizar: ${error.message}`)
+      return
+    }
     try {
       await fetch("/api/activity/log", {
         method: "POST",

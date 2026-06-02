@@ -26,6 +26,20 @@ export function normalizeEmailForDuplicate(email: string | null | undefined): st
   return e
 }
 
+/** Pelo menos um identificador para evitar cadastros “soltos” duplicados só por nome. */
+export function hasClientIdentity(params: {
+  cpfCnpj?: string | null
+  phone?: string | null
+  email?: string | null
+}): boolean {
+  if (normalizeCpfCnpjForSave(params.cpfCnpj) && !isPlaceholderCpfCnpj(params.cpfCnpj)) {
+    return true
+  }
+  if (normalizePhoneDigits(params.phone)) return true
+  if (normalizeEmailForDuplicate(params.email)) return true
+  return false
+}
+
 export function duplicateClientMessage(match: DuplicateClientResult): string {
   const who = match.existingName ? `"${match.existingName}"` : "outro contato"
   if (match.field === "cpf_cnpj") {
