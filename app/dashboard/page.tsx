@@ -1,46 +1,20 @@
 "use client"
 
 import { useAuth } from "@/lib/auth-context"
-import { createClient } from "@/lib/supabase/client"
 import { StatCard } from "@/components/dashboard/stat-card"
 import { RevenueChart } from "@/components/dashboard/revenue-chart"
 import { ProductsPieChart } from "@/components/dashboard/products-pie-chart"
 import { RecentActivity } from "@/components/dashboard/recent-activity"
-import { Users, Package, FileText, TrendingUp } from "lucide-react"
+import { Users, Package, FileText, TrendingUp, Clock } from "lucide-react"
 import useSWR from "swr"
+import { fetchDashboardOverview } from "@/lib/dashboard/fetch-overview"
 
 export default function DashboardHome() {
   const { hasPermission, profile } = useAuth()
-  const supabase = createClient()
   const userName = profile?.name || "Usuário"
 
-  const { data: stats } = useSWR("dashboard-stats", async () => {
-    const [clientsRes, contractsRes, productsRes] = await Promise.all([
-      supabase.from("clients").select("*", { count: "exact", head: true }),
-      supabase.from("contracts").select("*", { count: "exact", head: true }),
-      supabase.from("products").select("*", { count: "exact", head: true }).eq("is_active", true),
-    ])
-    const { count: activeContracts } = await supabase
-      .from("contracts")
-      .select("*", { count: "exact", head: true })
-      .in("status", ["active", "ativa"])
-    const { data: contractsForRevenue } = await supabase
-      .from("contracts")
-      .select("monthly_value, payment_status")
-    const totalRevenue = (contractsForRevenue ?? []).reduce((sum, c) => {
-      const p = (c.payment_status ?? "").toString().toLowerCase()
-      if (p !== "em_dia" && p !== "paid") return sum
-      return sum + Number(c.monthly_value ?? 0)
-    }, 0)
-
-    return {
-      totalClients: clientsRes.count ?? 0,
-      totalContracts: contractsRes.count ?? 0,
-      activeContracts: activeContracts ?? 0,
-      totalProducts: productsRes.count ?? 0,
-      monthlyRevenue: totalRevenue,
-    }
-  })
+  const { data } = useSWR("dashboard-overview", fetchDashboardOverview)
+  const stats = data?.stats
 
   return (
     <div className="flex flex-col gap-6">
@@ -48,33 +22,35 @@ export default function DashboardHome() {
         <h1 className="text-2xl font-bold text-foreground">Olá, {userName}</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Aqui está o resumo do seu painel.</p>
       </div>
-      {/* Stats Row */}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Clientes Ativos"
+          title="Contatos"
           value={stats?.totalClients ?? 0}
+          subtitle="Cadastros em Clientes"
           icon={Users}
         />
         <StatCard
-          title="Contratações Ativas"
-          value={stats?.activeContracts ?? 0}
-          subtitle={`${stats?.totalContracts ?? 0} totais`}
-          icon={FileText}
+          title="Testes em andamento"
+          value={stats?.trialsInProgress ?? 0}
+          subtitle="LiticaPro e demais produtos"
+          icon={Clock}
         />
         <StatCard
-          title="Produtos"
-          value={stats?.totalProducts ?? 0}
+          title="Ferramentas ativas"
+          value={stats?.activeTools ?? 0}
+          subtitle="Produtos no ar"
           icon={Package}
         />
         <StatCard
           title="Receita Mensal"
           value={`R$ ${(stats?.monthlyRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+          subtitle={`${stats?.activeContracts ?? 0} contratações ativas · ${stats?.totalContracts ?? 0} totais`}
           icon={TrendingUp}
           valueClassName="text-primary"
         />
       </div>
 
-      {/* Charts Row */}
       {hasPermission("produtos") && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           <div className="lg:col-span-2">
@@ -84,7 +60,17 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* Atividades Recentes */}
+      {!hasPermission("produtos") && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard
+            title="Contratações ativas"
+            value={stats?.activeContracts ?? 0}
+            subtitle={`${stats?.totalContracts ?? 0} contratos no total`}
+            icon={FileText}
+          />
+        </div>
+      )}
+
       <div>
         <RecentActivity />
       </div>

@@ -55,6 +55,12 @@ No painel da Vercel: *Project → Settings → Environment Variables*. Use os me
 
 | Variável | Obrigatório | Observação |
 |----------|-------------|------------|
+| `DATABASE_HOST` | Sim | Servidor PostgreSQL Locaweb (ex.: `admxpress.postgresql.dbaas.com.br`) |
+| `DATABASE_PORT` | Sim | Geralmente `5432` |
+| `DATABASE_NAME` | Sim | Ex.: `admxpress` |
+| `DATABASE_USER` | Sim | Ex.: `admxpress` |
+| `DATABASE_PASSWORD` | Sim | Senha do banco Locaweb |
+| `DATABASE_SSL` | Sim | `false` na Locaweb (ou `true` se exigido) |
 | `NEXT_PUBLIC_SUPABASE_URL` | Sim | URL do projeto Supabase |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Sim | Chave anon do Supabase |
 | `SUPABASE_SERVICE_ROLE_KEY` | Sim | Service role (secret) do Supabase |
