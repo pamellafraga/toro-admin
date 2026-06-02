@@ -18,6 +18,9 @@ export function origemCaptacaoForComercial(displayName: string): string {
 export const STEFANIE_ORIGEM_CAPTACAO = ["Comercial Stefanie", "Comercial - Stefanie"] as const
 export const STEFANIE_ORIGEM_COMERCIAL = "Comercial - Stefanie"
 
+/** Origem de captação Xpress Solutions (aba dedicada no painel Clientes). */
+export const XPRESS_ORIGEM_CAPTACAO = "Xpress Solutions"
+
 export function isStefanieOrigem(origem: string | null | undefined): boolean {
   const v = (origem ?? "").trim()
   return STEFANIE_ORIGEM_CAPTACAO.some((o) => o === v)

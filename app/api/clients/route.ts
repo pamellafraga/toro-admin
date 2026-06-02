@@ -11,7 +11,7 @@ import { listPrimaryContractByClient } from "@/lib/db/repositories/contracts.rep
 
 export const dynamic = "force-dynamic"
 
-const VALID_VIEWS: ClientesListView[] = ["geral", "stefanie", "comercial-geral", "comercial-meu"]
+const VALID_VIEWS: ClientesListView[] = ["geral", "stefanie", "xpress-solutions", "comercial-geral", "comercial-meu"]
 
 /** GET /api/clients?view=geral|stefanie|comercial-geral|comercial-meu */
 export async function GET(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     if (view.startsWith("comercial-") && auth.role !== "comercial") {
       return jsonError("Visualização inválida.", 400)
     }
-    if ((view === "geral" || view === "stefanie") && auth.role !== "admin") {
+    if ((view === "geral" || view === "stefanie" || view === "xpress-solutions") && auth.role !== "admin") {
       return jsonError("Visualização inválida.", 400)
     }
 

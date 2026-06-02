@@ -14,6 +14,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
+import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
 import {
@@ -105,9 +106,8 @@ export default function ClientesPage() {
   const [savingNewClient, setSavingNewClient] = useState(false)
   const [view, setView] = useState<"grid" | "list">("list")
   const [filterTab, setFilterTab] = useState<string>("all")
-  const [filterOrigem, setFilterOrigem] = useState("all")
-  /** Admin: "geral" = todos; "Stefanie" = monitorar aquele comercial */
-  const [adminClientesTab, setAdminClientesTab] = useState<"geral" | "Stefanie">("geral")
+  /** Admin: abas por origem de captação */
+  const [adminClientesTab, setAdminClientesTab] = useState<"geral" | "Stefanie" | "xpress-solutions">("geral")
   /** Comercial: só "geral" (lista toda) ou "meu" (painel dele — clientes com origem dele) */
   const [comercialClientesTab, setComercialClientesTab] = useState<"geral" | "meu">("geral")
   const [showImport, setShowImport] = useState(false)
@@ -158,7 +158,9 @@ export default function ClientesPage() {
         : "comercial-geral"
       : isAdmin && adminClientesTab === "Stefanie"
         ? "stefanie"
-        : "geral"
+        : isAdmin && adminClientesTab === "xpress-solutions"
+          ? "xpress-solutions"
+          : "geral"
 
   const clientesListKey = `clients-list-${clientesView}`
 
@@ -204,10 +206,7 @@ export default function ClientesPage() {
       (isComercial && comercialClientesTab === "geral") ||
       filterTab === "all" ||
       getStatusLead(c) === filterTab
-    const matchOrigem = filterOrigem === "all" ||
-      (filterOrigem === "none" && !(c.origem_captacao || "").trim()) ||
-      (filterOrigem !== "none" && (c.origem_captacao || "") === filterOrigem)
-    return matchSearch && matchTab && matchOrigem
+    return matchSearch && matchTab
   })
 
   const handleAdd = async () => {
@@ -553,21 +552,28 @@ export default function ClientesPage() {
         ) : (
           <>
             <p className="text-sm text-muted-foreground mb-2">
-              Aba Geral: contatos do website, Xpress Solutions e compras manuais (exceto Stefanie).
-              Aba Stefanie: somente contatos com origem dela.
+              Aba Geral: website e compras manuais. Stefanie e Xpress Solutions têm abas próprias por origem de captação.
             </p>
-            <div className="flex items-center gap-2 mt-2">
-              {(["geral", "Stefanie"] as const).map((tab) => (
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {(
+                [
+                  { id: "geral" as const, label: "Aba Geral" },
+                  { id: "Stefanie" as const, label: "Stefanie" },
+                  { id: "xpress-solutions" as const, label: "Xpress Solutions" },
+                ] as const
+              ).map((tab) => (
                 <button
-                  key={tab}
+                  key={tab.id}
                   type="button"
-                  onClick={() => setAdminClientesTab(tab)}
+                  onClick={() => setAdminClientesTab(tab.id)}
                   className={cn(
                     "rounded-lg px-4 py-2.5 text-sm font-medium border-2 transition-colors",
-                    adminClientesTab === tab ? "bg-primary border-primary text-white shadow-sm" : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50 hover:border-gray-400"
+                    adminClientesTab === tab.id
+                      ? "bg-primary border-primary text-white shadow-sm"
+                      : "bg-white border-gray-300 text-gray-800 hover:bg-gray-50 hover:border-gray-400",
                   )}
                 >
-                  {tab === "geral" ? "Aba Geral" : tab}
+                  {tab.label}
                 </button>
               ))}
             </div>
@@ -604,24 +610,6 @@ export default function ClientesPage() {
           </button>
         </div>
       </div>
-
-      {/* Filtro Origem (admin): Todas, — (sem origem), ou origem específica — "origem -" = Todos para pescar */}
-      {!isComercial && (
-        <div className="flex flex-wrap items-center gap-2 pb-1">
-          <span className="text-xs font-medium text-muted-foreground">Origem</span>
-          <select
-            value={filterOrigem}
-            onChange={(e) => setFilterOrigem(e.target.value)}
-            className="h-9 min-w-[140px] rounded-lg border border-border bg-secondary px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
-          >
-            <option value="all">Todas</option>
-            <option value="none">— (sem origem)</option>
-            {ORIGEM_CAPTACAO_OPCOES.map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {/* Contato: filtros coloridos por etapa (em branco = não designado, não é filtro) */}
       {(!isComercial || comercialClientesTab === "meu") && (
@@ -844,7 +832,11 @@ export default function ClientesPage() {
                       <>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-3">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0"><Users className="h-4 w-4 text-primary" /></div>
+                            <ClientTypeAvatar
+                              customerType={client.customer_type}
+                              cpfCnpj={client.cpf_cnpj}
+                              liticaproData={client.liticapro_data}
+                            />
                             <div>
                               <p className="text-sm font-medium text-foreground">{client.name}</p>
                               {client.company_name && <p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="h-3 w-3" />{client.company_name}</p>}
@@ -932,7 +924,12 @@ export default function ClientesPage() {
               <div key={client.id} className={cn("glass rounded-xl p-5 hover:glow-blue-sm transition-all", !isClientActive(client) && "opacity-60")}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10"><Users className="h-5 w-5 text-primary" /></div>
+                    <ClientTypeAvatar
+                      size="md"
+                      customerType={client.customer_type}
+                      cpfCnpj={client.cpf_cnpj}
+                      liticaproData={client.liticapro_data}
+                    />
                     <div>
                       <p className="font-medium text-foreground">{client.name}</p>
                       {client.company_name && <p className="text-xs text-muted-foreground">{client.company_name}</p>}

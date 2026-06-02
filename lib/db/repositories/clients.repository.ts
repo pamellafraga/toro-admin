@@ -1,11 +1,14 @@
 import {
   STEFANIE_ORIGEM_CAPTACAO,
   STEFANIE_ORIGEM_COMERCIAL,
+  XPRESS_ORIGEM_CAPTACAO,
   origemCaptacaoForComercial,
 } from "@/lib/constants/origem-captacao"
 import { queryMany, queryOne } from "@/lib/db/pool"
 
-export type ClientesListView = "geral" | "stefanie" | "comercial-geral" | "comercial-meu"
+export type ClientesListView = "geral" | "stefanie" | "xpress-solutions" | "comercial-geral" | "comercial-meu"
+
+const ORIGENS_EXCLUIDAS_ABA_GERAL = [...STEFANIE_ORIGEM_CAPTACAO, XPRESS_ORIGEM_CAPTACAO]
 
 type ClientRow = {
   id: string
@@ -60,7 +63,17 @@ export async function listClientsForDashboard(
     )
   }
 
-  // Aba Geral (admin): website, xpress, compra manual etc. — exceto contatos da Stefanie
+  if (view === "xpress-solutions") {
+    return queryMany<ClientRow>(
+      `SELECT * FROM clients
+       WHERE origem_captacao = $1
+       ORDER BY created_at ASC, name ASC
+       LIMIT 10000`,
+      [XPRESS_ORIGEM_CAPTACAO],
+    )
+  }
+
+  // Aba Geral (admin): website, compras manuais etc. — exceto Stefanie e Xpress Solutions
   return queryMany<ClientRow>(
     `SELECT * FROM clients c
      WHERE COALESCE(c.origem_captacao, '') <> ALL($1::text[])
@@ -69,7 +82,7 @@ export async function listClientsForDashboard(
        )
      ORDER BY c.created_at ASC, c.name ASC
      LIMIT 10000`,
-    [STEFANIE_ORIGEM_CAPTACAO, STEFANIE_ORIGEM_COMERCIAL],
+    [ORIGENS_EXCLUIDAS_ABA_GERAL, STEFANIE_ORIGEM_COMERCIAL],
   )
 }
 
