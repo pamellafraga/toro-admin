@@ -1,4 +1,5 @@
 import type { Client } from "@/lib/types"
+import { resolveClientCustomerType } from "@/lib/clients/customer-type"
 
 type ClientRow = {
   id: string
@@ -15,11 +16,14 @@ type ClientRow = {
   zip_code?: string | null
   origem_captacao?: string | null
   status_lead?: string | null
+  liticapro_data?: { customer_type?: string } | null
   created_at: string
   updated_at: string
 }
 
 export function mapClientRow(row: ClientRow): Client {
+  const liticaproData = row.liticapro_data ?? null
+  const customerType = resolveClientCustomerType(liticaproData, row.cpf_cnpj)
   return {
     id: row.id,
     name: row.name,
@@ -37,6 +41,8 @@ export function mapClientRow(row: ClientRow): Client {
     is_active: true,
     origem_captacao: row.origem_captacao ?? null,
     status_lead: row.status_lead ?? null,
+    customer_type: customerType,
+    liticapro_data: liticaproData,
     created_at: row.created_at,
     updated_at: row.updated_at,
   }

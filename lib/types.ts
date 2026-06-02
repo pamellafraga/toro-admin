@@ -60,6 +60,8 @@ export interface Client {
   is_active: boolean
   origem_captacao?: string | null
   status_lead?: string | null
+  customer_type?: "empresa" | "profissional_liberal"
+  liticapro_data?: { customer_type?: string } | null
   created_at: string
   updated_at: string
 }

@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth-context"
 import {
   Search, Plus, Minus, X, Save, Users, MapPin, Mail, Phone,
   LayoutGrid, List, Pencil, Building2, Trash2, Upload, Loader2,
-  CheckCircle, XCircle,
+  CheckCircle, XCircle, User,
 } from "lucide-react"
 import useSWR, { useSWRConfig } from "swr"
 import type { Client } from "@/lib/types"
@@ -16,6 +16,10 @@ import { ptBR } from "date-fns/locale"
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
+import {
+  resolveClientCustomerType,
+  type ClientCustomerType,
+} from "@/lib/clients/customer-type"
 
 type PrimaryContract = {
   status: string
@@ -112,7 +116,7 @@ export default function ClientesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [editForm, setEditForm] = useState<Partial<Client>>({})
+  const [editForm, setEditForm] = useState<Partial<Client> & { customer_type?: ClientCustomerType }>({})
   const [newClient, setNewClient] = useState<NewClientFormState>(EMPTY_NEW_CLIENT)
 
   const formatCpfCnpj = (value: string) => {
@@ -405,26 +409,45 @@ export default function ClientesPage() {
     }
     setEditForm({
       name: client.name, email: client.email || "", phone: client.phone || "",
-      cpf_cnpj: client.cpf_cnpj || "", company_name: client.company_name || "",
+      cpf_cnpj: client.cpf_cnpj
+        ? String(client.cpf_cnpj).startsWith("sem-cpf-")
+          ? client.cpf_cnpj
+          : formatCpfCnpj(client.cpf_cnpj)
+        : "",
+      company_name: client.company_name || "",
       address, city, state, zip_code, number, district,
       notes: client.notes || "", is_active: client.is_active !== false,
       origem_captacao: client.origem_captacao || "",
       status_lead: (client.status_lead as string) ?? "",
+      customer_type: resolveClientCustomerType(client.liticapro_data, client.cpf_cnpj),
     })
   }
 
   const saveEdit = async () => {
-    const parts = [editForm.address, editForm.number, editForm.district, editForm.city, editForm.state, editForm.zip_code].filter(Boolean)
+    if (!editForm.customer_type) {
+      toast.error("Selecione Empresa ou Profissional Liberal")
+      return
+    }
+    const isEmpresa = editForm.customer_type === "empresa"
+    const parts = isEmpresa
+      ? [editForm.address, editForm.number, editForm.district, editForm.city, editForm.state, editForm.zip_code].filter(Boolean)
+      : []
     const addressFull = parts.length ? parts.join(", ") : null
     const payload: Record<string, unknown> = {
       name: editForm.name,
       email: editForm.email ?? "",
       phone: editForm.phone ?? "",
       cpf_cnpj: editForm.cpf_cnpj ?? "",
-      company: editForm.company_name ?? editForm.company ?? null,
+      company: isEmpresa ? (editForm.company_name ?? editForm.company ?? null) : null,
       address: addressFull,
+      number: isEmpresa ? editForm.number ?? null : null,
+      district: isEmpresa ? editForm.district ?? null : null,
+      city: isEmpresa ? editForm.city ?? null : null,
+      state: isEmpresa ? editForm.state ?? null : null,
+      zip_code: isEmpresa ? editForm.zip_code ?? null : null,
       origem_captacao: (editForm.origem_captacao as string) || null,
       status_lead: (editForm.status_lead as string) || null,
+      customer_type: editForm.customer_type,
     }
     const { error } = await (async () => {
       const res = await fetch(`/api/clients/${editingId}`, {
@@ -690,28 +713,77 @@ export default function ClientesPage() {
                     {editingId === client.id ? (
                       <td colSpan={7} className="px-4 py-2">
                         <div className="rounded-lg border border-border/60 bg-muted/5 p-2 space-y-2">
+                          <div className="flex flex-wrap gap-2 pb-1 border-b border-border/40">
+                            <span className="text-[10px] text-muted-foreground/70 w-full">Tipo de contato</span>
+                            <button
+                              type="button"
+                              onClick={() => setEditForm({ ...editForm, customer_type: "empresa" })}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                                editForm.customer_type === "empresa"
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border bg-background text-muted-foreground hover:border-primary/50",
+                              )}
+                            >
+                              <Building2 className="h-3.5 w-3.5" />
+                              Empresa
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditForm({ ...editForm, customer_type: "profissional_liberal" })}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
+                                editForm.customer_type === "profissional_liberal"
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border bg-background text-muted-foreground hover:border-primary/50",
+                              )}
+                            >
+                              <User className="h-3.5 w-3.5" />
+                              Profissional Liberal
+                            </button>
+                          </div>
                           <div className="grid grid-cols-2 min-[500px]:grid-cols-3 sm:grid-cols-5 gap-x-2 gap-y-1.5">
                             <div>
-                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Nome *</label>
-                              <input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="Nome" />
+                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">
+                                {editForm.customer_type === "profissional_liberal" ? "Nome completo *" : "Razão social *"}
+                              </label>
+                              <input value={editForm.name ?? ""} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder={editForm.customer_type === "profissional_liberal" ? "Nome completo" : "Razão social"} />
+                            </div>
+                            {editForm.customer_type === "empresa" && (
+                              <div>
+                                <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Nome fantasia</label>
+                                <input value={editForm.company_name ?? ""} onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="Nome fantasia" />
+                              </div>
+                            )}
+                            <div>
+                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">
+                                {editForm.customer_type === "profissional_liberal" ? "CPF (opcional)" : "CNPJ"}
+                              </label>
+                              <input
+                                value={editForm.cpf_cnpj ?? ""}
+                                onChange={(e) => setEditForm({ ...editForm, cpf_cnpj: formatCpfCnpj(e.target.value) })}
+                                className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs font-mono text-foreground focus:border-primary focus:outline-none"
+                                placeholder={editForm.customer_type === "profissional_liberal" ? "000.000.000-00" : "00.000.000/0000-00"}
+                              />
                             </div>
                             <div>
-                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Empresa</label>
-                              <input value={editForm.company_name ?? ""} onChange={(e) => setEditForm({ ...editForm, company_name: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="Empresa" />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">CPF/CNPJ</label>
-                              <input value={editForm.cpf_cnpj ?? ""} onChange={(e) => setEditForm({ ...editForm, cpf_cnpj: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs font-mono text-foreground focus:border-primary focus:outline-none" placeholder="CPF/CNPJ" />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">E-mail</label>
-                              <input type="email" value={editForm.email ?? ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="E-mail" />
+                              <label className="block text-[10px] text-muted-foreground/70 mb-0.5">
+                                E-mail{editForm.customer_type === "profissional_liberal" ? " (opcional)" : ""}
+                              </label>
+                              <input
+                                type={editForm.customer_type === "profissional_liberal" ? "text" : "email"}
+                                value={editForm.email ?? ""}
+                                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                                className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none"
+                                placeholder="E-mail"
+                              />
                             </div>
                             <div>
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Telefone</label>
-                              <input value={editForm.phone ?? ""} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="Telefone" />
+                              <input value={editForm.phone ?? ""} onChange={(e) => setEditForm({ ...editForm, phone: formatPhone(e.target.value) })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none" placeholder="Telefone" />
                             </div>
                           </div>
+                          {editForm.customer_type === "empresa" && (
                           <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5">
                             <div className="w-[7.5rem] shrink-0">
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">CEP</label>
@@ -738,6 +810,7 @@ export default function ClientesPage() {
                               <input value={editForm.state ?? ""} onChange={(e) => setEditForm({ ...editForm, state: e.target.value.toUpperCase().slice(0, 2) })} className="h-7 w-full rounded border border-border/80 bg-background px-1 text-xs text-foreground text-center uppercase focus:border-primary focus:outline-none" placeholder="RS" maxLength={2} />
                             </div>
                           </div>
+                          )}
                           <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5 pt-1.5 border-t border-border/40">
                             <div className="w-32">
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Origem</label>

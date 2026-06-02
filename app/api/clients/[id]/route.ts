@@ -18,15 +18,32 @@ export async function PATCH(
     const name = String(body.name ?? "").trim()
     if (!name) return jsonError("Nome obrigatório.", 400)
 
+    const customerType = body.customer_type as string | undefined
+    if (customerType && customerType !== "empresa" && customerType !== "profissional_liberal") {
+      return jsonError("Tipo de contato inválido.", 400)
+    }
+
+    let cpfCnpj = body.cpf_cnpj != null ? String(body.cpf_cnpj).trim() : null
+    if (cpfCnpj && !cpfCnpj.startsWith("sem-cpf-")) {
+      cpfCnpj = cpfCnpj.replace(/\D/g, "")
+      if (!cpfCnpj) cpfCnpj = null
+    }
+
     await updateClientFromDashboard(id, {
       name,
       email: body.email ?? null,
       phone: body.phone ?? null,
-      cpf_cnpj: body.cpf_cnpj ?? null,
+      cpf_cnpj: cpfCnpj,
       company: body.company ?? body.company_name ?? null,
       address: body.address ?? null,
+      number: body.number ?? null,
+      district: body.district ?? null,
+      city: body.city ?? null,
+      state: body.state ?? null,
+      zip_code: body.zip_code ?? null,
       origem_captacao: body.origem_captacao ?? null,
       status_lead: body.status_lead ?? null,
+      customer_type: customerType as "empresa" | "profissional_liberal" | undefined,
     })
 
     return jsonOk({ ok: true })

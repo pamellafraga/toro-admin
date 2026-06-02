@@ -86,24 +86,51 @@ export async function updateClientFromDashboard(
     cpf_cnpj: string | null
     company: string | null
     address: string | null
+    number?: string | null
+    district?: string | null
+    city?: string | null
+    state?: string | null
+    zip_code?: string | null
     origem_captacao: string | null
     status_lead: string | null
+    customer_type?: "empresa" | "profissional_liberal"
   },
 ): Promise<void> {
+  const isProf = payload.customer_type === "profissional_liberal"
+  const company = isProf ? null : payload.company
+  const address = isProf ? null : payload.address
+  const number = isProf ? null : (payload.number ?? null)
+  const district = isProf ? null : (payload.district ?? null)
+  const city = isProf ? null : (payload.city ?? null)
+  const state = isProf ? null : (payload.state ?? null)
+  const zipCode = isProf ? null : (payload.zip_code ?? null)
+
   await queryOne(
     `UPDATE clients SET
        name = $1, email = $2, phone = $3, cpf_cnpj = $4, company = $5,
-       address = $6, origem_captacao = $7, status_lead = $8, updated_at = now()
-     WHERE id = $9`,
+       address = $6, number = $7, district = $8, city = $9, state = $10, zip_code = $11,
+       origem_captacao = $12, status_lead = $13,
+       liticapro_data = COALESCE(liticapro_data, '{}'::jsonb) || CASE
+         WHEN $14::text IS NOT NULL THEN jsonb_build_object('customer_type', $14)
+         ELSE '{}'::jsonb
+       END,
+       updated_at = now()
+     WHERE id = $15`,
     [
       payload.name,
       payload.email ?? "",
       payload.phone ?? "",
       payload.cpf_cnpj,
-      payload.company,
-      payload.address,
+      company,
+      address,
+      number,
+      district,
+      city,
+      state,
+      zipCode,
       payload.origem_captacao,
       payload.status_lead,
+      payload.customer_type ?? null,
       id,
     ],
   )
