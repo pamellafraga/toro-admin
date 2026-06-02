@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
+import { normalizeCpfCnpjForSave } from "@/lib/clients/cpf-cnpj-display"
 import { deleteClient, updateClientFromDashboard } from "@/lib/db/repositories/clients.repository"
 
 export const dynamic = "force-dynamic"
@@ -23,17 +24,16 @@ export async function PATCH(
       return jsonError("Tipo de contato inválido.", 400)
     }
 
-    let cpfCnpj = body.cpf_cnpj != null ? String(body.cpf_cnpj).trim() : null
-    if (cpfCnpj && !cpfCnpj.startsWith("sem-cpf-")) {
-      cpfCnpj = cpfCnpj.replace(/\D/g, "")
-      if (!cpfCnpj) cpfCnpj = null
-    }
+    const cpfCnpj =
+      "cpf_cnpj" in body && body.cpf_cnpj != null
+        ? normalizeCpfCnpjForSave(String(body.cpf_cnpj))
+        : undefined
 
     await updateClientFromDashboard(id, {
       name,
       email: body.email ?? null,
       phone: body.phone ?? null,
-      cpf_cnpj: cpfCnpj,
+      ...(cpfCnpj !== undefined ? { cpf_cnpj: cpfCnpj } : {}),
       company: body.company ?? body.company_name ?? null,
       address: body.address ?? null,
       number: body.number ?? null,

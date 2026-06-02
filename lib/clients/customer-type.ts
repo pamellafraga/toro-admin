@@ -1,3 +1,5 @@
+import { isPlaceholderCpfCnpj } from "@/lib/clients/cpf-cnpj-display"
+
 export type ClientCustomerType = "empresa" | "profissional_liberal"
 
 export function resolveClientCustomerType(
@@ -7,7 +9,7 @@ export function resolveClientCustomerType(
   const ct = liticaproData?.customer_type
   if (ct === "profissional_liberal" || ct === "empresa") return ct
   const digits = (cpfCnpj ?? "").replace(/\D/g, "")
-  if (digits.length === 11 && !String(cpfCnpj ?? "").startsWith("sem-cpf")) {
+  if (digits.length === 11 && !isPlaceholderCpfCnpj(cpfCnpj)) {
     return "profissional_liberal"
   }
   return "empresa"

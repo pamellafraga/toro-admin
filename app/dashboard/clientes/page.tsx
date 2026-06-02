@@ -21,6 +21,11 @@ import {
   resolveClientCustomerType,
   type ClientCustomerType,
 } from "@/lib/clients/customer-type"
+import {
+  formatCpfCnpjForDisplay,
+  formatCpfCnpjForDisplayOrDash,
+  normalizeCpfCnpjForSave,
+} from "@/lib/clients/cpf-cnpj-display"
 
 type PrimaryContract = {
   status: string
@@ -408,11 +413,7 @@ export default function ClientesPage() {
     }
     setEditForm({
       name: client.name, email: client.email || "", phone: client.phone || "",
-      cpf_cnpj: client.cpf_cnpj
-        ? String(client.cpf_cnpj).startsWith("sem-cpf-")
-          ? client.cpf_cnpj
-          : formatCpfCnpj(client.cpf_cnpj)
-        : "",
+      cpf_cnpj: formatCpfCnpjForDisplay(client.cpf_cnpj),
       company_name: client.company_name || "",
       address, city, state, zip_code, number, district,
       notes: client.notes || "", is_active: client.is_active !== false,
@@ -436,7 +437,9 @@ export default function ClientesPage() {
       name: editForm.name,
       email: editForm.email ?? "",
       phone: editForm.phone ?? "",
-      cpf_cnpj: editForm.cpf_cnpj ?? "",
+      ...(normalizeCpfCnpjForSave(editForm.cpf_cnpj)
+        ? { cpf_cnpj: normalizeCpfCnpjForSave(editForm.cpf_cnpj) }
+        : {}),
       company: isEmpresa ? (editForm.company_name ?? editForm.company ?? null) : null,
       address: addressFull,
       number: isEmpresa ? editForm.number ?? null : null,
@@ -800,9 +803,9 @@ export default function ClientesPage() {
                           </div>
                           )}
                           <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5 pt-1.5 border-t border-border/40">
-                            <div className="w-32">
+                            <div className="min-w-[11.5rem] w-auto max-w-[16rem] shrink-0">
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Origem</label>
-                              <select value={editForm.origem_captacao ?? ""} onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none">
+                              <select value={editForm.origem_captacao ?? ""} onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })} className="h-7 w-full min-w-[11.5rem] rounded border border-border/80 bg-background pl-2 pr-7 text-xs text-foreground focus:border-primary focus:outline-none">
                                 {getOpcoesOrigem(isComercial, comercialDisplayName ?? null).map((opt) => (
                                   <option key={opt.value || "blank"} value={opt.value}>{opt.label}</option>
                                 ))}
@@ -893,7 +896,7 @@ export default function ClientesPage() {
                         <div className="flex flex-wrap gap-6 text-sm">
                           <div>
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">CPF/CNPJ</span>
-                            <p className="font-mono text-foreground/90 mt-0.5">{client.cpf_cnpj || "—"}</p>
+                            <p className="font-mono text-foreground/90 mt-0.5">{formatCpfCnpjForDisplayOrDash(client.cpf_cnpj)}</p>
                           </div>
                           <div className="min-w-0 max-w-[400px]">
                             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Localização</span>
@@ -953,7 +956,9 @@ export default function ClientesPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-                  {client.cpf_cnpj && !String(client.cpf_cnpj).startsWith("import-") && !String(client.cpf_cnpj).startsWith("sem-cpf-") && <p className="font-mono text-xs text-foreground/60">{client.cpf_cnpj}</p>}
+                  {formatCpfCnpjForDisplay(client.cpf_cnpj) && (
+                    <p className="font-mono text-xs text-foreground/60">{formatCpfCnpjForDisplay(client.cpf_cnpj)}</p>
+                  )}
                   {client.email && <div className="flex items-center gap-1.5"><Mail className="h-3 w-3" />{client.email}</div>}
                   {client.phone && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3" />{client.phone}</div>}
                   {(client.address || client.city || client.state) && <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3 shrink-0" />{client.address || [client.city, client.state].filter(Boolean).join(", ")}</div>}

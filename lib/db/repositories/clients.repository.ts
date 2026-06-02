@@ -96,7 +96,7 @@ export async function updateClientFromDashboard(
     name: string
     email: string | null
     phone: string | null
-    cpf_cnpj: string | null
+    cpf_cnpj?: string | null
     company: string | null
     address: string | null
     number?: string | null
@@ -117,10 +117,13 @@ export async function updateClientFromDashboard(
   const city = isProf ? null : (payload.city ?? null)
   const state = isProf ? null : (payload.state ?? null)
   const zipCode = isProf ? null : (payload.zip_code ?? null)
+  const updateCpfCnpj = payload.cpf_cnpj !== undefined
 
   await queryOne(
     `UPDATE clients SET
-       name = $1, email = $2, phone = $3, cpf_cnpj = $4, company = $5,
+       name = $1, email = $2, phone = $3,
+       cpf_cnpj = CASE WHEN $16 = true THEN $4 ELSE cpf_cnpj END,
+       company = $5,
        address = $6, number = $7, district = $8, city = $9, state = $10, zip_code = $11,
        origem_captacao = $12, status_lead = $13,
        liticapro_data = COALESCE(liticapro_data, '{}'::jsonb) || CASE
@@ -133,7 +136,7 @@ export async function updateClientFromDashboard(
       payload.name,
       payload.email ?? "",
       payload.phone ?? "",
-      payload.cpf_cnpj,
+      payload.cpf_cnpj ?? null,
       company,
       address,
       number,
@@ -145,6 +148,7 @@ export async function updateClientFromDashboard(
       payload.status_lead,
       payload.customer_type ?? null,
       id,
+      updateCpfCnpj,
     ],
   )
 }
