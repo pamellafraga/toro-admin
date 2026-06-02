@@ -9,4 +9,4 @@ node_modules/
 tsconfig.tsbuildinfo
 .env*.local
 storage/nfe-pdfs/
-storage/
+.vercel
