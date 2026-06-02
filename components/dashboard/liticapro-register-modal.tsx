@@ -1,0 +1,813 @@
+"use client"
+
+import { useState, useEffect, useCallback, type ReactNode } from "react"
+import { Building2, User, Loader2, Plus, Trash2, Search } from "lucide-react"
+import { toast } from "sonner"
+import { useAuth } from "@/lib/auth-context"
+import { formatCep, formatCnpj, formatCpf, formatPhone } from "@/lib/format/br"
+import { suggestDeveloperUsername } from "@/lib/liticapro/developer-credentials"
+import { ORIGEM_CAPTACAO_OPCOES } from "@/lib/constants/origem-captacao"
+import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
+import { LiticaProCnaeAndRamoSection, LiticaProCnaeAndRamoCompact } from "@/components/dashboard/liticapro-cnae-section"
+import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
+import type { CnpjGovData } from "@/lib/liticapro/types"
+
+type CustomerType = "empresa" | "profissional_liberal" | null
+
+interface Props {
+  open: boolean
+  onClose: () => void
+  onSuccess: () => void
+}
+
+const inputClass =
+  "w-full h-8 rounded-lg border-2 border-primary/50 bg-background px-2.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
+const labelClass = "text-[11px] font-medium text-muted-foreground mb-0.5 block"
+const sectionClass = "space-y-2"
+const sectionTitleClass = "text-[11px] font-semibold text-primary uppercase tracking-wide"
+
+function FormSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className={sectionClass}>
+      <p className={sectionTitleClass}>{title}</p>
+      {children}
+    </section>
+  )
+}
+
+function applyGovToCompanyFields(gov: CnpjGovData, setters: {
+  setCompanyLegalName: (v: string) => void
+  setCompanyTradeName: (v: string) => void
+  setCompanyZip: (v: string) => void
+  setCompanyAddress: (v: string) => void
+  setCompanyNumber: (v: string) => void
+  setCompanyDistrict: (v: string) => void
+  setCompanyCity: (v: string) => void
+  setCompanyState: (v: string) => void
+}) {
+  setters.setCompanyLegalName(gov.razao_social)
+  setters.setCompanyTradeName(gov.nome_fantasia ?? "")
+  setters.setCompanyZip(gov.cep ? formatCep(gov.cep) : "")
+  setters.setCompanyAddress(gov.logradouro ?? "")
+  setters.setCompanyNumber(gov.numero ?? "")
+  setters.setCompanyDistrict(gov.bairro ?? "")
+  setters.setCompanyCity(gov.municipio ?? "")
+  setters.setCompanyState(gov.uf ?? "")
+}
+
+function buildCompanyGovPayload(
+  base: CnpjGovData | null,
+  cnpjDigits: string,
+  fields: {
+    companyLegalName: string
+    companyTradeName: string
+    companyZip: string
+    companyAddress: string
+    companyNumber: string
+    companyDistrict: string
+    companyCity: string
+    companyState: string
+  },
+): CnpjGovData {
+  return {
+    cnpj: cnpjDigits,
+    razao_social: fields.companyLegalName.trim(),
+    nome_fantasia: fields.companyTradeName.trim() || null,
+    logradouro: fields.companyAddress.trim() || null,
+    numero: fields.companyNumber.trim() || null,
+    bairro: fields.companyDistrict.trim() || null,
+    municipio: fields.companyCity.trim() || null,
+    uf: fields.companyState.trim() || null,
+    cep: fields.companyZip.replace(/\D/g, "") || null,
+    cnae_fiscal: base?.cnae_fiscal ?? null,
+    cnae_fiscal_descricao: base?.cnae_fiscal_descricao ?? null,
+    cnaes_secundarios: base?.cnaes_secundarios ?? [],
+    descricao_situacao_cadastral: base?.descricao_situacao_cadastral ?? null,
+  }
+}
+
+export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
+  const { isAdmin } = useAuth()
+  const [step, setStep] = useState<1 | 2>(1)
+  const [customerType, setCustomerType] = useState<CustomerType>(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [loadingCnpj, setLoadingCnpj] = useState(false)
+
+  // Empresa
+  const [cnpj, setCnpj] = useState("")
+  const [companyGov, setCompanyGov] = useState<CnpjGovData | null>(null)
+  const [companyLegalName, setCompanyLegalName] = useState("")
+  const [companyTradeName, setCompanyTradeName] = useState("")
+  const [companyZip, setCompanyZip] = useState("")
+  const [companyAddress, setCompanyAddress] = useState("")
+  const [companyNumber, setCompanyNumber] = useState("")
+  const [companyDistrict, setCompanyDistrict] = useState("")
+  const [companyCity, setCompanyCity] = useState("")
+  const [companyState, setCompanyState] = useState("")
+  const [responsibleName, setResponsibleName] = useState("")
+  const [businessSegment, setBusinessSegment] = useState("")
+
+  // Profissional liberal
+  const [cpf, setCpf] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [birthDate, setBirthDate] = useState("")
+  const [linkedCnpjs, setLinkedCnpjs] = useState<Array<{ cnpj: string; gov: CnpjGovData | null; razaoSocial: string; segment: string }>>([
+    { cnpj: "", gov: null, razaoSocial: "", segment: "" },
+  ])
+  const [billingZip, setBillingZip] = useState("")
+  const [billingAddress, setBillingAddress] = useState("")
+  const [billingNumber, setBillingNumber] = useState("")
+  const [billingDistrict, setBillingDistrict] = useState("")
+  const [billingCity, setBillingCity] = useState("")
+  const [billingState, setBillingState] = useState("")
+
+  // Comum
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [statesOfInterest, setStatesOfInterest] = useState<string[]>([])
+  const [origemCaptacao, setOrigemCaptacao] = useState("")
+
+  // Dados do desenvolvedor (somente admin)
+  const [devEmpresa, setDevEmpresa] = useState("")
+  const [devUsuario, setDevUsuario] = useState("")
+  const [devSenha, setDevSenha] = useState("")
+
+  const clearCompanyFields = () => {
+    setCompanyLegalName("")
+    setCompanyTradeName("")
+    setCompanyZip("")
+    setCompanyAddress("")
+    setCompanyNumber("")
+    setCompanyDistrict("")
+    setCompanyCity("")
+    setCompanyState("")
+  }
+
+  const fillCompanyFromGov = (gov: CnpjGovData) => {
+    setCompanyGov(gov)
+    applyGovToCompanyFields(gov, {
+      setCompanyLegalName,
+      setCompanyTradeName,
+      setCompanyZip,
+      setCompanyAddress,
+      setCompanyNumber,
+      setCompanyDistrict,
+      setCompanyCity,
+      setCompanyState,
+    })
+    if (isAdmin) {
+      setDevEmpresa((prev) => (prev.trim() ? prev : gov.razao_social))
+    }
+  }
+
+  const reset = () => {
+    setStep(1)
+    setCustomerType(null)
+    setError(null)
+    setCnpj("")
+    setCompanyGov(null)
+    clearCompanyFields()
+    setResponsibleName("")
+    setBusinessSegment("")
+    setCpf("")
+    setFullName("")
+    setBirthDate("")
+    setLinkedCnpjs([{ cnpj: "", gov: null, razaoSocial: "", segment: "" }])
+    setBillingZip("")
+    setBillingAddress("")
+    setBillingNumber("")
+    setBillingDistrict("")
+    setBillingCity("")
+    setBillingState("")
+    setEmail("")
+    setPhone("")
+    setStatesOfInterest([])
+    setOrigemCaptacao("")
+    setDevEmpresa("")
+    setDevUsuario("")
+    setDevSenha("")
+  }
+
+  const handleClose = () => {
+    reset()
+    onClose()
+  }
+
+  const fetchCnpj = useCallback(async (raw: string): Promise<CnpjGovData | null> => {
+    const digits = raw.replace(/\D/g, "")
+    if (digits.length !== 14) return null
+    setLoadingCnpj(true)
+    try {
+      const res = await fetch(`/api/geo/cnpj?value=${digits}`)
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "CNPJ não encontrado.")
+        return null
+      }
+      return data as CnpjGovData
+    } catch {
+      toast.error("Erro ao consultar CNPJ.")
+      return null
+    } finally {
+      setLoadingCnpj(false)
+    }
+  }, [])
+
+  // Consulta automática quando CNPJ completo (empresa)
+  useEffect(() => {
+    if (customerType !== "empresa") return
+    const digits = cnpj.replace(/\D/g, "")
+    if (digits.length !== 14) {
+      setCompanyGov(null)
+      clearCompanyFields()
+      return
+    }
+    if (companyGov?.cnpj === digits) return
+    const t = setTimeout(() => {
+      fetchCnpj(cnpj).then((gov) => {
+        if (gov) fillCompanyFromGov(gov)
+      })
+    }, 600)
+    return () => clearTimeout(t)
+  }, [cnpj, customerType, companyGov?.cnpj, fetchCnpj])
+
+  useEffect(() => {
+    if (!isAdmin) return
+    const name = customerType === "empresa" ? responsibleName : fullName
+    const suggested = suggestDeveloperUsername(name)
+    if (!suggested) return
+    setDevUsuario((prev) => (prev.trim() ? prev : suggested))
+  }, [responsibleName, fullName, isAdmin, customerType])
+
+  useEffect(() => {
+    if (!isAdmin || customerType !== "profissional_liberal") return
+    const cpfFormatted = cpf.trim()
+    if (!cpfFormatted) return
+    setDevEmpresa((prev) => (prev.trim() ? prev : cpfFormatted))
+  }, [cpf, isAdmin, customerType])
+
+  const handleCnpjBlur = async () => {
+    const gov = await fetchCnpj(cnpj)
+    if (gov) fillCompanyFromGov(gov)
+  }
+
+  const handleLinkedCnpjBlur = async (index: number) => {
+    const item = linkedCnpjs[index]
+    if (!item) return
+    const gov = await fetchCnpj(item.cnpj)
+    if (gov) {
+      setLinkedCnpjs((prev) =>
+        prev.map((x, i) =>
+          i === index
+            ? {
+                ...x,
+                gov,
+                razaoSocial: gov.razao_social,
+                segment: x.segment,
+              }
+            : x,
+        ),
+      )
+    }
+  }
+
+  const handleCompanyCepBlur = async () => {
+    const cep = companyZip.replace(/\D/g, "")
+    if (cep.length !== 8) return
+    try {
+      const res = await fetch(`/api/geo/cep?value=${cep}`)
+      const data = await res.json()
+      if (!res.ok) return
+      setCompanyAddress(data.street || companyAddress)
+      setCompanyDistrict(data.district || companyDistrict)
+      setCompanyCity(data.city || companyCity)
+      setCompanyState(data.state || companyState)
+    } catch {
+      // ignora
+    }
+  }
+
+  const handleBillingCepBlur = async () => {
+    const cep = billingZip.replace(/\D/g, "")
+    if (cep.length !== 8) return
+    try {
+      const res = await fetch(`/api/geo/cep?value=${cep}`)
+      const data = await res.json()
+      if (!res.ok) return
+      setBillingAddress(data.street || billingAddress)
+      setBillingDistrict(data.district || billingDistrict)
+      setBillingCity(data.city || billingCity)
+      setBillingState(data.state || billingState)
+    } catch {
+      // ignora
+    }
+  }
+
+  const toggleState = (uf: string) => {
+    setStatesOfInterest((prev) =>
+      prev.includes(uf) ? prev.filter((s) => s !== uf) : [...prev, uf],
+    )
+  }
+
+  const handleSubmit = async () => {
+    setError(null)
+    setSaving(true)
+    try {
+      const payload: Record<string, unknown> = {
+        customer_type: customerType,
+        email,
+        phone,
+        origem_captacao: origemCaptacao,
+        states_of_interest: statesOfInterest,
+      }
+
+      if (customerType === "empresa") {
+        const cnpjDigits = cnpj.replace(/\D/g, "")
+        let gov = companyGov
+        if (!gov?.razao_social) {
+          gov = await fetchCnpj(cnpj)
+          if (gov) fillCompanyFromGov(gov)
+        }
+        if (!companyLegalName.trim() && !gov?.razao_social) {
+          setError("Não foi possível consultar o CNPJ. Clique em Consultar ou verifique o número.")
+          setSaving(false)
+          return
+        }
+        if (!companyLegalName.trim()) {
+          setError("Informe a razão social da empresa.")
+          setSaving(false)
+          return
+        }
+        if (!businessSegment.trim()) {
+          setError("Informe o ramo de atuação.")
+          setSaving(false)
+          return
+        }
+        const companyGovPayload = buildCompanyGovPayload(gov, cnpjDigits, {
+          companyLegalName,
+          companyTradeName,
+          companyZip,
+          companyAddress,
+          companyNumber,
+          companyDistrict,
+          companyCity,
+          companyState,
+        })
+        payload.cnpj = cnpj
+        payload.responsible_name = responsibleName
+        payload.business_segment = businessSegment
+        payload.company_gov = companyGovPayload
+      } else {
+        const withGov = linkedCnpjs.filter((x) => x.gov)
+        if (withGov.length === 0) {
+          setError("Consulte ao menos um CNPJ válido na Receita Federal.")
+          setSaving(false)
+          return
+        }
+        if (withGov.some((x) => !x.segment.trim())) {
+          setError("Informe o ramo de atuação para cada CNPJ vinculado.")
+          setSaving(false)
+          return
+        }
+        payload.cpf = cpf
+        payload.full_name = fullName
+        payload.birth_date = birthDate
+        payload.linked_cnpjs = withGov.map((x) => ({
+          ...x.gov!,
+          razao_social: x.razaoSocial.trim() || x.gov!.razao_social,
+          ramo_atuacao: x.segment.trim(),
+        }))
+      }
+
+      if (isAdmin && (devEmpresa || devUsuario || devSenha)) {
+        payload.dados_desenvolvedor = {
+          empresa: devEmpresa.trim(),
+          usuario: devUsuario.trim(),
+          senha: devSenha.trim(),
+        }
+      }
+
+      const res = await fetch("/api/contracts/register/liticapro", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao registrar")
+
+      toast.success(data.message || "Teste grátis iniciado!")
+      handleClose()
+      onSuccess()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao registrar")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!open) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3">
+      <div className="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl bg-background border border-border p-4 shadow-xl">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground">Registrar compra — LiticaPro</h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              Teste grátis de 7 dias a partir da data de cadastro. Plano e pagamento serão definidos após o período de teste.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-secondary"
+          >
+            Fechar
+          </button>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerType("empresa")
+                setStep(2)
+              }}
+              className="flex flex-col items-center gap-3 rounded-xl border-2 border-border p-6 hover:border-primary hover:bg-primary/5 transition-colors text-left"
+            >
+              <Building2 className="h-10 w-10 text-primary" />
+              <div className="text-center">
+                <p className="font-semibold text-foreground">Empresa</p>
+                <p className="text-xs text-muted-foreground mt-1">CNPJ único, responsável pelo cadastro</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerType("profissional_liberal")
+                setStep(2)
+              }}
+              className="flex flex-col items-center gap-3 rounded-xl border-2 border-border p-6 hover:border-primary hover:bg-primary/5 transition-colors text-left"
+            >
+              <User className="h-10 w-10 text-primary" />
+              <div className="text-center">
+                <p className="font-semibold text-foreground">Profissional Liberal</p>
+                <p className="text-xs text-muted-foreground mt-1">CPF + um ou mais CNPJs vinculados</p>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {step === 2 && customerType === "empresa" && (
+          <div className="space-y-3">
+            <button type="button" onClick={() => setStep(1)} className="text-xs text-primary hover:underline">
+              ← Voltar ao tipo de cadastro
+            </button>
+
+            <FormSection title="Consulta CNPJ">
+              <div>
+                <label className={labelClass}>CNPJ da empresa *</label>
+                <div className="flex gap-2">
+                  <input
+                    className={inputClass}
+                    value={cnpj}
+                    onChange={(e) => {
+                      setCnpj(formatCnpj(e.target.value))
+                      setCompanyGov(null)
+                      clearCompanyFields()
+                    }}
+                    onBlur={handleCnpjBlur}
+                    placeholder="00.000.000/0000-00"
+                  />
+                  <button
+                    type="button"
+                    disabled={loadingCnpj || cnpj.replace(/\D/g, "").length !== 14}
+                    onClick={async () => {
+                      const gov = await fetchCnpj(cnpj)
+                      if (gov) {
+                        fillCompanyFromGov(gov)
+                        toast.success("Dados da empresa carregados.")
+                      }
+                    }}
+                    className="shrink-0 rounded-lg border-2 border-primary px-3 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+                  >
+                    {loadingCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : "Consultar"}
+                  </button>
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-1">A consulta na Receita é automática ao digitar os 14 dígitos.</p>
+              </div>
+            </FormSection>
+
+            <FormSection title="Dados da empresa">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>Razão social *</label>
+                  <input
+                    className={inputClass}
+                    value={companyLegalName}
+                    onChange={(e) => setCompanyLegalName(e.target.value)}
+                    placeholder="Preenchido automaticamente pelo CNPJ"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Nome fantasia</label>
+                  <input
+                    className={inputClass}
+                    value={companyTradeName}
+                    onChange={(e) => setCompanyTradeName(e.target.value)}
+                    placeholder="Preenchido automaticamente pelo CNPJ"
+                  />
+                </div>
+              </div>
+            </FormSection>
+
+            <FormSection title="Endereço da empresa">
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>CEP</label>
+                  <input
+                    className={inputClass}
+                    value={companyZip}
+                    onChange={(e) => setCompanyZip(formatCep(e.target.value))}
+                    onBlur={handleCompanyCepBlur}
+                    placeholder="00000-000"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className={labelClass}>Endereço</label>
+                  <input
+                    className={inputClass}
+                    value={companyAddress}
+                    onChange={(e) => setCompanyAddress(e.target.value)}
+                    placeholder="Logradouro"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className={labelClass}>Número</label>
+                  <input
+                    className={inputClass}
+                    value={companyNumber}
+                    onChange={(e) => setCompanyNumber(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Bairro</label>
+                  <input
+                    className={inputClass}
+                    value={companyDistrict}
+                    onChange={(e) => setCompanyDistrict(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Cidade / UF</label>
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass}
+                      value={companyCity}
+                      onChange={(e) => setCompanyCity(e.target.value)}
+                      placeholder="Cidade"
+                    />
+                    <input
+                      className={`w-16 shrink-0 ${inputClass}`}
+                      value={companyState}
+                      onChange={(e) => setCompanyState(e.target.value.toUpperCase())}
+                      placeholder="UF"
+                      maxLength={2}
+                    />
+                  </div>
+                </div>
+              </div>
+            </FormSection>
+
+            <FormSection title="Responsável pelo cadastro">
+              <div>
+                <label className={labelClass}>Nome do responsável pelo cadastro *</label>
+                <input className={inputClass} value={responsibleName} onChange={(e) => setResponsibleName(e.target.value)} />
+              </div>
+            </FormSection>
+
+            <CommonFields
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              statesOfInterest={statesOfInterest} toggleState={toggleState}
+              origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
+            />
+
+            <LiticaProCnaeAndRamoSection
+              gov={companyGov}
+              ramo={businessSegment}
+              setRamo={setBusinessSegment}
+              inline
+            />
+
+            {isAdmin && (
+              <LiticaProDeveloperCredentialsBlock
+                customerType="empresa"
+                empresa={devEmpresa}
+                setEmpresa={setDevEmpresa}
+                usuario={devUsuario}
+                setUsuario={setDevUsuario}
+                senha={devSenha}
+                setSenha={setDevSenha}
+              />
+            )}
+
+            <SubmitRow saving={saving} onSubmit={handleSubmit} />
+          </div>
+        )}
+
+        {step === 2 && customerType === "profissional_liberal" && (
+          <div className="space-y-3">
+            <button type="button" onClick={() => setStep(1)} className="text-xs text-primary hover:underline">
+              ← Voltar ao tipo de cadastro
+            </button>
+
+            <FormSection title="Dados pessoais">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelClass}>CPF *</label>
+                  <input className={inputClass} value={cpf} onChange={(e) => setCpf(formatCpf(e.target.value))} />
+                </div>
+                <div>
+                  <label className={labelClass}>Data de nascimento *</label>
+                  <input type="date" className={inputClass} value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Nome completo *</label>
+                <input className={inputClass} value={fullName} onChange={(e) => setFullName(e.target.value)} />
+              </div>
+            </FormSection>
+
+            <FormSection title="CNPJs vinculados">
+              <p className="text-[10px] text-muted-foreground -mt-1">Consulta automática na Receita Federal ao sair do campo</p>
+              {linkedCnpjs.map((item, index) => (
+                <div key={index} className="space-y-2 pt-3 border-t border-border/40 first:border-t-0 first:pt-0">
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass}
+                      value={item.cnpj}
+                      onChange={(e) =>
+                        setLinkedCnpjs((prev) =>
+                          prev.map((x, i) =>
+                            i === index
+                              ? { cnpj: formatCnpj(e.target.value), gov: null, razaoSocial: "", segment: "" }
+                              : x,
+                          ),
+                        )
+                      }
+                      onBlur={() => handleLinkedCnpjBlur(index)}
+                      placeholder="CNPJ"
+                    />
+                    {linkedCnpjs.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setLinkedCnpjs((prev) => prev.filter((_, i) => i !== index))}
+                        className="shrink-0 rounded-lg border-2 border-primary/50 px-2 text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div>
+                    <label className={labelClass}>Razão social</label>
+                    <input
+                      className={inputClass}
+                      value={item.razaoSocial}
+                      onChange={(e) =>
+                        setLinkedCnpjs((prev) =>
+                          prev.map((x, i) => (i === index ? { ...x, razaoSocial: e.target.value } : x)),
+                        )
+                      }
+                      placeholder="Preenchido automaticamente pelo CNPJ"
+                    />
+                  </div>
+                  <LiticaProCnaeAndRamoCompact gov={item.gov} ramo={item.segment} setRamo={(v) =>
+                    setLinkedCnpjs((prev) =>
+                      prev.map((x, i) => (i === index ? { ...x, segment: v } : x)),
+                    )
+                  } />
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setLinkedCnpjs((prev) => [...prev, { cnpj: "", gov: null, razaoSocial: "", segment: "" }])}
+                className="flex items-center gap-1 text-xs text-primary hover:underline"
+              >
+                <Plus className="h-3 w-3" /> Adicionar outro CNPJ
+              </button>
+            </FormSection>
+
+            <CommonFields
+              email={email} setEmail={setEmail}
+              phone={phone} setPhone={setPhone}
+              statesOfInterest={statesOfInterest} toggleState={toggleState}
+              origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
+              emailRequired={false}
+            />
+
+            {isAdmin && (
+              <LiticaProDeveloperCredentialsBlock
+                customerType="profissional_liberal"
+                empresa={devEmpresa}
+                setEmpresa={setDevEmpresa}
+                usuario={devUsuario}
+                setUsuario={setDevUsuario}
+                senha={devSenha}
+                setSenha={setDevSenha}
+              />
+            )}
+
+            <SubmitRow saving={saving} onSubmit={handleSubmit} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function CommonFields({
+  email, setEmail, phone, setPhone,
+  statesOfInterest, toggleState,
+  origemCaptacao, setOrigemCaptacao,
+  emailRequired = true,
+}: {
+  email: string
+  setEmail: (v: string) => void
+  phone: string
+  setPhone: (v: string) => void
+  statesOfInterest: string[]
+  toggleState: (uf: string) => void
+  origemCaptacao: string
+  setOrigemCaptacao: (v: string) => void
+  emailRequired?: boolean
+}) {
+  return (
+    <>
+      <FormSection title="Contato">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass}>
+              E-mail principal (acesso à plataforma){emailRequired ? " *" : ""}
+            </label>
+            <input
+              type="email"
+              className={inputClass}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder={emailRequired ? undefined : "Opcional"}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>Telefone / WhatsApp *</label>
+            <input className={inputClass} value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} />
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title="Estados de interesse em licitações">
+        <LiticaProStatesSelector selected={statesOfInterest} onToggle={toggleState} compact />
+      </FormSection>
+
+      <FormSection title="Origem da captação">
+        <div>
+          <label className={labelClass}>Origem da captação *</label>
+          <select className={inputClass} value={origemCaptacao} onChange={(e) => setOrigemCaptacao(e.target.value)}>
+            <option value="">Selecione...</option>
+            {ORIGEM_CAPTACAO_OPCOES.map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </select>
+        </div>
+      </FormSection>
+    </>
+  )
+}
+
+function SubmitRow({ saving, onSubmit }: { saving: boolean; onSubmit: () => void }) {
+  return (
+    <div className="flex items-center gap-3 pt-2">
+      <button
+        type="button"
+        disabled={saving}
+        onClick={onSubmit}
+        className="flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+        Iniciar teste grátis (7 dias)
+      </button>
+      <p className="text-[11px] text-muted-foreground">Cadastro na data de hoje. O sistema notifica quando o teste expirar para você contatar o cliente.</p>
+    </div>
+  )
+}

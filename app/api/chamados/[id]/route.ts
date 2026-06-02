@@ -1,39 +1,29 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest } from "next/server"
+import { handleApiError, jsonError, jsonForbidden, jsonOk } from "@/lib/api/response"
 import { canAccessChamadosPanel } from "@/lib/chamados-api"
+import { updateTicketStatus } from "@/lib/db/repositories/chamados.repository"
 import type { SupportTicketStatus } from "@/lib/types"
 
 const STATUSES: SupportTicketStatus[] = ["aberto", "em_andamento", "resolvido", "fechado"]
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!canAccessChamadosPanel(request))
-    return NextResponse.json({ error: "Sem permissão." }, { status: 403 })
+  if (!canAccessChamadosPanel(request)) return jsonForbidden("Sem permissão.")
 
   const { id } = await params
-  if (!id) return NextResponse.json({ error: "ID inválido." }, { status: 400 })
+  if (!id) return jsonError("ID inválido.", 400)
 
   try {
     const body = await request.json()
     const status = body.status != null ? String(body.status).trim() : ""
-    if (!STATUSES.includes(status as SupportTicketStatus))
-      return NextResponse.json({ error: "Status inválido." }, { status: 400 })
+    if (!STATUSES.includes(status as SupportTicketStatus)) return jsonError("Status inválido.", 400)
 
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from("internal_support_tickets")
-      .update({ status })
-      .eq("id", id)
-      .select("*")
-      .single()
-
-    if (error) throw error
-    if (!data) return NextResponse.json({ error: "Chamado não encontrado." }, { status: 404 })
-    return NextResponse.json(data)
+    const data = await updateTicketStatus(id, status as SupportTicketStatus)
+    if (!data) return jsonError("Chamado não encontrado.", 404)
+    return jsonOk(data)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao atualizar."
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return handleApiError(e, "Erro ao atualizar.")
   }
 }

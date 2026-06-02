@@ -1,31 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { nfeIssueBodySchema } from "@/lib/schemas/nfe"
+import { NextRequest } from "next/server"
+import { isAuthenticated, parseAuthCookie } from "@/lib/api/auth"
+import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
-import {
-  getConfigNfseNacional,
-  emitirNfseNacional,
-} from "@/lib/nfse/nacional"
+import { activateContract } from "@/lib/db/repositories/contracts.repository"
+import { findNfeDocument, insertNfeDocument, updateNfeDocument } from "@/lib/db/repositories/nfe.repository"
+import { emitirNfseNacional, getConfigNfseNacional } from "@/lib/nfse/nacional"
+import { nfeIssueBodySchema } from "@/lib/schemas/nfe"
+import { saveNfePdf } from "@/lib/storage/nfe-pdf"
 
-function isAdminRequest(request: NextRequest): boolean {
-  try {
-    const cookie = request.cookies.get("xpress_auth")?.value
-    if (!cookie) return false
-    const parsed = JSON.parse(cookie)
-    return !!(parsed.authenticated || parsed.user)
-  } catch {
-    return false
-  }
-}
-
-/**
- * Emissão de NF-e / NFS-e.
- * Prioridade: 1) Sistema Nacional NFS-e (Porto Alegre), 2) Provedor genérico (NFE_API_*), 3) Simulado.
- */
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
+  if (!isAuthenticated(req)) return jsonUnauthorized()
 
   try {
     const raw = await req.json()
@@ -33,11 +17,10 @@ export async function POST(req: NextRequest) {
     if (!parseResult.success) {
       const first = parseResult.error.flatten().fieldErrors
       const msg = Object.values(first).flat().join(" ") || "Dados inválidos."
-      return NextResponse.json({ error: msg }, { status: 400 })
+      return jsonError(msg, 400)
     }
     const body = parseResult.data
 
-    const supabase = createAdminClient()
     const apiUrl = process.env.NFE_API_URL
     const apiKey = process.env.NFE_API_KEY
     const configNacional = getConfigNfseNacional()
@@ -64,10 +47,7 @@ export async function POST(req: NextRequest) {
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Falha ao emitir NFS-e no Sistema Nacional"
-        return NextResponse.json(
-          { error: msg, provider: "nfse_nacional" },
-          { status: 502 },
-        )
+        return jsonError(msg, 502)
       }
     } else if (apiUrl && apiKey) {
       const providerRes = await fetch(`${apiUrl}/nfe`, {
@@ -82,13 +62,13 @@ export async function POST(req: NextRequest) {
       providerJson = (await providerRes.json().catch(() => ({}))) as Record<string, unknown>
 
       if (!providerRes.ok) {
-        return NextResponse.json(
+        return jsonOk(
           {
             error: "Falha ao emitir NF-e no provedor",
             providerStatus: providerRes.status,
             providerResponse: providerJson,
           },
-          { status: 502 },
+          502,
         )
       }
 
@@ -105,11 +85,7 @@ export async function POST(req: NextRequest) {
 
     let contractIdToActivate: string | null = null
     if (body.id) {
-      const { data: existing } = await supabase
-        .from("nfe_documents")
-        .select("provider_payload")
-        .eq("id", body.id)
-        .single()
+      const existing = await findNfeDocument(body.id)
       const payload = existing?.provider_payload as { contract_id?: string } | null
       if (payload?.contract_id) contractIdToActivate = payload.contract_id
     }
@@ -125,110 +101,71 @@ export async function POST(req: NextRequest) {
       series: nfeSeries,
       provider_id: providerId,
       provider_payload:
-        body.id && contractIdToActivate
-          ? { ...raw, contract_id: contractIdToActivate }
-          : raw,
+        body.id && contractIdToActivate ? { ...raw, contract_id: contractIdToActivate } : raw,
       provider_response: providerJson,
     }
 
-    let data: unknown
-    let error: { message: string } | null
-
+    let data: { id?: string } | null
     if (body.id) {
-      const result = await supabase
-        .from("nfe_documents")
-        .update(basePayload)
-        .eq("id", body.id)
-        .select()
-        .single()
-      data = result.data
-      error = result.error
+      data = (await updateNfeDocument(body.id, basePayload)) as { id?: string } | null
     } else {
-      const result = await supabase
-        .from("nfe_documents")
-        .insert(basePayload)
-        .select()
-        .single()
-      data = result.data
-      error = result.error
+      data = (await insertNfeDocument(basePayload)) as { id?: string } | null
     }
 
-    if (error) {
-      return NextResponse.json(
-        {
-          error: "NF-e emitida no provedor, mas falhou ao salvar no banco",
-          dbError: error.message,
-          providerResponse: providerJson,
-        },
-        { status: 500 },
-      )
+    if (!data) {
+      return jsonError("NF-e emitida no provedor, mas falhou ao salvar no banco", 500)
     }
 
-    const nfeId = (data as { id?: string })?.id
-    const NFE_PDF_BUCKET = "nfe-pdfs"
+    const nfeId = data.id
     if (nfeId) {
       const pdfUrl = typeof providerJson.pdfUrl === "string" ? providerJson.pdfUrl.trim() : null
       const pdfBase64 = typeof providerJson.pdfBase64 === "string" ? providerJson.pdfBase64 : null
-      let pdfBuffer: ArrayBuffer | null = null
+      let pdfBuffer: Buffer | null = null
+
       if (pdfUrl) {
         try {
           const res = await fetch(pdfUrl)
-          if (res.ok) pdfBuffer = await res.arrayBuffer()
+          if (res.ok) pdfBuffer = Buffer.from(await res.arrayBuffer())
         } catch (e) {
           console.warn("Falha ao baixar PDF do provedor:", e)
         }
       } else if (pdfBase64) {
         try {
           const b64 = pdfBase64.replace(/^data:application\/pdf;base64,/, "")
-          pdfBuffer = Buffer.from(b64, "base64").buffer
+          pdfBuffer = Buffer.from(b64, "base64")
         } catch (e) {
           console.warn("Falha ao decodificar PDF base64:", e)
         }
       }
+
       if (pdfBuffer && pdfBuffer.byteLength > 0) {
-        const path = `${nfeId}.pdf`
-        const { error: uploadError } = await supabase.storage
-          .from(NFE_PDF_BUCKET)
-          .upload(path, pdfBuffer, { contentType: "application/pdf", upsert: true })
-        if (!uploadError) {
-          await supabase.from("nfe_documents").update({ pdf_storage_path: path }).eq("id", nfeId)
-        } else {
-          console.warn("Falha ao fazer upload do PDF para Storage:", uploadError)
+        try {
+          const storagePath = await saveNfePdf(nfeId, pdfBuffer)
+          await updateNfeDocument(nfeId, { pdf_storage_path: storagePath })
+        } catch (e) {
+          console.warn("Falha ao salvar PDF local:", e)
         }
       }
     }
 
     if (contractIdToActivate) {
-      await supabase
-        .from("contracts")
-        .update({ status: "ativa" })
-        .eq("id", contractIdToActivate)
+      await activateContract(contractIdToActivate)
     }
 
-    const who = (() => {
-      try {
-        const c = req.cookies.get("xpress_auth")?.value
-        if (!c) return null
-        const p = JSON.parse(c)
-        return p.displayName ?? p.user ?? null
-      } catch { return null }
-    })()
+    const auth = parseAuthCookie(req)
     await logActivity(
-      { displayName: who },
+      { displayName: auth?.displayName },
       {
         action: `Emitiu NF-e para ${body.client_name ?? "cliente"}`,
         entity_type: "nfe",
-        entity_id: (data as { id?: string })?.id ?? undefined,
+        entity_id: data.id,
         details: { number: nfeNumber, series: nfeSeries },
-      }
+      },
     )
 
-    return NextResponse.json({ success: true, nfe: data }, { status: 201 })
+    return jsonOk({ success: true, nfe: data }, 201)
   } catch (err) {
     console.error("Erro ao emitir NF-e:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erro inesperado ao emitir NF-e" },
-      { status: 500 },
-    )
+    return handleApiError(err, "Erro inesperado ao emitir NF-e")
   }
 }

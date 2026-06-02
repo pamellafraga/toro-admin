@@ -9,7 +9,6 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
   "/dashboard/chamados": "Chamados",
   "/dashboard/produtos": "Produtos",
-  "/dashboard/clientes": "Clientes",
   "/dashboard/seguradoras": "Marketing",
   "/dashboard/chat": "Chat Interno",
   "/dashboard/financeiro": "Financeiro",
@@ -27,7 +26,6 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
   const title = Object.entries(PAGE_TITLES).find(
     ([path]) => pathname === path || (path !== "/dashboard" && pathname.startsWith(path))
   )?.[1] ?? "Dashboard"
-  const hideTitle = pathname === "/dashboard/clientes" || pathname.startsWith("/dashboard/clientes/")
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-background/80 backdrop-blur-xl px-6">
@@ -39,7 +37,7 @@ export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
         >
           <Menu className="h-5 w-5" />
         </button>
-        {!hideTitle && <h1 className="text-lg font-semibold text-foreground">{title}</h1>}
+        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
       </div>
 
       {/* Logo — só a imagem, sem moldura nem texto */}

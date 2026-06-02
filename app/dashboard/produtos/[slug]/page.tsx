@@ -13,11 +13,52 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { getProductBySlug } from "@/lib/products/catalog"
+import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-register-modal"
+import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
+import { LiticaProCnaeAndRamoSection } from "@/components/dashboard/liticapro-cnae-section"
+import { LiticaProContractDetailView } from "@/components/dashboard/liticapro-contract-detail-view"
+import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
+import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-badge"
+import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { formatCpfCnpj, formatPhone } from "@/lib/format/br"
+import type { CnpjGovData } from "@/lib/liticapro/types"
+import { buildDashboardMonthOptions, resolveTrialEndsAt } from "@/lib/liticapro/trial"
+
+function formatContractDate(value: string | null | undefined): string {
+  if (!value) return "—"
+  try {
+    return format(new Date(value), "dd/MM/yyyy", { locale: ptBR })
+  } catch {
+    return "—"
+  }
+}
+
+function displayCpfCnpj(value: string | null | undefined): string {
+  if (!value) return "---"
+  const raw = String(value)
+  if (raw.startsWith("import-") || raw.startsWith("sem-cpf-")) return raw
+  const digits = raw.replace(/\D/g, "")
+  if (!digits) return "---"
+  return formatCpfCnpj(digits)
+}
+
+/** Agrupa status do contrato nos 4 buckets de produto exibidos no dashboard. */
+type ProductStatusBucket = "aguardando_produto" | "contratado" | "trial" | "inativo"
+
+function getProductStatusBucket(status: string | null | undefined): ProductStatusBucket {
+  const t = (status ?? "").toLowerCase().trim()
+  if (t === "trial") return "trial"
+  if (t === "aguardando_produto") return "aguardando_produto"
+  if (t === "ativa" || t === "active") return "contratado"
+  return "inativo"
+}
 
 /** Produto (contratação): ícone na exibição (estilo foto 3); texto só em cadastro/edição */
 function normalizeProductStatus(s: string | null): string {
   if (!s) return ""
   const t = (s || "").toLowerCase().trim()
+  if (t === "trial") return "trial"
   if (t === "active" || t === "ativa") return "ativa"
   if (t === "inactive" || t === "inativa") return "inativa"
   if (t === "cancelled" || t === "cancelada") return "cancelada"
@@ -25,11 +66,14 @@ function normalizeProductStatus(s: string | null): string {
   return t || s
 }
 const STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; class: string }> = {
-  active: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  ativa: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  active: { label: "Produto contratado", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  ativa: { label: "Produto contratado", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  contratado: { label: "Produto contratado", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
+  trial: { label: "Teste grátis", Icon: Clock, class: "bg-sky-500/10 text-sky-400 border-sky-500/30" },
   aguardando_produto: { label: "Aguardando produto", Icon: Clock, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
   inactive: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
   inativa: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
+  inativo: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
   suspended: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
   pendente: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
   cancelled: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/10 text-red-400 border-red-500/30" },
@@ -38,6 +82,8 @@ const STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; class: strin
 
 const PAYMENT_MAP: Record<string, { label: string; class: string }> = {
   paid: { label: "Em dia", class: "text-emerald-400" },
+  trial: { label: "Teste grátis (7 dias)", class: "text-sky-400" },
+  trial_expirado: { label: "Teste expirado — contatar", class: "text-red-400" },
   em_dia: { label: "Em dia", class: "text-emerald-400" },
   pending: { label: "Pendente", class: "text-amber-400" },
   pendente: { label: "Pendente", class: "text-amber-400" },
@@ -48,6 +94,13 @@ const PAYMENT_MAP: Record<string, { label: string; class: string }> = {
   expirado: { label: "Expirado", class: "text-red-400" },
   expired: { label: "Expirado", class: "text-red-400" },
 }
+
+const PRODUCT_KANBAN_COLUMNS = [
+  { id: "aguardando_produto", label: "Aguardando produto", class: "bg-amber-500/15 text-amber-400 border-amber-500/30", Icon: Clock },
+  { id: "trial", label: "Teste grátis", class: "bg-sky-500/15 text-sky-400 border-sky-500/30", Icon: Clock },
+  { id: "ativa", label: "Produto contratado", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30", Icon: CheckCircle },
+  { id: "inativa", label: "Produto inativo", class: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30", Icon: PauseCircle },
+] as const
 
 const PAYMENT_KANBAN_COLUMNS = [
   { id: "em_dia", label: "Em dia", class: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
@@ -78,12 +131,6 @@ const addOneMonthSameDay = (dateStr: string) => {
   return `${yy}-${mm}-${dd}`
 }
 
-const ORIGEM_CAPTACAO_OPCOES = [
-  "Website",
-  "Comercial - Stefanie",
-  "Comercial - Lisete",
-] as const
-
 const STATUS_COMERCIAL_OPCOES = [
   { id: "", label: "—" },
   { id: "tentando_contato", label: "Tentando contato" },
@@ -97,6 +144,26 @@ const STATUS_COMERCIAL_OPCOES = [
   { id: "sem_interesse", label: "Sem interesse" },
 ] as const
 
+const PRODUCT_STATUS_OPCOES = [
+  { id: "aguardando_produto", label: "Aguardando produto" },
+  { id: "ativa", label: "Produto contratado" },
+  { id: "trial", label: "Teste grátis" },
+  { id: "inativa", label: "Produto inativo" },
+] as const
+
+const ETAPA_LEAD_COLOR_MAP: Record<string, string> = {
+  "": "bg-secondary text-muted-foreground border-border",
+  tentando_contato: "bg-slate-500/10 text-slate-400 border-slate-500/30",
+  em_conversa: "bg-sky-500/10 text-sky-400 border-sky-500/30",
+  agendado: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
+  contratando: "bg-amber-500/10 text-amber-400 border-amber-500/30",
+  negociando: "bg-violet-500/10 text-violet-400 border-violet-500/30",
+  ativo: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+  perdido: "bg-red-500/10 text-red-400 border-red-500/30",
+  bloqueado: "bg-black/15 text-gray-900 border-gray-800/40",
+  sem_interesse: "bg-gray-500/10 text-gray-700 border-gray-500/30",
+}
+
 /** Status em branco = "—", não designado (igual origem); só em "Todos" */
 const getEtapaLead = (client: Client | null | undefined) => {
   const s = (client?.status_lead ?? "") as string
@@ -108,9 +175,23 @@ const getEtapaLeadLabel = (client: Client | null | undefined) => {
   return etapa === "" ? "—" : (STATUS_COMERCIAL_OPCOES.find((x) => x.id === etapa)?.label ?? etapa)
 }
 
+/** Subtítulo na coluna Cliente: empresa LiticaPro → responsável; demais → e-mail */
+const getClientListSubtitle = (client: Client | null | undefined, liticaproProduct: boolean) => {
+  if (!client) return ""
+  if (liticaproProduct) {
+    const lp = (client as Client & { liticapro_data?: { customer_type?: string; responsible_name?: string } }).liticapro_data
+    const isEmpresa = lp?.customer_type !== "profissional_liberal"
+    const responsible = String(lp?.responsible_name ?? "").trim()
+    if (isEmpresa && responsible) return responsible
+  }
+  return client.email || ""
+}
+
 export default function ProductDetailPage() {
   const params = useParams()
   const slug = params.slug as string
+  const catalogProduct = getProductBySlug(slug)
+  const isLiticaPro = catalogProduct?.slug === "liticapro"
   const supabase = createClient()
   const { mutate: globalMutate } = useSWRConfig()
   const { isComercial, comercialDisplayName, isAdmin } = useAuth()
@@ -123,6 +204,7 @@ export default function ProductDetailPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [editingContract, setEditingContract] = useState<Contract | null>(null)
+  const [viewOnly, setViewOnly] = useState(false)
   const [editForm, setEditForm] = useState({
     // Cliente (igual Registrar assinatura)
     client_name: "",
@@ -146,9 +228,19 @@ export default function ProductDetailPage() {
     status: "ativa",
     payment_status: "em_dia",
     notes: "",
+    dev_empresa: "",
+    dev_usuario: "",
+    dev_senha: "",
+    customer_type: "empresa" as "empresa" | "profissional_liberal",
+    business_segment: "",
+    states_of_interest: [] as string[],
+    responsible_name: "",
   })
+  const [editCompanyGov, setEditCompanyGov] = useState<CnpjGovData | null>(null)
+  const [loadingEditCnpj, setLoadingEditCnpj] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [newContract, setNewContract] = useState({
     // dados do cliente
     client_name: "",
@@ -173,9 +265,15 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (showNewContract && isComercial && comercialDisplayName) {
-      setNewContract((prev) => ({ ...prev, origem_captacao: `Comercial - ${comercialDisplayName}` }))
+      setNewContract((prev) => ({ ...prev, origem_captacao: origemCaptacaoForComercial(comercialDisplayName) }))
     }
   }, [showNewContract, isComercial, comercialDisplayName])
+
+  useEffect(() => {
+    if (isLiticaPro) {
+      fetch("/api/liticapro/check-trials", { credentials: "include" }).catch(() => {})
+    }
+  }, [isLiticaPro])
 
   const { data: product } = useSWR(`product-${slug}`, async () => {
     // Tenta buscar o produto pelo slug; se não existir, cria automaticamente
@@ -189,18 +287,21 @@ export default function ProductDetailPage() {
       console.error("Erro ao carregar produto:", error)
     }
 
+    const catalog = getProductBySlug(slug)
     if (data) {
       return data as Product
     }
 
+    if (!catalog) return null
+
     const { data: created, error: createError } = await supabase
       .from("products")
       .insert({
-        name: "Software de Gestão",
-        slug,
-        description: "Apólice de Seguro - Modalidade Garantias",
-        icon: "monitor",
-        monthly_price: 800,
+        name: catalog.name,
+        slug: catalog.slug,
+        description: catalog.description,
+        icon: catalog.icon,
+        monthly_price: catalog.slug === "segura" ? 800 : 0,
         is_active: true,
       })
       .select()
@@ -238,11 +339,16 @@ export default function ProductDetailPage() {
   const contracts = (contractsFromApi.length > 0 ? contractsFromApi : contractsFromClient) ?? []
   const productResolved = product || productFromApi
 
+  const getContractMonthKey = (c: Contract) =>
+    isLiticaPro
+      ? (c.created_at ? String(c.created_at).slice(0, 7) : "")
+      : (c.start_date ? String(c.start_date).slice(0, 7) : "")
+
   // Comercial: só vê mês atual (todos) + meses anteriores (apenas aguardando produto). Sem filtro por mês.
   const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`
   const contractsVisible = isComercial
     ? contracts.filter((c) => {
-        const monthStr = c.start_date ? String(c.start_date).slice(0, 7) : ""
+        const monthStr = getContractMonthKey(c)
         return monthStr === currentMonthStr || c.status === "aguardando_produto"
       })
     : contracts
@@ -252,61 +358,24 @@ export default function ProductDetailPage() {
     ? contractsVisible.filter((c) => (c.clients?.origem_captacao || "") === filterOrigin)
     : contractsVisible
 
-  const statusForFilter = (s: string) => (s === "ativa" ? "active" : s === "inativa" ? "inactive" : s === "aguardando_produto" ? "aguardando_produto" : s === "pendente" ? "suspended" : s === "cancelada" ? "cancelled" : s)
   const filtered = contractsVisibleByOrigin?.filter((c) => {
+    const lp = (c.clients as Client & { liticapro_data?: { responsible_name?: string } } | null)?.liticapro_data
+    const responsibleName = String(lp?.responsible_name ?? "").trim()
     const matchesSearch =
       !search ||
       c.clients?.name?.toLowerCase().includes(search.toLowerCase()) ||
       c.clients?.cpf_cnpj?.includes(search) ||
-      c.clients?.email?.toLowerCase().includes(search.toLowerCase())
+      (search.replace(/\D/g, "") && c.clients?.cpf_cnpj?.replace(/\D/g, "").includes(search.replace(/\D/g, ""))) ||
+      c.clients?.email?.toLowerCase().includes(search.toLowerCase()) ||
+      responsibleName.toLowerCase().includes(search.toLowerCase())
     const matchesStatus =
-      filterStatus === "all" ? true
-      : filterStatus === "inactive" ? c.status !== "ativa" && c.status !== "aguardando_produto"
-      : statusForFilter(c.status) === filterStatus || c.status === filterStatus
-    const monthStr = c.start_date ? String(c.start_date).slice(0, 7) : ""
+      filterStatus === "all" ? true : getProductStatusBucket(c.status) === filterStatus
+    const monthStr = getContractMonthKey(c)
     const matchesMonth = isComercial ? true : !filterMonth || monthStr === filterMonth
     return matchesSearch && matchesStatus && matchesMonth
   })
 
-  const monthOptions = (() => {
-    const opts: { value: string; label: string }[] = []
-    const start = new Date(2026, 2, 1)
-    const now = new Date()
-    const end = new Date(now.getFullYear(), now.getMonth(), 1)
-    for (let d = new Date(start); d <= end; d.setMonth(d.getMonth() + 1)) {
-      const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-      const label = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" })
-      opts.push({ value, label: label.charAt(0).toUpperCase() + label.slice(1) })
-    }
-    return opts
-  })()
-
-  const formatCpfCnpj = (value: string) => {
-    const digits = value.replace(/\D/g, "")
-    if (digits.length <= 11) {
-      return digits
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d)/, "$1.$2")
-        .replace(/(\d{3})(\d{1,2})$/, "$1-$2")
-    }
-    return digits
-      .replace(/^(\d{2})(\d)/, "$1.$2")
-      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/\.(\d{3})(\d)/, ".$1/$2")
-      .replace(/(\d{4})(\d{1,2})$/, "$1-$2")
-  }
-
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, "")
-    if (digits.length <= 10) {
-      return digits
-        .replace(/(\d{2})(\d)/, "($1) $2")
-        .replace(/(\d{4})(\d)/, "$1-$2")
-    }
-    return digits
-      .replace(/(\d{2})(\d)/, "($1) $2")
-      .replace(/(\d{5})(\d)/, "$1-$2")
-  }
+  const monthOptions = buildDashboardMonthOptions()
 
   const handleCepBlur = async () => {
     const raw = newContract.zip_code.replace(/\D/g, "")
@@ -473,22 +542,23 @@ export default function ProductDetailPage() {
   const planValues: Record<string, number> = { basic: 500, confort: 800, premium: 1500 }
   const valueToPlan = (v: number) => (v === 1500 ? "premium" : v === 800 ? "confort" : "basic")
 
-  const openEditContract = (contract: Contract) => {
-    setEditingContract(contract)
+  const closeContractModal = () => {
+    setEditingContract(null)
+    setEditCompanyGov(null)
+    setViewOnly(false)
+  }
+
+  const populateEditFormFromContract = (contract: Contract) => {
     const c = contract.clients
     const monthly = Number(contract.monthly_value) || 800
-    // Garante que endereço venha quebrado em campos separados quando possível
-    let address = (c as any)?.address ?? ""
-    let number = (c as any)?.number ?? ""
-    let district = (c as any)?.district ?? ""
+    let address = (c as { address?: string })?.address ?? ""
+    let number = (c as { number?: string })?.number ?? ""
+    let district = (c as { district?: string })?.district ?? ""
     let city = c?.city ?? ""
     let state = c?.state ?? ""
     let zip_code = c?.zip_code ?? ""
     if (address && !city && !state) {
-      const parts = address
-        .split(",")
-        .map((p: string) => p.trim())
-        .filter(Boolean)
+      const parts = address.split(",").map((p: string) => p.trim()).filter(Boolean)
       if (parts.length >= 6) {
         address = parts[0]
         number = number || parts[1] || ""
@@ -518,10 +588,13 @@ export default function ProductDetailPage() {
     }
     const startStr = contract.start_date ? String(contract.start_date).slice(0, 10) : ""
     const endStr = contract.end_date ? String(contract.end_date).slice(0, 10) : startStr ? addOneMonthSameDay(startStr) : ""
-
+    const dev = (c as { liticapro_data?: { dados_desenvolvedor?: { empresa?: string; usuario?: string; senha?: string }; customer_type?: string; business_segment?: string; states_of_interest?: string[]; responsible_name?: string; company_gov?: CnpjGovData } })?.liticapro_data
+    const meta = (contract as { liticapro_meta?: { states_of_interest?: string[]; customer_type?: string } }).liticapro_meta
+    const lpStates = dev?.states_of_interest ?? meta?.states_of_interest ?? []
+    setEditCompanyGov(dev?.company_gov ?? null)
     setEditForm({
       client_name: c?.name ?? "",
-      client_cpf_cnpj: c?.cpf_cnpj ?? "",
+      client_cpf_cnpj: formatCpfCnpj(c?.cpf_cnpj ?? ""),
       client_email: c?.email ?? "",
       client_phone: c?.phone ?? "",
       zip_code,
@@ -540,7 +613,55 @@ export default function ProductDetailPage() {
       status: contract.status || "ativa",
       payment_status: contract.payment_status || "em_dia",
       notes: contract.notes ?? "",
+      dev_empresa: dev?.dados_desenvolvedor?.empresa ?? "",
+      dev_usuario: dev?.dados_desenvolvedor?.usuario ?? "",
+      dev_senha: dev?.dados_desenvolvedor?.senha ?? "",
+      customer_type: (dev?.customer_type === "profissional_liberal" ? "profissional_liberal" : "empresa") as "empresa" | "profissional_liberal",
+      business_segment: dev?.business_segment ?? "",
+      states_of_interest: Array.isArray(lpStates) ? lpStates.map(String) : [],
+      responsible_name: dev?.responsible_name ?? "",
     })
+  }
+
+  const openViewContract = (contract: Contract) => {
+    populateEditFormFromContract(contract)
+    setEditingContract(contract)
+    setViewOnly(true)
+  }
+
+  const openEditContract = (contract: Contract) => {
+    populateEditFormFromContract(contract)
+    setEditingContract(contract)
+    setViewOnly(false)
+  }
+
+  const toggleEditState = (uf: string) => {
+    setEditForm((p) => ({
+      ...p,
+      states_of_interest: p.states_of_interest.includes(uf)
+        ? p.states_of_interest.filter((s) => s !== uf)
+        : [...p.states_of_interest, uf],
+    }))
+  }
+
+  const handleEditCnpjConsult = async () => {
+    const digits = (editForm.client_cpf_cnpj || "").replace(/\D/g, "")
+    if (digits.length !== 14) {
+      toast.error("Informe um CNPJ válido (14 dígitos).")
+      return
+    }
+    setLoadingEditCnpj(true)
+    try {
+      const res = await fetch(`/api/geo/cnpj?value=${encodeURIComponent(digits)}`)
+      const data = await res.json()
+      if (!res.ok || !data?.razao_social) throw new Error(data.error || "CNPJ não encontrado")
+      setEditCompanyGov(data as CnpjGovData)
+      toast.success("CNAEs atualizados pela Receita Federal.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao consultar CNPJ.")
+    } finally {
+      setLoadingEditCnpj(false)
+    }
   }
 
   const saveEditContract = async () => {
@@ -555,81 +676,79 @@ export default function ProductDetailPage() {
     setSavingEdit(true)
     try {
       const cpfCnpjRaw = (editForm.client_cpf_cnpj || "").replace(/\D/g, "")
-    const clientName = editForm.client_name?.trim() || editingContract.clients?.name || ""
-    if (!clientName) {
-      toast.error("Informe o nome do cliente.")
-      setSavingEdit(false)
-      return
-    }
-    await supabase
-        .from("clients")
-        .update({
-          name: clientName,
-          cpf_cnpj: cpfCnpjRaw || editingContract.clients?.cpf_cnpj || null,
-          email: (editForm.client_email ?? "").trim() || null,
-          phone: (editForm.client_phone ?? "").trim() || null,
+      const clientName = editForm.client_name?.trim() || editingContract.clients?.name || ""
+      if (!clientName) {
+        toast.error("Informe o nome do cliente.")
+        setSavingEdit(false)
+        return
+      }
+
+      const res = await fetch(`/api/contracts/${editingContract.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_name: clientName,
+          client_cpf_cnpj: cpfCnpjRaw || editingContract.clients?.cpf_cnpj || null,
+          client_email: editForm.client_email,
+          client_phone: editForm.client_phone,
           address: fullAddress,
-          zip_code: editForm.zip_code?.trim() || null,
-          number: editForm.number?.trim() || null,
-          district: editForm.district?.trim() || null,
-          city: editForm.city?.trim() || null,
-          state: editForm.state?.trim() || null,
-          origem_captacao: editForm.origem_captacao?.trim() || null,
-          status_lead: editForm.payment_status === "cancelado" || editForm.payment_status === "expirado" || editForm.payment_status === "cancelled" || editForm.payment_status === "expired" ? "perdido" : (editForm.status_lead?.trim() || null),
-        })
-        .eq("id", editingContract.client_id)
-      const { error } = await supabase
-        .from("contracts")
-        .update({
-          status: isAdmin ? editForm.status : (editingContract.status ?? editForm.status),
+          number: editForm.number,
+          district: editForm.district,
+          city: editForm.city,
+          state: editForm.state,
+          zip_code: editForm.zip_code,
+          origem_captacao: editForm.origem_captacao,
+          status_lead: editForm.status_lead,
+          status: isAdmin ? editForm.status : editingContract.status,
           payment_status: editForm.payment_status,
-          monthly_value: value,
+          monthly_value: isLiticaPro ? Number(editingContract.monthly_value ?? 0) : value,
           start_date: startDate,
           end_date: endDate,
-          payment_day: paymentDay,
-          notes: editForm.notes?.trim() || null,
-        })
-        .eq("id", editingContract.id)
-      if (error) throw error
-      const pagamentoPerdido = editForm.payment_status === "cancelado" || editForm.payment_status === "expirado" || editForm.payment_status === "cancelled" || editForm.payment_status === "expired"
-      if (pagamentoPerdido && editingContract.client_id) {
-        await supabase.from("clients").update({ status_lead: "perdido" }).eq("id", editingContract.client_id)
-      }
-      // Sincroniza NF-e pendente vinculada a este contrato (valor e nome do cliente)
-      const { data: nfePendentes } = await supabase
-        .from("nfe_documents")
-        .select("id")
-        .eq("status", "pendente")
-        .contains("provider_payload", { contract_id: editingContract.id })
-      const clientNameNfe = editForm.client_name?.trim() || (editingContract.clients as { name?: string } | null)?.name || ""
-      if (nfePendentes?.length) {
-        const nfeUpdate: { total_value: number; client_name?: string } = { total_value: value }
-        if (clientNameNfe) nfeUpdate.client_name = clientNameNfe
-        for (const nfe of nfePendentes) {
-          await supabase.from("nfe_documents").update(nfeUpdate).eq("id", nfe.id)
-        }
-      }
-      try {
-        await fetch("/api/activity/log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+          ...(isLiticaPro ? {} : { payment_day: paymentDay, plan: editForm.plan }),
+          notes: editForm.notes,
+          ...(isLiticaPro ? {
+            liticapro_data: {
+              customer_type: editForm.customer_type,
+              business_segment: editForm.business_segment.trim(),
+              states_of_interest: editForm.states_of_interest,
+              responsible_name: editForm.responsible_name.trim(),
+              company_gov: editCompanyGov,
+            },
+            liticapro_meta: {
+              customer_type: editForm.customer_type,
+              states_of_interest: editForm.states_of_interest,
+            },
+          } : {}),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao atualizar contrato")
+
+      if (isLiticaPro && isAdmin && editingContract.client_id && (editForm.dev_empresa || editForm.dev_usuario || editForm.dev_senha)) {
+        const devRes = await fetch(`/api/clients/${editingContract.client_id}/liticapro-developer`, {
+          method: "PATCH",
           credentials: "include",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: `Atualizou o contrato de ${editForm.client_name?.trim() || (editingContract.clients as { name?: string } | null)?.name || "cliente"}`,
-            entity_type: "contract",
-            entity_id: editingContract.id,
+            empresa: editForm.dev_empresa,
+            usuario: editForm.dev_usuario,
+            senha: editForm.dev_senha,
           }),
         })
-        globalMutate("recent-activity")
-        globalMutate("all-activities")
-      } catch {}
+        if (!devRes.ok) {
+          const devData = await devRes.json()
+          throw new Error(devData.error || "Erro ao salvar credenciais do desenvolvedor.")
+        }
+      }
+
       toast.success("Contrato e cliente atualizados.")
-      setEditingContract(null)
+      closeContractModal()
       await mutateContracts()
       await mutateApiContracts()
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro ao atualizar contrato:", err)
-      const msg = err?.message || (typeof err === "string" ? err : "Erro ao atualizar contrato.")
+      const msg = err instanceof Error ? err.message : "Erro ao atualizar contrato."
       toast.error(msg)
     } finally {
       setSavingEdit(false)
@@ -641,34 +760,61 @@ export default function ProductDetailPage() {
     setDeletingId(contract.id)
     const clientName = (contract.clients as { name?: string } | null)?.name ?? "cliente"
     try {
-      const { error } = await supabase.from("contracts").delete().eq("id", contract.id)
-      if (error) throw error
-      try {
-        await fetch("/api/activity/log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            action: `Excluiu o contrato do cliente ${clientName}`,
-            entity_type: "contract",
-            entity_id: contract.id,
-          }),
-        })
-        globalMutate("recent-activity")
-        globalMutate("all-activities")
-      } catch {}
+      const res = await fetch(`/api/contracts/${contract.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao excluir contrato")
+
       toast.success("Contrato excluído. O cliente continua na lista de Clientes.")
       await mutateContracts()
       await mutateApiContracts()
       await globalMutate("clients-list")
       await globalMutate("contracts-by-client")
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Erro ao excluir contrato:", err)
-      toast.error(err?.message || "Erro ao excluir contrato.")
+      toast.error(err instanceof Error ? err.message : "Erro ao excluir contrato.")
     } finally {
       setDeletingId(null)
     }
   }
+
+  const quickUpdateStatus = async (
+    contract: Contract,
+    payload: { status_lead?: string; product_status?: string },
+  ) => {
+    setStatusUpdatingId(contract.id)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}/quick-status`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao atualizar status")
+      toast.success("Status atualizado.")
+      await mutateContracts()
+      await mutateApiContracts()
+      await globalMutate("clients-list")
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar status.")
+      throw err
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
+  const getProductStatusPickerValue = (status: string | null | undefined) => {
+    const bucket = getProductStatusBucket(status)
+    if (bucket === "contratado") return "ativa"
+    if (bucket === "trial") return "trial"
+    if (bucket === "aguardando_produto") return "aguardando_produto"
+    return "inativa"
+  }
+
+  const kanbanColumns = isLiticaPro ? PRODUCT_KANBAN_COLUMNS : PAYMENT_KANBAN_COLUMNS
 
   return (
     <div className="flex flex-col gap-6">
@@ -678,10 +824,10 @@ export default function ProductDetailPage() {
         </Link>
         <div>
           <h2 className="text-2xl font-bold text-foreground">
-            {productResolved?.name || "Software de Gestão"}
+            {productResolved?.name || getProductBySlug(slug)?.name || slug}
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {productResolved?.description || "Apólice de Seguro - Modalidade Garantias"}
+            {productResolved?.description || getProductBySlug(slug)?.description || ""}
           </p>
           {isComercial && (
             <p className="text-xs text-amber-400/90 mt-1">Seus contratos — apenas vendas registradas por você.</p>
@@ -692,7 +838,7 @@ export default function ProductDetailPage() {
           className="ml-auto flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
         >
           <Plus className="h-4 w-4" />
-          Registrar compra manual
+          {isLiticaPro ? "Registrar compra manual" : "Registrar compra manual"}
         </button>
       </div>
 
@@ -743,12 +889,33 @@ export default function ProductDetailPage() {
 
       {/* Stats: total geral ou "Seu total" para comercial (comercial vê só lista do mês + aguardando) */}
       <p className="text-xs text-muted-foreground mb-1">{isComercial ? "Seu total" : "Total geral"}</p>
-      <div className={cn("grid gap-4", isComercial ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2 sm:grid-cols-5")}>
+      <div className={cn("grid gap-4", isComercial ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6")}>
         {[
           { label: "Total", value: contractsVisibleByOrigin?.length || 0, color: "text-foreground", filter: "all" as const },
-          { label: "Aguardando produto", value: contractsVisibleByOrigin?.filter(c => c.status === "aguardando_produto").length || 0, color: "text-amber-400", filter: "aguardando_produto" as const },
-          { label: "Produto ativo", value: contractsVisibleByOrigin?.filter(c => c.status === "ativa").length || 0, color: "text-emerald-400", filter: "active" as const },
-          { label: "Produto inativo", value: contractsVisibleByOrigin?.filter(c => c.status !== "ativa" && c.status !== "aguardando_produto").length || 0, color: "text-red-400", filter: "inactive" as const },
+          {
+            label: "Aguardando produto",
+            value: contractsVisibleByOrigin?.filter((c) => getProductStatusBucket(c.status) === "aguardando_produto").length || 0,
+            color: "text-amber-400",
+            filter: "aguardando_produto" as const,
+          },
+          {
+            label: "Produto contratado",
+            value: contractsVisibleByOrigin?.filter((c) => getProductStatusBucket(c.status) === "contratado").length || 0,
+            color: "text-emerald-400",
+            filter: "contratado" as const,
+          },
+          {
+            label: "Teste grátis",
+            value: contractsVisibleByOrigin?.filter((c) => getProductStatusBucket(c.status) === "trial").length || 0,
+            color: "text-sky-400",
+            filter: "trial" as const,
+          },
+          {
+            label: "Produto inativo",
+            value: contractsVisibleByOrigin?.filter((c) => getProductStatusBucket(c.status) === "inativo").length || 0,
+            color: "text-red-400",
+            filter: "inativo" as const,
+          },
           ...(isComercial ? [] : [{ label: "Receita Mensal", value: (() => {
             const paymentOk = (c: Contract) => {
               const p = (c.payment_status ?? "").toString().toLowerCase()
@@ -762,7 +929,7 @@ export default function ProductDetailPage() {
             }
             const total = contractsVisibleByOrigin?.filter(c => paymentOk(c) && noMes(c)).reduce((s, c) => s + Number(c.monthly_value ?? 0), 0) ?? 0
             return `R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-          })(), color: "text-primary", filter: null as const }]),
+          })(), color: "text-primary", filter: null }]),
         ].map((stat) => (
           <button
             key={stat.label}
@@ -780,14 +947,18 @@ export default function ProductDetailPage() {
         ))}
       </div>
 
-      {/* Lista ou Kanban por status de pagamento */}
+      {/* Lista ou Kanban */}
       <div className="flex items-center justify-between gap-4 mb-2">
         <p className="text-xs text-muted-foreground">
-          {isComercial
-            ? "Contratos do mês atual e aguardando produto"
-            : [filterMonth && "mês selecionado", filterOrigin && "origem selecionada"].filter(Boolean).length
-              ? "Lista filtrada"
-              : "Todos os contratos"}
+          {view === "kanban" && isLiticaPro
+            ? "Kanban por status do produto"
+            : view === "kanban"
+              ? "Kanban por status de pagamento"
+              : isComercial
+                ? "Contratos do mês atual e aguardando produto"
+                : [filterMonth && "mês selecionado", filterOrigin && "origem selecionada"].filter(Boolean).length
+                  ? "Lista filtrada"
+                  : "Todos os contratos"}
         </p>
         <div className="flex rounded-lg border border-border overflow-hidden shrink-0">
           <button
@@ -800,7 +971,7 @@ export default function ProductDetailPage() {
           </button>
           <button
             type="button"
-            title="Kanban (por status de pagamento)"
+            title={isLiticaPro ? "Kanban (por status do produto)" : "Kanban (por status de pagamento)"}
             onClick={() => setView("kanban")}
             className={cn("flex items-center gap-2 px-3 py-2 text-sm", view === "kanban" ? "bg-primary/10 text-primary font-medium" : "text-muted-foreground hover:bg-secondary")}
           >
@@ -810,13 +981,21 @@ export default function ProductDetailPage() {
       </div>
 
       {view === "kanban" ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
-          {PAYMENT_KANBAN_COLUMNS.map((col) => {
-            const colContracts = (filtered || []).filter((c) => normalizePaymentForKanban(c.payment_status) === col.id)
+        <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-4 overflow-x-auto pb-4", isLiticaPro ? "lg:grid-cols-4" : "lg:grid-cols-5")}>
+          {kanbanColumns.map((col) => {
+            const colContracts = (filtered || []).filter((c) =>
+              isLiticaPro
+                ? getProductStatusPickerValue(c.status) === col.id
+                : normalizePaymentForKanban(c.payment_status) === col.id,
+            )
+            const ColIcon = "Icon" in col ? col.Icon : null
             return (
               <div key={col.id} className="flex flex-col min-w-[220px] rounded-xl border border-border bg-card/50 overflow-hidden">
                 <div className={cn("flex items-center justify-between px-3 py-2.5 border-b border-border", col.class)}>
-                  <span className="text-sm font-semibold">{col.label}</span>
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+                    {ColIcon ? <ColIcon className="h-4 w-4 shrink-0" /> : null}
+                    {col.label}
+                  </span>
                   <span className="flex h-6 min-w-6 items-center justify-center rounded-full bg-background/80 text-xs font-bold">{colContracts.length}</span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 space-y-2 max-h-[calc(100vh-380px)]">
@@ -828,16 +1007,43 @@ export default function ProductDetailPage() {
                         key={contract.id}
                         className="rounded-lg border border-border bg-background p-3 shadow-sm hover:shadow transition-shadow"
                       >
-                        <p className="font-medium text-foreground truncate">{contract.clients?.name || "—"}</p>
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">{contract.clients?.email || contract.clients?.cpf_cnpj || ""}</p>
+                        <button
+                          type="button"
+                          onClick={() => openViewContract(contract)}
+                          className="text-left w-full rounded-md hover:bg-primary/5 -m-1 p-1 transition-colors"
+                          title="Ver detalhes do cliente"
+                        >
+                          <p className="font-medium text-foreground truncate">{contract.clients?.name || "—"}</p>
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">{getClientListSubtitle(contract.clients, isLiticaPro) || displayCpfCnpj(contract.clients?.cpf_cnpj)}</p>
+                        </button>
                         <p className="text-xs text-muted-foreground mt-1">{contract.clients?.origem_captacao || "—"}</p>
-                        <p className="text-sm font-semibold text-primary mt-2">
-                          R$ {Number(contract.monthly_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </p>
+                        {isLiticaPro ? (
+                          <>
+                            <p className="text-[11px] text-muted-foreground mt-2">
+                              Contato: {getEtapaLeadLabel(contract.clients)}
+                            </p>
+                            {(contract.payment_status === "trial" || contract.status === "trial") && (
+                              <p className="text-[11px] text-sky-400/90 mt-1 flex items-center gap-1">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                Teste até {formatContractDate(resolveTrialEndsAt(contract as Contract & { trial_ends_at?: string | null })?.toISOString())}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm font-semibold text-primary mt-2">
+                            R$ {Number(contract.monthly_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </p>
+                        )}
                         <p className="text-[11px] text-muted-foreground mt-1 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {contract.start_date ? format(new Date(contract.start_date), "dd/MM/yyyy", { locale: ptBR }) : "—"}
+                          <Calendar className="h-3 w-3 shrink-0" />
+                          Cadastro {formatContractDate(isLiticaPro ? contract.created_at : contract.start_date)}
                         </p>
+                        {!isLiticaPro && (contract.payment_status === "trial" || contract.status === "trial") && (
+                          <p className="text-[11px] text-sky-400/90 mt-0.5 flex items-center gap-1">
+                            <Clock className="h-3 w-3 shrink-0" />
+                            Teste até {formatContractDate(resolveTrialEndsAt(contract as Contract & { trial_ends_at?: string | null })?.toISOString())}
+                          </p>
+                        )}
                         <div className="flex gap-1 mt-2">
                           <button
                             type="button"
@@ -874,11 +1080,11 @@ export default function ProductDetailPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Cliente</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">CPF/CNPJ</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Origem</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Contato</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Pagamento</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">{isLiticaPro ? "Cadastro" : "Inicio"}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Valor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Inicio</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Pagamento</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Contato</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Acoes</th>
               </tr>
             </thead>
@@ -887,56 +1093,86 @@ export default function ProductDetailPage() {
                 filtered.map((contract) => (
                   <tr key={contract.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                      <button
+                        type="button"
+                        onClick={() => openViewContract(contract)}
+                        className="flex items-center gap-3 text-left w-full rounded-lg hover:bg-primary/5 transition-colors -m-1 p-1"
+                        title="Ver detalhes do cliente"
+                      >
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
                           <User className="h-4 w-4 text-primary" />
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{contract.clients?.name || "---"}</p>
-                          <p className="text-xs text-muted-foreground">{contract.clients?.email || ""}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{contract.clients?.name || "---"}</p>
+                          <p className="text-xs text-muted-foreground truncate">{getClientListSubtitle(contract.clients, isLiticaPro) || "—"}</p>
                         </div>
-                      </div>
+                      </button>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{contract.clients?.cpf_cnpj || "---"}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{displayCpfCnpj(contract.clients?.cpf_cnpj)}</td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{contract.clients?.origem_captacao || "—"}</td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const etapa = getEtapaLead(contract.clients)
-                        const label = getEtapaLeadLabel(contract.clients)
-                        const colorMap: Record<string, string> = {
-                          "": "bg-secondary text-muted-foreground border-border",
-                          tentando_contato: "bg-slate-500/10 text-slate-400 border-slate-500/30", em_conversa: "bg-sky-500/10 text-sky-400 border-sky-500/30", agendado: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
-                          contratando: "bg-amber-500/10 text-amber-400 border-amber-500/30", negociando: "bg-violet-500/10 text-violet-400 border-violet-500/30", ativo: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-                          perdido: "bg-red-500/10 text-red-400 border-red-500/30", bloqueado: "bg-black/15 text-gray-900 border-gray-800/40", sem_interesse: "bg-gray-500/10 text-gray-700 border-gray-500/30",
-                        }
-                        const color = colorMap[etapa] ?? "bg-secondary text-muted-foreground border-border"
-                        return <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", color)}>{label}</span>
-                      })()}
-                    </td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const status = normalizeProductStatus(contract.status)
-                        const info = STATUS_MAP[status] ?? STATUS_MAP[contract.status] ?? { label: contract.status, Icon: PauseCircle, class: "bg-secondary text-muted-foreground border-border" }
-                        const Icon = info.Icon
-                        return <span title={info.label} className={cn("inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", info.class)}><Icon className="h-3.5 w-3.5 shrink-0" /></span>
-                      })()}
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1.5">
-                        <DollarSign className={cn("h-3.5 w-3.5", PAYMENT_MAP[contract.payment_status]?.class)} />
-                        <span className={cn("text-sm font-medium", PAYMENT_MAP[contract.payment_status]?.class)}>
-                          {PAYMENT_MAP[contract.payment_status]?.label}
-                        </span>
+                        <Calendar className="h-3.5 w-3.5 shrink-0" />
+                        {formatContractDate(isLiticaPro ? (contract.created_at ?? contract.start_date) : contract.start_date)}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm font-medium text-foreground">
                       R$ {Number(contract.monthly_value).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                    <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {contract.start_date ? format(new Date(contract.start_date), "dd/MM/yyyy", { locale: ptBR }) : "---"}
+                        <DollarSign className={cn("h-3.5 w-3.5 shrink-0", PAYMENT_MAP[contract.payment_status]?.class)} />
+                        <div>
+                          <span className={cn("text-sm font-medium", PAYMENT_MAP[contract.payment_status]?.class)}>
+                            {PAYMENT_MAP[contract.payment_status]?.label}
+                          </span>
+                          {isLiticaPro && (contract.payment_status === "trial" || contract.status === "trial") && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Expira {formatContractDate(resolveTrialEndsAt(contract as Contract & { trial_ends_at?: string | null })?.toISOString())}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const pickerValue = getProductStatusPickerValue(contract.status)
+                        const status = normalizeProductStatus(contract.status)
+                        const info = STATUS_MAP[status] ?? STATUS_MAP[pickerValue] ?? { label: contract.status, Icon: PauseCircle, class: "bg-secondary text-muted-foreground border-border" }
+                        const Icon = info.Icon
+                        return (
+                          <ClickableStatusBadge
+                            options={[...PRODUCT_STATUS_OPCOES]}
+                            value={pickerValue}
+                            className={info.class}
+                            disabled={!isAdmin}
+                            saving={statusUpdatingId === contract.id}
+                            title={isAdmin ? "Clique para alterar o status do produto" : "Somente administradores podem alterar"}
+                            onSelect={(id) => quickUpdateStatus(contract, { product_status: id })}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0" />
+                          </ClickableStatusBadge>
+                        )
+                      })()}
+                    </td>
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const etapa = getEtapaLead(contract.clients)
+                        const label = getEtapaLeadLabel(contract.clients)
+                        const color = ETAPA_LEAD_COLOR_MAP[etapa] ?? "bg-secondary text-muted-foreground border-border"
+                        return (
+                          <ClickableStatusBadge
+                            options={[...STATUS_COMERCIAL_OPCOES]}
+                            value={etapa}
+                            className={color}
+                            saving={statusUpdatingId === contract.id}
+                            title="Clique para alterar o status de contato"
+                            onSelect={(id) => quickUpdateStatus(contract, { status_lead: id })}
+                          >
+                            {label}
+                          </ClickableStatusBadge>
+                        )
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -963,7 +1199,7 @@ export default function ProductDetailPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
                     {search ? "Nenhuma contratacao encontrada para esta busca." : "Nenhuma contratacao registrada para este produto."}
                   </td>
                 </tr>
@@ -974,85 +1210,217 @@ export default function ProductDetailPage() {
       </div>
       )}
 
-      {editingContract && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 overflow-y-auto">
-          <div className="w-full max-w-4xl rounded-2xl bg-background border border-border p-6 shadow-xl my-4">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-semibold text-foreground">Editar contrato e cliente</h3>
-                <p className="text-xs text-muted-foreground">Vincule um cliente a este produto com valor e data de início.</p>
+      {editingContract && (() => {
+        const ro = viewOnly
+        const inputCls = cn(
+          "w-full h-8 rounded-lg border border-border px-2.5 text-sm text-foreground",
+          ro ? "bg-muted/40 cursor-default" : "bg-background focus:border-primary focus:outline-none",
+        )
+        const selectCls = cn(inputCls, ro && "pointer-events-none opacity-90")
+        const areaCls = cn(
+          "w-full rounded-lg border border-border px-2.5 py-1.5 text-sm text-foreground resize-none",
+          ro ? "bg-muted/40 cursor-default" : "bg-background focus:border-primary focus:outline-none",
+        )
+        const productStatusLabel = STATUS_MAP[normalizeProductStatus(editForm.status)]?.label ?? editForm.status
+        const paymentLabel = PAYMENT_MAP[editForm.payment_status]?.label ?? editForm.payment_status
+        const contatoLabel = getEtapaLeadLabel({ status_lead: editForm.status_lead } as Client)
+        const trialEndLabel = formatContractDate(
+          resolveTrialEndsAt(editingContract as Contract & { trial_ends_at?: string | null })?.toISOString(),
+        )
+        const cadastroLabel = formatContractDate(editingContract.created_at)
+
+        if (ro && isLiticaPro) {
+          return (
+            <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
+              <div className="w-full max-w-[min(96vw,1280px)] rounded-2xl bg-background border border-border p-5 shadow-xl">
+                <LiticaProContractDetailView
+                  clientName={editForm.client_name}
+                  cpfCnpj={editForm.client_cpf_cnpj}
+                  customerType={editForm.customer_type}
+                  responsibleName={editForm.responsible_name}
+                  email={editForm.client_email}
+                  phone={editForm.client_phone}
+                  zipCode={editForm.zip_code}
+                  address={editForm.address}
+                  number={editForm.number}
+                  district={editForm.district}
+                  city={editForm.city}
+                  state={editForm.state}
+                  businessSegment={editForm.business_segment}
+                  statesOfInterest={editForm.states_of_interest}
+                  gov={editCompanyGov}
+                  cadastroLabel={cadastroLabel}
+                  trialEndLabel={trialEndLabel}
+                  productStatusLabel={productStatusLabel}
+                  paymentLabel={paymentLabel}
+                  origemCaptacao={editForm.origem_captacao}
+                  contatoLabel={contatoLabel}
+                  notes={editForm.notes}
+                  devEmpresa={editForm.dev_empresa}
+                  devUsuario={editForm.dev_usuario}
+                  devSenha={editForm.dev_senha}
+                  showDev={isAdmin}
+                  onEdit={() => setViewOnly(false)}
+                  onClose={closeContractModal}
+                />
               </div>
-              <button type="button" onClick={() => setEditingContract(null)} className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-secondary">Fechar</button>
             </div>
-            <div className="space-y-4">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Dados do cliente (NF-e)</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Nome completo</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.client_name} onChange={(e) => setEditForm((p) => ({ ...p, client_name: e.target.value }))} />
-                </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">CPF/CNPJ</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none font-mono" value={editForm.client_cpf_cnpj} onChange={(e) => setEditForm((p) => ({ ...p, client_cpf_cnpj: formatCpfCnpj(e.target.value) }))} placeholder="CPF ou CNPJ" />
-                </div>
+          )
+        }
+
+        return (
+        <div className={cn("fixed inset-0 z-40 flex bg-black/60 p-3", isLiticaPro ? "items-center justify-center" : "items-start justify-center overflow-y-auto")}>
+          <div className={cn("w-full rounded-2xl bg-background border border-border p-4 shadow-xl", isLiticaPro ? "max-w-[min(96vw,1280px)]" : "max-w-4xl my-2")}>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-semibold text-foreground">
+                  {ro ? "Detalhes do contrato" : "Editar contrato e cliente"}
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  {ro
+                    ? "Visualização completa dos dados — use Editar para alterar."
+                    : isLiticaPro
+                      ? "Dados LiticaPro — sem plano ou dia de pagamento nesta etapa."
+                      : "Vincule um cliente a este produto com valor e data de início."}
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <button type="button" onClick={closeContractModal} className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-secondary">Fechar</button>
+            </div>
+            <div className="space-y-3">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Dados do cliente</p>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Email</p>
-                  <input type="email" className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.client_email} onChange={(e) => setEditForm((p) => ({ ...p, client_email: e.target.value }))} />
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Nome completo</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.client_name} onChange={(e) => setEditForm((p) => ({ ...p, client_name: e.target.value }))} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Telefone / Celular</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.client_phone} onChange={(e) => setEditForm((p) => ({ ...p, client_phone: formatPhone(e.target.value) }))} />
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">CPF/CNPJ</p>
+                  <div className="flex gap-1.5">
+                    <input readOnly={ro} className={cn(inputCls, "font-mono")} value={editForm.client_cpf_cnpj} onChange={(e) => setEditForm((p) => ({ ...p, client_cpf_cnpj: formatCpfCnpj(e.target.value) }))} placeholder="CPF ou CNPJ" />
+                    {isLiticaPro && !ro && (
+                      <button type="button" onClick={handleEditCnpjConsult} disabled={loadingEditCnpj} className="shrink-0 rounded-lg border border-primary px-2 text-[11px] text-primary hover:bg-primary/10 disabled:opacity-50" title="Atualizar CNAEs">
+                        {loadingEditCnpj ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "CNPJ"}
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
+                {isLiticaPro && (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Modalidade</p>
+                    {ro ? (
+                      <input readOnly className={inputCls} value={editForm.customer_type === "profissional_liberal" ? "Profissional Liberal" : "Empresa"} />
+                    ) : (
+                      <select className={selectCls} value={editForm.customer_type} onChange={(e) => setEditForm((p) => ({ ...p, customer_type: e.target.value as "empresa" | "profissional_liberal" }))}>
+                        <option value="empresa">Empresa</option>
+                        <option value="profissional_liberal">Profissional Liberal</option>
+                      </select>
+                    )}
+                  </div>
+                )}
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">CEP</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.zip_code} onChange={(e) => setEditForm((p) => ({ ...p, zip_code: e.target.value }))} onBlur={handleEditCepBlur} />
-                </div>
-                <div className="col-span-2">
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Endereço (rua)</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Número</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.number} onChange={(e) => setEditForm((p) => ({ ...p, number: e.target.value }))} />
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Email</p>
+                  <input readOnly={ro} type="email" className={inputCls} value={editForm.client_email} onChange={(e) => setEditForm((p) => ({ ...p, client_email: e.target.value }))} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Bairro</p>
-                  <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.district} onChange={(e) => setEditForm((p) => ({ ...p, district: e.target.value }))} />
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Telefone / Celular</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.client_phone} onChange={(e) => setEditForm((p) => ({ ...p, client_phone: formatPhone(e.target.value) }))} />
+                </div>
+                {isLiticaPro && editForm.customer_type === "empresa" && (
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Responsável pelo cadastro</p>
+                    <input readOnly={ro} className={inputCls} value={editForm.responsible_name} onChange={(e) => setEditForm((p) => ({ ...p, responsible_name: e.target.value }))} />
+                  </div>
+                )}
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">CEP</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.zip_code} onChange={(e) => setEditForm((p) => ({ ...p, zip_code: e.target.value }))} onBlur={ro ? undefined : handleEditCepBlur} />
+                </div>
+                <div className="lg:col-span-2">
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Endereço (rua)</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} />
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Cidade / UF</p>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Número</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.number} onChange={(e) => setEditForm((p) => ({ ...p, number: e.target.value }))} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Bairro</p>
+                  <input readOnly={ro} className={inputCls} value={editForm.district} onChange={(e) => setEditForm((p) => ({ ...p, district: e.target.value }))} />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Cidade / UF</p>
                   <div className="flex gap-2">
-                    <input className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="Cidade" value={editForm.city} onChange={(e) => setEditForm((p) => ({ ...p, city: e.target.value }))} onBlur={handleEditGuessUF} />
-                    <input className="w-20 h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" placeholder="UF" value={editForm.state} onChange={(e) => setEditForm((p) => ({ ...p, state: e.target.value.toUpperCase() }))} />
+                    <input readOnly={ro} className={inputCls} placeholder="Cidade" value={editForm.city} onChange={(e) => setEditForm((p) => ({ ...p, city: e.target.value }))} onBlur={ro ? undefined : handleEditGuessUF} />
+                    <input readOnly={ro} className={cn(inputCls, "w-16")} placeholder="UF" value={editForm.state} onChange={(e) => setEditForm((p) => ({ ...p, state: e.target.value.toUpperCase() }))} />
                   </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Plano contratado</p>
-                  <select className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.plan} onChange={(e) => { const planId = e.target.value; const val = planValues[planId] || 0; setEditForm((p) => ({ ...p, plan: planId, monthly_value: val ? String(val) : p.monthly_value })) }}>
-                    <option value="basic">Básico+ — R$ 500,00/mês</option>
-                    <option value="confort">Confort+ — R$ 800,00/mês</option>
-                    <option value="premium">Premium++ — R$ 1.500,00/mês</option>
-                  </select>
+
+              {isLiticaPro && (
+                <>
+                  <LiticaProCnaeAndRamoSection
+                    gov={editCompanyGov}
+                    ramo={editForm.business_segment}
+                    setRamo={(v) => setEditForm((p) => ({ ...p, business_segment: v }))}
+                    ramoRequired={false}
+                    inline
+                    readOnly={ro}
+                  />
+                  {ro ? (
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold text-primary uppercase tracking-wide">Estados contratados / de interesse</p>
+                      <p className={inputCls}>{editForm.states_of_interest.length ? editForm.states_of_interest.join(", ") : "—"}</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-[11px] font-semibold text-primary uppercase tracking-wide">Estados contratados / de interesse</p>
+                      <LiticaProStatesSelector selected={editForm.states_of_interest} onToggle={toggleEditState} compact />
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!isLiticaPro && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Plano contratado</p>
+                    <select className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.plan} onChange={(e) => { const planId = e.target.value; const val = planValues[planId] || 0; setEditForm((p) => ({ ...p, plan: planId, monthly_value: val ? String(val) : p.monthly_value })) }}>
+                      <option value="basic">Básico+ — R$ 500,00/mês</option>
+                      <option value="confort">Confort+ — R$ 800,00/mês</option>
+                      <option value="premium">Premium++ — R$ 1.500,00/mês</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Dia de pagamento</p>
+                    <input type="number" min={1} max={31} className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.payment_day} onChange={(e) => setEditForm((p) => ({ ...p, payment_day: e.target.value === "" ? 10 : Number(e.target.value) }))} />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Dia de pagamento</p>
-                  <input type="number" min={1} max={31} className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.payment_day} onChange={(e) => setEditForm((p) => ({ ...p, payment_day: e.target.value === "" ? 10 : Number(e.target.value) }))} />
+              )}
+
+              {isLiticaPro && editingContract && (
+                <div className="grid grid-cols-2 gap-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Data de cadastro</p>
+                    <p className="text-sm font-semibold text-foreground">{formatContractDate(editingContract.created_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Teste grátis expira em (7 dias)</p>
+                    <p className="text-sm font-semibold text-sky-400">
+                      {formatContractDate(
+                        resolveTrialEndsAt(editingContract as Contract & { trial_ends_at?: string | null })?.toISOString(),
+                      )}
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              )}
+
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
+                {!isLiticaPro && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Início do contrato</p>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Início do contrato</p>
                   <input
                     type="date"
-                    className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
+                    className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none"
                     value={editForm.start_date}
                     onChange={(e) => {
                       const value = e.target.value
@@ -1064,75 +1432,129 @@ export default function ProductDetailPage() {
                     }}
                   />
                 </div>
+                )}
+                {!isLiticaPro && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Data de término (opcional)</p>
-                  <input type="date" className="w-full h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.end_date} onChange={(e) => setEditForm((p) => ({ ...p, end_date: e.target.value }))} />
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Data de término (opcional)</p>
+                  <input type="date" className="w-full h-8 rounded-lg border border-border bg-background px-2.5 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.end_date} onChange={(e) => setEditForm((p) => ({ ...p, end_date: e.target.value }))} />
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+                )}
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Produto</p>
-                  {isAdmin ? (
-                    <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}>
-                      <option value="aguardando_produto">Aguardando produto</option>
-                      <option value="ativa">Produto ativo</option>
-                      <option value="inativa">Produto inativo</option>
-                      <option value="pendente">Produto vencido</option>
-                      <option value="cancelada">Produto cancelado</option>
-                    </select>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Produto</p>
+                  {ro || !isAdmin ? (
+                    <input readOnly className={inputCls} value={productStatusLabel} />
                   ) : (
-                    <div className="flex h-9 items-center gap-1.5 rounded-lg border border-border bg-muted/30 px-3 text-sm text-muted-foreground" title={STATUS_MAP[normalizeProductStatus(editForm.status)]?.label ?? editForm.status}>
-                      {(() => {
-                        const status = normalizeProductStatus(editForm.status)
-                        const info = STATUS_MAP[status] ?? STATUS_MAP[editForm.status]
-                        if (!info) return editForm.status
-                        const Icon = info.Icon
-                        return <><Icon className="h-3.5 w-3.5 shrink-0" /></>
-                      })()}
-                    </div>
+                    <select className={selectCls} value={editForm.status} onChange={(e) => setEditForm((p) => ({ ...p, status: e.target.value }))}>
+                      {isLiticaPro ? (
+                        <>
+                          <option value="trial">Teste grátis</option>
+                          <option value="aguardando_produto">Aguardando produto</option>
+                          <option value="ativa">Produto contratado</option>
+                          <option value="inativa">Produto inativo</option>
+                          <option value="cancelada">Produto cancelado</option>
+                        </>
+                      ) : (
+                        <>
+                          <option value="aguardando_produto">Aguardando produto</option>
+                          <option value="ativa">Produto contratado</option>
+                          <option value="inativa">Produto inativo</option>
+                          <option value="pendente">Produto vencido</option>
+                          <option value="cancelada">Produto cancelado</option>
+                        </>
+                      )}
+                    </select>
                   )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Situação do pagamento</p>
-                  <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.payment_status} onChange={(e) => setEditForm((p) => ({ ...p, payment_status: e.target.value }))}>
-                    <option value="em_dia">Em dia</option>
-                    <option value="pendente">Pendente</option>
-                    <option value="atrasado">Atrasado</option>
-                    <option value="cancelado">Cancelado</option>
-                    <option value="expirado">Expirado</option>
-                  </select>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Situação do pagamento</p>
+                  {ro ? (
+                    <input readOnly className={inputCls} value={paymentLabel} />
+                  ) : (
+                    <select className={selectCls} value={editForm.payment_status} onChange={(e) => setEditForm((p) => ({ ...p, payment_status: e.target.value }))}>
+                      {isLiticaPro && <option value="trial">Teste grátis (7 dias)</option>}
+                      {isLiticaPro && <option value="trial_expirado">Teste expirado</option>}
+                      <option value="em_dia">Em dia</option>
+                      <option value="pendente">Pendente</option>
+                      <option value="atrasado">Atrasado</option>
+                      <option value="cancelado">Cancelado</option>
+                      <option value="expirado">Expirado</option>
+                    </select>
+                  )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Origem de captação</p>
-                  <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.origem_captacao} onChange={(e) => setEditForm((p) => ({ ...p, origem_captacao: e.target.value }))}>
-                    <option value="">—</option>
-                    {ORIGEM_CAPTACAO_OPCOES.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-                  </select>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Origem de captação</p>
+                  {ro ? (
+                    <input readOnly className={inputCls} value={editForm.origem_captacao || "—"} />
+                  ) : (
+                    <select className={selectCls} value={editForm.origem_captacao} onChange={(e) => setEditForm((p) => ({ ...p, origem_captacao: e.target.value }))}>
+                      <option value="">—</option>
+                      {ORIGEM_CAPTACAO_OPCOES.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                    </select>
+                  )}
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">Contato</p>
-                  <select className="w-full h-9 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none" value={editForm.status_lead} onChange={(e) => setEditForm((p) => ({ ...p, status_lead: e.target.value }))}>
-                    {STATUS_COMERCIAL_OPCOES.map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}
-                  </select>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Contato</p>
+                  {ro ? (
+                    <input readOnly className={inputCls} value={contatoLabel} />
+                  ) : (
+                    <select className={selectCls} value={editForm.status_lead} onChange={(e) => setEditForm((p) => ({ ...p, status_lead: e.target.value }))}>
+                      {STATUS_COMERCIAL_OPCOES.map((opt) => (<option key={opt.id} value={opt.id}>{opt.label}</option>))}
+                    </select>
+                  )}
                 </div>
               </div>
               <div>
-                <p className="text-xs font-medium text-muted-foreground mb-1">Observações</p>
-                <textarea rows={2} className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none resize-none" value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Notas do contrato" />
+                <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Observações</p>
+                <textarea readOnly={ro} rows={2} className={areaCls} value={editForm.notes} onChange={(e) => setEditForm((p) => ({ ...p, notes: e.target.value }))} placeholder="Notas do contrato" />
               </div>
-              <div className="flex gap-2 pt-2">
-                <button type="button" onClick={saveEditContract} disabled={savingEdit} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
-                  {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
-                  Salvar
-                </button>
-                <button type="button" onClick={() => setEditingContract(null)} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary">Cancelar</button>
+              {isLiticaPro && isAdmin && !ro && (
+                <LiticaProDeveloperCredentialsBlock
+                  customerType={editForm.customer_type}
+                  empresa={editForm.dev_empresa}
+                  setEmpresa={(v) => setEditForm((p) => ({ ...p, dev_empresa: v }))}
+                  usuario={editForm.dev_usuario}
+                  setUsuario={(v) => setEditForm((p) => ({ ...p, dev_usuario: v }))}
+                  senha={editForm.dev_senha}
+                  setSenha={(v) => setEditForm((p) => ({ ...p, dev_senha: v }))}
+                />
+              )}
+              <div className="flex gap-2 pt-1">
+                {ro ? (
+                  <>
+                    <button type="button" onClick={() => setViewOnly(false)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
+                      <Pencil className="h-4 w-4" />
+                      Editar
+                    </button>
+                    <button type="button" onClick={closeContractModal} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary">Fechar</button>
+                  </>
+                ) : (
+                  <>
+                    <button type="button" onClick={saveEditContract} disabled={savingEdit} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+                      {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : <Pencil className="h-4 w-4" />}
+                      Salvar
+                    </button>
+                    <button type="button" onClick={closeContractModal} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary">Cancelar</button>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
+        )
+      })()}
+
+      {isLiticaPro && (
+        <LiticaProRegisterModal
+          open={showNewContract}
+          onClose={() => setShowNewContract(false)}
+          onSuccess={async () => {
+            await mutateContracts()
+            await mutateApiContracts()
+          }}
+        />
       )}
 
-      {showNewContract && (
+      {showNewContract && !isLiticaPro && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
           <div className="w-full max-w-4xl rounded-2xl bg-background border border-border p-6 shadow-xl">
             <div className="flex items-center justify-between mb-4">
@@ -1354,7 +1776,7 @@ export default function ProductDetailPage() {
                         setNewContract((prev) => ({ ...prev, status: e.target.value }))
                       }
                     >
-                      <option value="active">Produto ativo</option>
+                      <option value="active">Produto contratado</option>
                       <option value="aguardando_produto">Aguardando produto</option>
                       <option value="inactive">Produto inativo</option>
                       <option value="suspended">Produto vencido</option>

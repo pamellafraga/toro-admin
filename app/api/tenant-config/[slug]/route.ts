@@ -1,7 +1,6 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-
-const FERRAMENTA_APOLICER = "apolicer"
+import { NextRequest } from "next/server"
+import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
+import { findTenantConfig } from "@/lib/db/repositories/tenants.repository"
 
 function isAuthorized(req: NextRequest): boolean {
   const token = process.env.CENTRAL_API_TOKEN
@@ -24,60 +23,27 @@ function isAuthorized(req: NextRequest): boolean {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ slug: string }> }
+  { params }: { params: Promise<{ slug: string }> },
 ) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
+  if (!isAuthorized(req)) return jsonError("Unauthorized", 401)
 
   const slug = (await params).slug?.trim()
-  if (!slug) {
-    return NextResponse.json({ error: "Slug é obrigatório na URL." }, { status: 400 })
-  }
+  if (!slug) return jsonError("Slug é obrigatório na URL.", 400)
 
   try {
-    const supabase = createAdminClient()
-    const { data: row, error } = await supabase
-      .from("tenants")
-      .select(
-        `
-        id,
-        slug,
-        tenant_databases!inner (
-          supabase_url,
-          supabase_anon
-        )
-      `
-      )
-      .eq("slug", slug)
-      .eq("ferramenta", FERRAMENTA_APOLICER)
-      .eq("ativo", true)
-      .maybeSingle()
-
-    if (error) {
-      console.error("tenant-config query error:", error)
-      return NextResponse.json({ error: "Erro ao consultar tenant." }, { status: 500 })
+    const row = await findTenantConfig(slug)
+    if (!row?.id || !row.supabase_url || !row.supabase_anon) {
+      return jsonError("Tenant não encontrado ou inativo, ou banco não configurado.", 404)
     }
 
-    const db = (row as { tenant_databases?: { supabase_url: string; supabase_anon: string } | { supabase_url: string; supabase_anon: string }[] } | null)
-      ?.tenant_databases
-    const firstDb = Array.isArray(db) ? db[0] : (db as { supabase_url: string; supabase_anon: string } | null)
-
-    if (!row?.id || !firstDb?.supabase_url || !firstDb?.supabase_anon) {
-      return NextResponse.json(
-        { error: "Tenant não encontrado ou inativo, ou banco não configurado." },
-        { status: 404 }
-      )
-    }
-
-    return NextResponse.json({
+    return jsonOk({
       tenantId: row.id,
       slug: row.slug,
-      supabaseUrl: firstDb.supabase_url,
-      supabaseAnonKey: firstDb.supabase_anon,
+      supabaseUrl: row.supabase_url,
+      supabaseAnonKey: row.supabase_anon,
     })
   } catch (err) {
     console.error("tenant-config error:", err)
-    return NextResponse.json({ error: "Erro interno." }, { status: 500 })
+    return handleApiError(err, "Erro interno.")
   }
 }

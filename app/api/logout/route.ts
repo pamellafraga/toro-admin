@@ -1,20 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest } from "next/server"
+import { clearAuthCookie } from "@/lib/api/auth"
+import { jsonOk } from "@/lib/api/response"
 
-export async function POST(request: NextRequest) {
-  const response = NextResponse.json(
-    { success: true },
-    { status: 200 }
-  )
-
-  // Limpa o cookie de autenticação
-  response.cookies.set({
-    name: 'xpress_auth',
-    value: '',
-    httpOnly: false,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 0,
-  })
-
+export async function POST(_request: NextRequest) {
+  const response = jsonOk({ success: true })
+  clearAuthCookie(response)
   return response
 }

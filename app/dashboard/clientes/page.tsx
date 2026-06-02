@@ -1,13 +1,11 @@
 "use client"
 import React, { useState, useRef } from "react"
-import { createClient } from "@/lib/supabase/client"
 import { useAuth } from "@/lib/auth-context"
 import {
   Search, Plus, Minus, X, Save, Users, MapPin, Mail, Phone,
-  LayoutGrid, List, Pencil, CheckCircle, XCircle, Building2, Trash2, Upload, Loader2,
-  Clock, PauseCircle, AlertCircle
+  LayoutGrid, List, Pencil, Building2, Trash2, Upload, Loader2,
+  CheckCircle, XCircle,
 } from "lucide-react"
-import type { LucideIcon } from "lucide-react"
 import useSWR, { useSWRConfig } from "swr"
 import type { Client } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -15,18 +13,64 @@ import { toast } from "sonner"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
-const ORIGEM_CAPTACAO_OPCOES = [
-  "Website",
-  "Comercial - Stefanie",
-  "Comercial - Lisete",
-] as const
+import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
+import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
+
+type PrimaryContract = {
+  status: string
+  payment_status: string | null
+  product_name: string
+  product_slug: string
+}
+
+type ClientListItem = Client & { primary_contract: PrimaryContract | null }
+
+function ProductStatusBadge({ contract }: { contract: PrimaryContract | null | undefined }) {
+  if (!contract?.status) {
+    return <span className="text-muted-foreground text-xs">—</span>
+  }
+  const info = resolveProductStatusDisplay(contract.status)
+  const Icon = info.Icon
+  const title = contract.product_name ? `${contract.product_name} — ${info.label}` : info.label
+  return (
+    <span
+      title={title}
+      className={cn(
+        "inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        info.class,
+      )}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+    </span>
+  )
+}
+
+const EMPTY_NEW_CLIENT: NewClientFormState = {
+  customer_type: "",
+  name: "",
+  email: "",
+  phone: "",
+  cpf_cnpj: "",
+  company_name: "",
+  address: "",
+  number: "",
+  district: "",
+  city: "",
+  state: "",
+  zip_code: "",
+  notes: "",
+  origem_captacao: "",
+  status_lead: "",
+}
 
 /** Opções de origem no formulário: admin vê todas; comercial só em branco ou o próprio nome */
 function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | null) {
   if (isComercial && comercialDisplayName) {
+    const auto = origemCaptacaoForComercial(comercialDisplayName)
     return [
       { value: "", label: "Em branco" },
-      { value: `Comercial - ${comercialDisplayName}`, label: `Comercial - ${comercialDisplayName}` },
+      { value: auto, label: auto },
     ]
   }
   return [
@@ -50,38 +94,16 @@ const STATUS_COMERCIAL_OPCOES = [
   { id: "sem_interesse", label: "Sem interesse", btn: "bg-gray-500 hover:bg-gray-600 text-white border-2 border-gray-500", inactive: "bg-gray-400 text-white border-2 border-gray-400 hover:bg-gray-500" },
 ] as const
 
-/** Produto (contratação): ícone na exibição (como na foto 3); texto só em cadastro/edição */
-function normalizeProductStatus(s: string | null): string {
-  if (!s) return ""
-  const t = (s || "").toLowerCase().trim()
-  if (t === "active" || t === "ativa") return "ativa"
-  if (t === "inactive" || t === "inativa") return "inativa"
-  if (t === "cancelled" || t === "cancelada") return "cancelada"
-  if (t === "suspended" || t === "pendente") return "pendente"
-  return t || s
-}
-const CONTRACT_STATUS_MAP: Record<string, { label: string; Icon: LucideIcon; class: string }> = {
-  active: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  ativa: { label: "Produto ativo", Icon: CheckCircle, class: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30" },
-  aguardando_produto: { label: "Aguardando produto", Icon: Clock, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  inactive: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
-  inativa: { label: "Produto inativo", Icon: PauseCircle, class: "bg-gray-500/10 text-gray-400 border-gray-500/30" },
-  suspended: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  pendente: { label: "Produto vencido", Icon: AlertCircle, class: "bg-amber-500/10 text-amber-400 border-amber-500/30" },
-  cancelled: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/10 text-red-400 border-red-500/30" },
-  cancelada: { label: "Produto cancelado", Icon: XCircle, class: "bg-red-500/10 text-red-400 border-red-500/30" },
-}
-
 export default function ClientesPage() {
-  const supabase = createClient()
   const { isAdmin, isComercial, comercialDisplayName } = useAuth()
   const [search, setSearch] = useState("")
   const [showAdd, setShowAdd] = useState(false)
+  const [savingNewClient, setSavingNewClient] = useState(false)
   const [view, setView] = useState<"grid" | "list">("list")
   const [filterTab, setFilterTab] = useState<string>("all")
   const [filterOrigem, setFilterOrigem] = useState("all")
-  /** Admin: "geral" = todos; "Stefanie" | "Lisete" = monitorar aquele comercial */
-  const [adminClientesTab, setAdminClientesTab] = useState<"geral" | "Stefanie" | "Lisete">("geral")
+  /** Admin: "geral" = todos; "Stefanie" = monitorar aquele comercial */
+  const [adminClientesTab, setAdminClientesTab] = useState<"geral" | "Stefanie">("geral")
   /** Comercial: só "geral" (lista toda) ou "meu" (painel dele — clientes com origem dele) */
   const [comercialClientesTab, setComercialClientesTab] = useState<"geral" | "meu">("geral")
   const [showImport, setShowImport] = useState(false)
@@ -91,22 +113,7 @@ export default function ClientesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editForm, setEditForm] = useState<Partial<Client>>({})
-  const [newClient, setNewClient] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    cpf_cnpj: "",
-    company_name: "",
-    address: "",
-    number: "",
-    district: "",
-    city: "",
-    state: "",
-    zip_code: "",
-    notes: "",
-    origem_captacao: "",
-    status_lead: "",
-  })
+  const [newClient, setNewClient] = useState<NewClientFormState>(EMPTY_NEW_CLIENT)
 
   const formatCpfCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "")
@@ -139,65 +146,35 @@ export default function ClientesPage() {
       .replace(/(\d{5})(\d)/, "$1-$2")
   }
 
-  /** Comercial: "geral" = só sem origem; "meu" = com origem dele. Admin: "geral" = todos; outro = monitorar aquele comercial */
-  const clientesListKey =
+  /** Comercial: "geral" = sem origem; "meu" = origem dele. Admin: "geral" = website/xpress/compra manual; Stefanie = só dela */
+  const clientesView =
     isComercial && comercialDisplayName
       ? comercialClientesTab === "meu"
-        ? `clients-list-comercial-${comercialDisplayName}`
-        : "clients-list-comercial-geral"
-      : isAdmin && adminClientesTab !== "geral"
-        ? `clients-list-admin-${adminClientesTab}`
-        : "clients-list"
+        ? "comercial-meu"
+        : "comercial-geral"
+      : isAdmin && adminClientesTab === "Stefanie"
+        ? "stefanie"
+        : "geral"
+
+  const clientesListKey = `clients-list-${clientesView}`
 
   const { mutate: globalMutate } = useSWRConfig()
   const { data: clients, mutate } = useSWR(
     clientesListKey,
     async () => {
-      if (isComercial && comercialDisplayName) {
-        if (comercialClientesTab === "geral") {
-          // Aba Geral do comercial: só contatos que ainda NÃO têm origem (para ele pegar e colocar o nome dele)
-          const { data } = await supabase
-            .from("clients")
-            .select("*")
-            .order("name")
-            .range(0, 9999)
-          const list = (data || []) as Client[]
-          return list.filter((c) => !(c.origem_captacao || "").trim())
-        }
-        // Aba do comercial: clientes que já têm origem dele (painel próprio)
-        const { data } = await supabase
-          .from("clients")
-          .select("*")
-          .eq("origem_captacao", `Comercial - ${comercialDisplayName}`)
-          .order("name")
-          .range(0, 9999)
-        return (data || []) as Client[]
+      const res = await fetch(`/api/clients?view=${encodeURIComponent(clientesView)}`, {
+        credentials: "include",
+        cache: "no-store",
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as { error?: string }).error || "Erro ao carregar clientes")
       }
-      if (isAdmin && adminClientesTab !== "geral") {
-        const origem = `Comercial - ${adminClientesTab}`
-        const { data: contracts } = await supabase
-          .from("contracts")
-          .select("client_id")
-          .eq("origem_comercial", origem)
-          .range(0, 9999)
-        const ids = [...new Set((contracts || []).map((r: { client_id: string }) => r.client_id))]
-        if (ids.length === 0) return []
-        const { data } = await supabase.from("clients").select("*").in("id", ids).order("name").range(0, 9999)
-        return (data || []) as Client[]
-      }
-      const { data } = await supabase.from("clients").select("*").order("name").range(0, 9999)
-      return (data || []) as Client[]
-    }
+      const json = (await res.json()) as { clients: ClientListItem[] }
+      return json.clients ?? []
+    },
+    { revalidateOnFocus: true, dedupingInterval: 5000 },
   )
-
-  const { data: contractsByClient } = useSWR("contracts-by-client", async () => {
-    const { data } = await supabase.from("contracts").select("client_id, status").order("created_at", { ascending: false }).range(0, 9999)
-    const map = new Map<string, string>()
-    ;(data || []).forEach((r: { client_id: string; status: string }) => {
-      if (!map.has(r.client_id)) map.set(r.client_id, r.status)
-    })
-    return map
-  })
 
   /** Status em branco (null/""/novo) = "—", não designado; só aparece em "Todos", não é filtro */
   const getStatusLead = (c: Client) => {
@@ -206,7 +183,6 @@ export default function ClientesPage() {
     return !t || t === "novo" ? "" : t
   }
   const getStatusLeadLabel = (c: Client) => (getStatusLead(c) === "" ? "—" : (STATUS_COMERCIAL_OPCOES.find((x) => x.id === getStatusLead(c))?.label ?? getStatusLead(c)))
-  const getContractStatus = (clientId: string) => contractsByClient?.get(clientId) ?? null
   const countByTab = (id: string) => {
     if (!clients) return 0
     if (id === "all") return clients.length
@@ -231,27 +207,59 @@ export default function ClientesPage() {
   })
 
   const handleAdd = async () => {
-    if (!newClient.name) {
-      toast.error("Nome obrigatório")
+    if (!newClient.customer_type) {
+      toast.error("Selecione Empresa ou Profissional Liberal")
       return
     }
+    if (!newClient.name.trim()) {
+      toast.error(newClient.customer_type === "empresa" ? "Razão social obrigatória" : "Nome completo obrigatório")
+      return
+    }
+    const docDigits = (newClient.cpf_cnpj || "").replace(/\D/g, "")
+    if (newClient.customer_type === "empresa" && docDigits.length > 0 && docDigits.length !== 14) {
+      toast.error("CNPJ inválido")
+      return
+    }
+    const cpfCnpjPayload =
+      newClient.customer_type === "profissional_liberal"
+        ? docDigits.length === 11
+          ? docDigits
+          : null
+        : docDigits.length === 14
+          ? docDigits
+          : docDigits || null
+    setSavingNewClient(true)
     try {
-      const addressParts = [newClient.address, newClient.number, newClient.district, newClient.city, newClient.state, newClient.zip_code].filter(Boolean)
+      const addressParts = newClient.customer_type === "empresa"
+        ? [newClient.address, newClient.number, newClient.district, newClient.city, newClient.state, newClient.zip_code].filter(Boolean)
+        : []
       const addressFull = addressParts.length ? addressParts.join(", ") : null
       const payload: Record<string, unknown> = {
-        name: newClient.name,
-        email: newClient.email || null,
-        phone: newClient.phone || null,
-        cpf_cnpj: (newClient.cpf_cnpj || "").replace(/\D/g, "") || null,
-        company: newClient.company_name || null,
+        customer_type: newClient.customer_type,
+        name: newClient.name.trim(),
+        email: newClient.email.trim() || "",
+        phone: newClient.phone.trim() || null,
+        cpf_cnpj: cpfCnpjPayload,
+        company: newClient.customer_type === "empresa" ? newClient.company_name.trim() || null : null,
         address: addressFull,
+        number: newClient.customer_type === "empresa" ? newClient.number.trim() || null : null,
+        district: newClient.customer_type === "empresa" ? newClient.district.trim() || null : null,
+        city: newClient.customer_type === "empresa" ? newClient.city.trim() || null : null,
+        state: newClient.customer_type === "empresa" ? newClient.state.trim() || null : null,
+        zip_code: newClient.customer_type === "empresa" ? newClient.zip_code.replace(/\D/g, "") || null : null,
+        notes: newClient.notes.trim() || null,
         origem_captacao: newClient.origem_captacao || null,
         status_lead: newClient.status_lead || null,
       }
-      if (!payload.cpf_cnpj) payload.cpf_cnpj = `sem-cpf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-      const { error } = await supabase.from("clients").insert(payload)
-      if (error) {
-        toast.error("Erro ao salvar: " + error.message)
+      const res = await fetch("/api/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error("Erro ao salvar: " + ((err as { error?: string }).error || res.statusText))
         return
       }
       try {
@@ -266,25 +274,13 @@ export default function ClientesPage() {
       } catch {}
       toast.success("Cliente salvo com sucesso")
       setShowAdd(false)
-      setNewClient({
-        name: "",
-        email: "",
-        phone: "",
-        cpf_cnpj: "",
-        company_name: "",
-        address: "",
-        number: "",
-        district: "",
-        city: "",
-        state: "",
-        zip_code: "",
-        notes: "",
-        origem_captacao: "",
-        status_lead: "",
-      })
+      setNewClient(EMPTY_NEW_CLIENT)
       mutate()
-    } catch (err) {
+      globalMutate(clientesListKey)
+    } catch {
       toast.error("Erro inesperado ao salvar cliente")
+    } finally {
+      setSavingNewClient(false)
     }
   }
 
@@ -333,7 +329,19 @@ export default function ClientesPage() {
         origem_captacao: null,
         status_lead: null,
       }
-      const { error } = await supabase.from("clients").insert(payload)
+      const { error } = await (async () => {
+        const res = await fetch("/api/clients", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          return { error: { message: (err as { error?: string }).error || res.statusText } }
+        }
+        return { error: null }
+      })()
       if (error) {
         err++
         if (err <= 2) toast.error(`Linha ${i + 1}: ${error.message}`)
@@ -418,7 +426,19 @@ export default function ClientesPage() {
       origem_captacao: (editForm.origem_captacao as string) || null,
       status_lead: (editForm.status_lead as string) || null,
     }
-    const { error } = await supabase.from("clients").update(payload).eq("id", editingId)
+    const { error } = await (async () => {
+      const res = await fetch(`/api/clients/${editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        return { error: { message: (err as { error?: string }).error || res.statusText } }
+      }
+      return { error: null }
+    })()
     if (error) { toast.error("Erro ao atualizar: " + error.message); return }
     try {
       await fetch("/api/activity/log", {
@@ -441,7 +461,17 @@ export default function ClientesPage() {
 
   const handleDelete = async (client: Client) => {
     if (!confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Contratos e NF-e vinculados também serão removidos.`)) return
-    const { error } = await supabase.from("clients").delete().eq("id", client.id)
+    const { error } = await (async () => {
+      const res = await fetch(`/api/clients/${client.id}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        return { error: { message: (err as { error?: string }).error || res.statusText } }
+      }
+      return { error: null }
+    })()
     if (error) {
       toast.error("Erro ao excluir: " + error.message)
       return
@@ -499,9 +529,12 @@ export default function ClientesPage() {
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-2">Cadastros únicos por pessoa. Um mesmo cliente pode ter vários contratos na página do produto.</p>
+            <p className="text-sm text-muted-foreground mb-2">
+              Aba Geral: contatos do website, Xpress Solutions e compras manuais (exceto Stefanie).
+              Aba Stefanie: somente contatos com origem dela.
+            </p>
             <div className="flex items-center gap-2 mt-2">
-              {(["geral", "Stefanie", "Lisete"] as const).map((tab) => (
+              {(["geral", "Stefanie"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -586,129 +619,21 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {showAdd && (
-        <div className="glass rounded-xl p-5 border border-primary/20">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-foreground">Novo Cliente</h3>
-            <button title="Fechar" onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-          </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <input
-              placeholder="Nome *"
-              value={newClient.name}
-              onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Email"
-              type="email"
-              value={newClient.email}
-              onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Telefone"
-              value={newClient.phone}
-              onChange={(e) => setNewClient({ ...newClient, phone: formatPhone(e.target.value) })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="CPF/CNPJ"
-              value={newClient.cpf_cnpj}
-              onChange={(e) => setNewClient({ ...newClient, cpf_cnpj: formatCpfCnpj(e.target.value) })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Empresa"
-              value={newClient.company_name}
-              onChange={(e) => setNewClient({ ...newClient, company_name: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="CEP"
-              value={newClient.zip_code}
-              onChange={(e) => setNewClient({ ...newClient, zip_code: e.target.value })}
-              onBlur={async () => {
-                const raw = newClient.zip_code.replace(/\D/g, "")
-                if (!raw) return
-                try {
-                  const res = await fetch(`/api/geo/cep?value=${encodeURIComponent(raw)}`)
-                  const data = await res.json()
-                  if (!res.ok) return
-                  setNewClient((prev) => ({
-                    ...prev,
-                    zip_code: data.cep || prev.zip_code,
-                    city: data.city || prev.city,
-                    state: (data.state || prev.state || "").toUpperCase(),
-                    district: data.district || prev.district,
-                    address: data.street || prev.address,
-                  }))
-                } catch {
-                  // ignora erro de rede
-                }
-              }}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Cidade"
-              value={newClient.city}
-              onChange={(e) => setNewClient({ ...newClient, city: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Estado (UF)"
-              value={newClient.state}
-              onChange={(e) => setNewClient({ ...newClient, state: e.target.value.toUpperCase() })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Endereço (rua)"
-              value={newClient.address}
-              onChange={(e) => setNewClient({ ...newClient, address: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Número"
-              value={newClient.number}
-              onChange={(e) => setNewClient({ ...newClient, number: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Bairro"
-              value={newClient.district}
-              onChange={(e) => setNewClient({ ...newClient, district: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <input
-              placeholder="Observações"
-              value={newClient.notes}
-              onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-            />
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Origem de captação</p>
-              <select value={newClient.origem_captacao} onChange={(e) => setNewClient({ ...newClient, origem_captacao: e.target.value })}
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none">
-                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null).map((opt) => (
-                  <option key={opt.value || "blank"} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground mb-1">Contato</p>
-              <select value={newClient.status_lead} onChange={(e) => setNewClient({ ...newClient, status_lead: e.target.value })}
-                className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none">
-                {STATUS_COMERCIAL_OPCOES.filter((o) => o.id !== "all").map((opt) => (
-                  <option key={opt.id || "blank"} value={opt.id}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          <button onClick={handleAdd} className="mt-4 flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
-            <Save className="h-4 w-4" /> Salvar Cliente
-          </button>
-        </div>
-      )}
+      <ClientRegisterModal
+        open={showAdd}
+        onClose={() => {
+          setShowAdd(false)
+          setNewClient(EMPTY_NEW_CLIENT)
+        }}
+        onSubmit={handleAdd}
+        saving={savingNewClient}
+        form={newClient}
+        setForm={setNewClient}
+        formatCpfCnpj={formatCpfCnpj}
+        formatPhone={formatPhone}
+        isComercial={isComercial}
+        comercialDisplayName={comercialDisplayName}
+      />
 
       {showImport && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
@@ -882,14 +807,7 @@ export default function ClientesPage() {
                           })()}
                         </td>
                         <td className="px-4 py-3">
-                          {(() => {
-                            const raw = getContractStatus(client.id)
-                            if (!raw) return <span className="text-muted-foreground text-xs">—</span>
-                            const status = normalizeProductStatus(raw)
-                            const info = CONTRACT_STATUS_MAP[status] ?? CONTRACT_STATUS_MAP[raw] ?? { label: raw, Icon: PauseCircle, class: "bg-secondary text-muted-foreground border-border" }
-                            const Icon = info.Icon
-                            return <span title={info.label} className={cn("inline-flex items-center justify-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium", info.class)}><Icon className="h-3.5 w-3.5 shrink-0" /></span>
-                          })()}
+                          <ProductStatusBadge contract={(client as ClientListItem).primary_contract} />
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{format(new Date(client.created_at), "dd/MM/yyyy", { locale: ptBR })}</td>
                         <td className="px-4 py-3">
@@ -988,15 +906,7 @@ export default function ClientesPage() {
                     <span className="font-medium">{client.origem_captacao || "—"}</span>
                     <span className="text-muted-foreground/50">|</span>
                     <span className="text-muted-foreground">Produto:</span>
-                    {(() => {
-                      const raw = getContractStatus(client.id)
-                      if (!raw) return <span className="font-medium text-muted-foreground">—</span>
-                      const status = normalizeProductStatus(raw)
-                      const info = CONTRACT_STATUS_MAP[status] ?? CONTRACT_STATUS_MAP[raw]
-                      const color = info?.class?.includes("emerald") ? "text-emerald-400" : info?.class?.includes("amber") ? "text-amber-400" : info?.class?.includes("red") ? "text-red-400" : "text-muted-foreground"
-                      const Icon = info?.Icon ?? PauseCircle
-                      return <span title={info?.label ?? raw} className={cn("inline-flex items-center gap-1 font-medium", color)}><Icon className="h-3.5 w-3.5 shrink-0" /></span>
-                    })()}
+                    <ProductStatusBadge contract={(client as ClientListItem).primary_contract} />
                   </div>
                 </div>
                 <p className="mt-3 text-xs text-muted-foreground/50">Cadastrado em {format(new Date(client.created_at), "dd/MM/yyyy", { locale: ptBR })}</p>

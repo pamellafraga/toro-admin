@@ -1,17 +1,12 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { NextRequest } from "next/server"
+import { parseAuthCookie } from "@/lib/api/auth"
+import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
-
-function getAuthFromCookie(req: NextRequest): { role?: string; displayName?: string } {
-  try {
-    const cookie = req.cookies.get("xpress_auth")?.value
-    if (!cookie) return {}
-    const parsed = JSON.parse(cookie)
-    return { role: parsed.role, displayName: parsed.displayName ?? parsed.user }
-  } catch {
-    return {}
-  }
-}
+import { findClientByCpfCnpj, insertClient, updateClient } from "@/lib/db/repositories/clients.repository"
+import { insertContract } from "@/lib/db/repositories/contracts.repository"
+import { insertNfeDocument } from "@/lib/db/repositories/nfe.repository"
+import { findOrCreateProductFromCatalog, findProductBySlug } from "@/lib/db/repositories/products.repository"
+import { getProductBySlug } from "@/lib/products/catalog"
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,79 +27,39 @@ export async function POST(req: NextRequest) {
       plan,
       payment_day,
       start_date,
-      status,
+      status: _status,
       payment_status,
       origem_captacao,
     } = body
-    const auth = getAuthFromCookie(req)
-    const isComercial = auth.role === "comercial" && auth.displayName
+
+    const auth = parseAuthCookie(req)
+    const isComercial = auth?.role === "comercial" && auth.displayName
     const origemComercial = isComercial ? `Comercial - ${auth.displayName}` : (body.origem_comercial ?? null)
 
-    if (!client_name?.trim()) {
-      return NextResponse.json(
-        { error: "Nome do cliente é obrigatório." },
-        { status: 400 },
-      )
-    }
+    if (!client_name?.trim()) return jsonError("Nome do cliente é obrigatório.", 400)
 
-    const supabase = await createClient()
     let resolvedProductId: string | null = productId || null
 
     if (!resolvedProductId && productSlug) {
-      const { data: existingProduct } = await supabase
-        .from("products")
-        .select("id")
-        .eq("name", "Software de Gestão")
-        .limit(1)
-        .maybeSingle()
-      if (existingProduct) {
-        resolvedProductId = existingProduct.id
+      const catalog = getProductBySlug(String(productSlug))
+      if (catalog) {
+        const product = await findOrCreateProductFromCatalog(catalog)
+        resolvedProductId = product.id
       } else {
-        const { data: created, error: createErr } = await supabase
-          .from("products")
-          .insert({
-            name: "Software de Gestão",
-            description: "Apólice de Seguro - Modalidade Garantias",
-            icon: "monitor",
-          })
-          .select("id")
-          .single()
-        if (createErr) {
-          return NextResponse.json(
-            { error: "Erro ao obter/criar produto: " + createErr.message },
-            { status: 500 },
-          )
-        }
-        resolvedProductId = created.id
+        const product = await findProductBySlug(String(productSlug))
+        if (product) resolvedProductId = product.id
       }
     }
 
-    if (!resolvedProductId) {
-      return NextResponse.json(
-        { error: "Informe o produto (productId ou productSlug)." },
-        { status: 400 },
-      )
-    }
+    if (!resolvedProductId) return jsonError("Informe o produto (productId ou productSlug).", 400)
 
-    const planValues: Record<string, number> = {
-      basic: 500,
-      confort: 800,
-      premium: 1500,
-    }
+    const planValues: Record<string, number> = { basic: 500, confort: 800, premium: 1500 }
     const selectedValue = planValues[plan]
-    if (!selectedValue) {
-      return NextResponse.json(
-        { error: "Plano inválido." },
-        { status: 400 },
-      )
-    }
+    if (!selectedValue) return jsonError("Plano inválido.", 400)
 
     const cpfCnpjRaw = (client_cpf_cnpj || "").replace(/\D/g, "")
     if (!cpfCnpjRaw || (cpfCnpjRaw.length !== 11 && cpfCnpjRaw.length !== 14)) {
-      return NextResponse.json(
-        { error: "CPF/CNPJ inválido." },
-        { status: 400 },
-      )
+      return jsonError("CPF/CNPJ inválido.", 400)
     }
 
     const paymentMap: Record<string, string> = {
@@ -122,7 +77,8 @@ export async function POST(req: NextRequest) {
 
     const parts = [address, number, district, city, state, zip_code].filter(Boolean)
     const fullAddress = parts.length ? parts.join(", ") : null
-    const clientPayload: Record<string, unknown> = {
+
+    const clientPayload = {
       name: client_name.trim(),
       email: (client_email || "").trim() || "",
       phone: (client_phone || "").trim() || "",
@@ -133,100 +89,48 @@ export async function POST(req: NextRequest) {
       city: city?.trim() || null,
       state: state?.trim() ? String(state).toUpperCase() : null,
       zip_code: zip_code?.trim() || null,
-    }
-    if (origem_captacao != null && String(origem_captacao).trim()) {
-      clientPayload.origem_captacao = String(origem_captacao).trim()
-    }
-    if (pagamentoPerdido) {
-      clientPayload.status_lead = "perdido"
+      origem_captacao: origem_captacao != null && String(origem_captacao).trim() ? String(origem_captacao).trim() : null,
+      status_lead: pagamentoPerdido ? "perdido" : null,
     }
 
+    const existing = await findClientByCpfCnpj(cpfCnpjRaw)
     let clientId: string
-
-    const { data: existing } = await supabase
-      .from("clients")
-      .select("id, name")
-      .eq("cpf_cnpj", cpfCnpjRaw)
-      .maybeSingle()
+    const wasExistingClient = !!existing
 
     if (existing) {
       clientId = existing.id
-      const updatePayload: Record<string, unknown> = {
-        name: client_name.trim(),
-        email: (client_email || "").trim() || "",
-        phone: (client_phone || "").trim() || "",
-        address: fullAddress,
-        number: number?.trim() || null,
-        district: district?.trim() || null,
-        city: city?.trim() || null,
-        state: state?.trim() ? String(state).toUpperCase() : null,
-        zip_code: zip_code?.trim() || null,
-      }
-      if (origem_captacao != null && String(origem_captacao).trim()) {
-        updatePayload.origem_captacao = String(origem_captacao).trim()
-      }
-      if (pagamentoPerdido) {
-        updatePayload.status_lead = "perdido"
-      }
-      await supabase
-        .from("clients")
-        .update(updatePayload)
-        .eq("id", clientId)
+      await updateClient(clientId, clientPayload)
     } else {
-      const { data: inserted, error: clientError } = await supabase
-        .from("clients")
-        .insert(clientPayload)
-        .select("id")
-        .single()
-
-      if (clientError) {
-        return NextResponse.json(
-          { error: "Erro ao criar cliente: " + clientError.message },
-          { status: 500 },
-        )
-      }
+      const inserted = await insertClient(clientPayload)
       clientId = inserted.id
     }
 
     const paymentDay = Number(payment_day) || 10
-    const wasExistingClient = !!existing
-    const { data: contract, error: contractError } = await supabase
-      .from("contracts")
-      .insert({
-        client_id: clientId,
-        product_id: resolvedProductId,
-        status: contractStatus,
-        payment_status: paymentStatusDb,
-        start_date: start_date || new Date().toISOString().slice(0, 10),
-        monthly_value: selectedValue,
-        notes: null,
-        origem_comercial: origemComercial || null,
-      })
-      .select("id, client_id, product_id")
-      .single()
+    const contract = await insertContract({
+      client_id: clientId,
+      product_id: resolvedProductId,
+      status: contractStatus,
+      payment_status: paymentStatusDb,
+      start_date: start_date || new Date().toISOString().slice(0, 10),
+      monthly_value: selectedValue,
+      notes: null,
+      origem_comercial: origemComercial || null,
+    })
 
-    if (contractError) {
-      return NextResponse.json(
-        { error: "Erro ao criar contrato: " + contractError.message },
-        { status: 500 },
-      )
-    }
-
-    // NF-e só para quem está com pagamento em dia — guarda todos os dados do cliente e da compra na solicitação
     await logActivity(
-      { displayName: auth.displayName },
+      { displayName: auth?.displayName },
       {
         action: wasExistingClient
-          ? `Cadastrou contrato/assinatura para ${(client_name as string).trim()}`
-          : `Cadastrou novo cliente e contrato: ${(client_name as string).trim()}`,
+          ? `Cadastrou contrato/assinatura para ${client_name.trim()}`
+          : `Cadastrou novo cliente e contrato: ${client_name.trim()}`,
         entity_type: "contract",
         entity_id: contract.id,
         details: { client_id: clientId, product_id: resolvedProductId },
-      }
+      },
     )
 
     if (paymentStatusDb === "em_dia") {
-      await supabase.from("nfe_documents").insert({
+      await insertNfeDocument({
         client_id: contract.client_id,
         client_name: client_name.trim(),
         total_value: selectedValue,
@@ -255,17 +159,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({
+    return jsonOk({
       success: true,
       productId: resolvedProductId,
       existingClient: wasExistingClient,
-      existingClientName: wasExistingClient ? ((existing as { name?: string })?.name ?? null) : null,
+      existingClientName: wasExistingClient ? existing?.name ?? null : null,
     })
-  } catch (err: unknown) {
+  } catch (err) {
     console.error("Erro ao registrar assinatura:", err)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Erro inesperado" },
-      { status: 500 },
-    )
+    return handleApiError(err, "Erro inesperado")
   }
 }

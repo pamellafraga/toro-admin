@@ -1,57 +1,28 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createHash } from "crypto"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { NextRequest } from "next/server"
+import { hashPassword, isAdmin, parseAuthCookie } from "@/lib/api/auth"
+import { handleApiError, jsonError, jsonForbidden, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import {
+  createUser,
+  findUserByUsername,
+  listUsers,
+} from "@/lib/db/repositories/dashboard-users.repository"
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex")
-}
-
-function isAdminRequest(request: NextRequest): boolean {
-  try {
-    const cookie = request.cookies.get("xpress_auth")?.value
-    if (!cookie) return false
-    const parsed = JSON.parse(cookie)
-    return parsed.role === "admin" && !!(parsed.authenticated || parsed.user)
-  } catch {
-    return false
-  }
-}
-
-/** GET: listar todos os usuários do sistema (sem password_hash) */
 export async function GET(request: NextRequest) {
-  if (!isAdminRequest(request))
-    return NextResponse.json({ error: "Somente administradores podem acessar." }, { status: 403 })
+  if (!isAdmin(request)) return jsonForbidden("Somente administradores podem acessar.")
 
   try {
-    const supabase = createAdminClient()
-    const { data, error } = await supabase
-      .from("dashboard_users")
-      .select("id, username, role, display_name, email, created_at, updated_at")
-      .order("display_name")
-
-    if (error) throw error
-    return NextResponse.json(data ?? [])
+    const data = await listUsers()
+    return jsonOk(data)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao listar usuários."
-    if (/obrigatórios para o admin client|SUPABASE_SERVICE_ROLE_KEY/i.test(msg))
-      return NextResponse.json({ error: "Configuração do servidor incompleta." }, { status: 503 })
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return handleApiError(e, "Erro ao listar usuários.")
   }
 }
 
-/** POST: cadastrar novo usuário */
 export async function POST(request: NextRequest) {
-  const cookie = request.cookies.get("xpress_auth")?.value
-  if (!cookie) return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  let parsed: { role?: string; authenticated?: boolean; user?: string }
-  try {
-    parsed = JSON.parse(cookie)
-  } catch {
-    return NextResponse.json({ error: "Não autorizado." }, { status: 401 })
-  }
-  if (parsed.role !== "admin" || !(parsed.authenticated || parsed.user))
-    return NextResponse.json({ error: "Somente administradores podem cadastrar usuários." }, { status: 403 })
+  const auth = parseAuthCookie(request)
+  if (!auth) return jsonUnauthorized()
+  if (auth.role !== "admin") return jsonForbidden("Somente administradores podem cadastrar usuários.")
 
   try {
     const body = await request.json()
@@ -61,40 +32,30 @@ export async function POST(request: NextRequest) {
     const role = String(body.role ?? "comercial").trim()
     const email = body.email != null ? String(body.email).trim().toLowerCase() || null : null
 
-    if (!username) return NextResponse.json({ error: "Login (username) é obrigatório." }, { status: 400 })
-    if (!password) return NextResponse.json({ error: "Senha é obrigatória." }, { status: 400 })
-    if (!display_name) return NextResponse.json({ error: "Nome de exibição é obrigatório." }, { status: 400 })
+    if (!username) return jsonError("Login (username) é obrigatório.", 400)
+    if (!password) return jsonError("Senha é obrigatória.", 400)
+    if (!display_name) return jsonError("Nome de exibição é obrigatório.", 400)
     if (role !== "admin" && role !== "comercial")
-      return NextResponse.json({ error: "Perfil deve ser Administrador ou Comercial." }, { status: 400 })
+      return jsonError("Perfil deve ser Administrador ou Comercial.", 400)
 
-    const supabase = createAdminClient()
-    const { data: existing } = await supabase
-      .from("dashboard_users")
-      .select("id")
-      .ilike("username", username)
-      .limit(1)
-      .maybeSingle()
+    const existing = await findUserByUsername(username)
+    if (existing) return jsonError("Já existe um usuário com este login.", 400)
 
-    if (existing) return NextResponse.json({ error: "Já existe um usuário com este login." }, { status: 400 })
+    const created = await createUser({
+      username,
+      password_hash: hashPassword(password),
+      role,
+      display_name,
+      email,
+    })
 
-    const password_hash = hashPassword(password)
-    const { data: created, error } = await supabase
-      .from("dashboard_users")
-      .insert({ username, password_hash, role, display_name, email })
-      .select("id, username, role, display_name, email, created_at")
-      .single()
-
-    if (error) throw error
-    const who = (parsed as { displayName?: string }).displayName ?? parsed.user ?? "Admin"
     await logActivity(
-      { displayName: who },
-      { action: `Cadastrou o usuário ${display_name} (${username})`, entity_type: "user", entity_id: created.id }
+      { displayName: auth.displayName },
+      { action: `Cadastrou o usuário ${display_name} (${username})`, entity_type: "user", entity_id: created.id },
     )
-    return NextResponse.json(created, { status: 201 })
+
+    return jsonOk(created, 201)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Erro ao cadastrar usuário."
-    if (/obrigatórios para o admin client|SUPABASE_SERVICE_ROLE_KEY/i.test(msg))
-      return NextResponse.json({ error: "Configuração do servidor incompleta." }, { status: 503 })
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return handleApiError(e, "Erro ao cadastrar usuário.")
   }
 }

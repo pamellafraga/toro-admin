@@ -1,0 +1,1 @@
+ALTER TABLE contracts ADD COLUMN IF NOT EXISTS payment_day integer NOT NULL DEFAULT 10;
