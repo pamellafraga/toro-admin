@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { isAdmin, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { updateClientForContract, updateClientLiticaProData } from "@/lib/db/repositories/clients.repository"
 import { deleteContract, findContractById, findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
 
@@ -37,6 +38,16 @@ export async function PATCH(
     const statusLead = pagamentoPerdido
       ? "perdido"
       : String(body.status_lead ?? "").trim() || null
+
+    const duplicate = await findDuplicateClient({
+      cpfCnpj: cpfCnpjRaw,
+      phone: String(body.client_phone ?? "").trim() || null,
+      email: String(body.client_email ?? "").trim() || null,
+      excludeClientId: existing.client_id,
+    })
+    if (duplicate) {
+      return jsonError(duplicateClientMessage(duplicate), 409)
+    }
 
     await updateClientForContract(existing.client_id, {
       name: clientName,

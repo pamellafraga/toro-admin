@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { findClientByCpfCnpj, insertClient, updateClient } from "@/lib/db/repositories/clients.repository"
 import { insertContract } from "@/lib/db/repositories/contracts.repository"
 import { insertNfeDocument } from "@/lib/db/repositories/nfe.repository"
@@ -96,6 +97,16 @@ export async function POST(req: NextRequest) {
     const existing = await findClientByCpfCnpj(cpfCnpjRaw)
     let clientId: string
     const wasExistingClient = !!existing
+
+    const duplicate = await findDuplicateClient({
+      cpfCnpj: cpfCnpjRaw,
+      phone: clientPayload.phone,
+      email: clientPayload.email,
+      excludeClientId: existing?.id ?? null,
+    })
+    if (duplicate) {
+      return jsonError(duplicateClientMessage(duplicate), 409)
+    }
 
     if (existing) {
       clientId = existing.id

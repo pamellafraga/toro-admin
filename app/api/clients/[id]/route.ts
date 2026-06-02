@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { normalizeCpfCnpjForSave } from "@/lib/clients/cpf-cnpj-display"
+import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { deleteClient, updateClientFromDashboard } from "@/lib/db/repositories/clients.repository"
 
 export const dynamic = "force-dynamic"
@@ -28,6 +29,16 @@ export async function PATCH(
       "cpf_cnpj" in body && body.cpf_cnpj != null
         ? normalizeCpfCnpjForSave(String(body.cpf_cnpj))
         : undefined
+
+    const duplicate = await findDuplicateClient({
+      cpfCnpj: cpfCnpj !== undefined ? cpfCnpj : undefined,
+      phone: body.phone ?? null,
+      email: body.email ?? null,
+      excludeClientId: id,
+    })
+    if (duplicate) {
+      return jsonError(duplicateClientMessage(duplicate), 409)
+    }
 
     await updateClientFromDashboard(id, {
       name,

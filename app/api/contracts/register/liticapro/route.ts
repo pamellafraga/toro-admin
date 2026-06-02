@@ -3,6 +3,7 @@ import { parseAuthCookie, isAdmin } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
 import { deleteUserByUsername } from "@/lib/db/repositories/dashboard-users.repository"
+import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { findClientByCpfCnpj, insertClient, updateClient } from "@/lib/db/repositories/clients.repository"
 import { insertContract } from "@/lib/db/repositories/contracts.repository"
 import { insertNotification } from "@/lib/db/repositories/notifications.repository"
@@ -143,6 +144,16 @@ export async function POST(req: NextRequest) {
       origem_captacao: origemCaptacao,
       status_lead: "ativo",
       liticapro_data: liticaproData,
+    }
+
+    const duplicate = await findDuplicateClient({
+      cpfCnpj: cpfCnpjRaw,
+      phone: clientPayload.phone,
+      email: clientPayload.email,
+      excludeClientId: existing?.id ?? null,
+    })
+    if (duplicate) {
+      return jsonError(duplicateClientMessage(duplicate), 409)
     }
 
     let clientId: string

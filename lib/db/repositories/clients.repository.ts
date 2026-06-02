@@ -180,6 +180,50 @@ export async function findClientByCpfCnpj(cpfCnpj: string) {
   )
 }
 
+/** CPF/CNPJ real (11 ou 14 dígitos), ignorando placeholders sem-cpf-/import-. */
+export async function findClientByCpfCnpjDigits(
+  digits: string,
+  excludeClientId?: string | null,
+) {
+  if (digits.length !== 11 && digits.length !== 14) return null
+  return queryOne<{ id: string; name: string }>(
+    `SELECT id, name FROM clients
+     WHERE regexp_replace(COALESCE(cpf_cnpj, ''), '\\D', '', 'g') = $1
+       AND COALESCE(cpf_cnpj, '') NOT LIKE 'sem-cpf-%'
+       AND COALESCE(cpf_cnpj, '') NOT LIKE 'import-%'
+       AND ($2::uuid IS NULL OR id <> $2::uuid)
+     LIMIT 1`,
+    [digits, excludeClientId ?? null],
+  )
+}
+
+export async function findClientByPhoneDigits(
+  phoneDigits: string,
+  excludeClientId?: string | null,
+) {
+  return queryOne<{ id: string; name: string }>(
+    `SELECT id, name FROM clients
+     WHERE regexp_replace(COALESCE(phone, ''), '\\D', '', 'g') = $1
+       AND ($2::uuid IS NULL OR id <> $2::uuid)
+     LIMIT 1`,
+    [phoneDigits, excludeClientId ?? null],
+  )
+}
+
+export async function findClientByEmailNormalized(
+  emailNormalized: string,
+  excludeClientId?: string | null,
+) {
+  return queryOne<{ id: string; name: string }>(
+    `SELECT id, name FROM clients
+     WHERE lower(trim(COALESCE(email, ''))) = $1
+       AND trim(COALESCE(email, '')) <> ''
+       AND ($2::uuid IS NULL OR id <> $2::uuid)
+     LIMIT 1`,
+    [emailNormalized, excludeClientId ?? null],
+  )
+}
+
 export async function getClientLiticaProData(id: string) {
   return queryOne<{ liticapro_data: Record<string, unknown> | null }>(
     `SELECT liticapro_data FROM clients WHERE id = $1`,

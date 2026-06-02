@@ -2,6 +2,7 @@ import { NextRequest } from "next/server"
 import { isAuthenticated, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { mapClientRow } from "@/lib/clients/map-client-row"
+import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import {
   insertClient,
   listClientsForDashboard,
@@ -100,10 +101,22 @@ export async function POST(req: NextRequest) {
       return jsonError("CNPJ inválido.", 400)
     }
 
+    const email = String(body.email ?? "").trim()
+    const phone = String(body.phone ?? "").trim() || null
+
+    const duplicate = await findDuplicateClient({
+      cpfCnpj: cpfCnpj,
+      phone,
+      email,
+    })
+    if (duplicate) {
+      return jsonError(duplicateClientMessage(duplicate), 409)
+    }
+
     const inserted = await insertClient({
       name,
-      email: String(body.email ?? "").trim(),
-      phone: String(body.phone ?? "").trim() || null,
+      email,
+      phone,
       cpf_cnpj: cpfCnpj,
       company: customerType === "empresa" ? String(body.company ?? body.company_name ?? "").trim() || null : null,
       address: body.address ?? null,
@@ -118,8 +131,12 @@ export async function POST(req: NextRequest) {
     })
 
     return jsonOk({ id: inserted.id }, 201)
-  } catch (err) {
+  } catch (err: unknown) {
     console.error("Erro em POST /api/clients:", err)
+    const code = (err as { code?: string })?.code
+    if (code === "23505") {
+      return jsonError("Já existe um contato com este CPF/CNPJ.", 409)
+    }
     return handleApiError(err, "Erro ao criar cliente.")
   }
 }
