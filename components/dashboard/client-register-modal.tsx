@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { Building2, Loader2, Save, User } from "lucide-react"
 import { formatCep } from "@/lib/format/br"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
 
 const inputClass =
   "w-full h-8 rounded-lg border-2 border-primary/50 bg-background px-2.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
@@ -40,18 +41,7 @@ export interface NewClientFormState {
   status_lead: string
 }
 
-const STATUS_COMERCIAL_FORM = [
-  { id: "", label: "—" },
-  { id: "tentando_contato", label: "Tentando contato" },
-  { id: "em_conversa", label: "Em conversa" },
-  { id: "agendado", label: "Agendado" },
-  { id: "contratando", label: "Contratando" },
-  { id: "negociando", label: "Negociando" },
-  { id: "ativo", label: "Ativo" },
-  { id: "perdido", label: "Perdido" },
-  { id: "bloqueado", label: "Bloqueado" },
-  { id: "sem_interesse", label: "Sem interesse" },
-] as const
+const STATUS_COMERCIAL_FORM = STATUS_LEAD_OPTIONS
 
 function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | null) {
   if (isComercial && comercialDisplayName) {

@@ -18,6 +18,7 @@ import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-registe
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection } from "@/components/dashboard/liticapro-cnae-section"
 import { LiticaProContractDetailView } from "@/components/dashboard/liticapro-contract-detail-view"
+import { STATUS_LEAD_OPTIONS, STATUS_LEAD_COLOR_MAP, normalizeStatusLead, getStatusLeadLabel } from "@/lib/clients/status-lead"
 import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
 import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-badge"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
@@ -131,18 +132,7 @@ const addOneMonthSameDay = (dateStr: string) => {
   return `${yy}-${mm}-${dd}`
 }
 
-const STATUS_COMERCIAL_OPCOES = [
-  { id: "", label: "—" },
-  { id: "tentando_contato", label: "Tentando contato" },
-  { id: "em_conversa", label: "Em conversa" },
-  { id: "agendado", label: "Agendado" },
-  { id: "contratando", label: "Contratando" },
-  { id: "negociando", label: "Negociando" },
-  { id: "ativo", label: "Ativo" },
-  { id: "perdido", label: "Perdido" },
-  { id: "bloqueado", label: "Bloqueado" },
-  { id: "sem_interesse", label: "Sem interesse" },
-] as const
+const STATUS_COMERCIAL_OPCOES = STATUS_LEAD_OPTIONS
 
 const PRODUCT_STATUS_OPCOES = [
   { id: "aguardando_produto", label: "Aguardando produto" },
@@ -151,29 +141,12 @@ const PRODUCT_STATUS_OPCOES = [
   { id: "inativa", label: "Produto inativo" },
 ] as const
 
-const ETAPA_LEAD_COLOR_MAP: Record<string, string> = {
-  "": "bg-secondary text-muted-foreground border-border",
-  tentando_contato: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-  em_conversa: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-  agendado: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
-  contratando: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-  negociando: "bg-violet-500/10 text-violet-400 border-violet-500/30",
-  ativo: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-  perdido: "bg-red-500/10 text-red-400 border-red-500/30",
-  bloqueado: "bg-black/15 text-gray-900 border-gray-800/40",
-  sem_interesse: "bg-gray-500/10 text-gray-700 border-gray-500/30",
-}
+const ETAPA_LEAD_COLOR_MAP = STATUS_LEAD_COLOR_MAP
 
-/** Status em branco = "—", não designado (igual origem); só em "Todos" */
-const getEtapaLead = (client: Client | null | undefined) => {
-  const s = (client?.status_lead ?? "") as string
-  const t = s.trim()
-  return !t || t === "novo" ? "" : t
-}
-const getEtapaLeadLabel = (client: Client | null | undefined) => {
-  const etapa = getEtapaLead(client)
-  return etapa === "" ? "—" : (STATUS_COMERCIAL_OPCOES.find((x) => x.id === etapa)?.label ?? etapa)
-}
+const getEtapaLead = (client: Client | null | undefined) =>
+  normalizeStatusLead(client?.status_lead as string | null)
+const getEtapaLeadLabel = (client: Client | null | undefined) =>
+  getStatusLeadLabel(getEtapaLead(client))
 
 /** Subtítulo na coluna Cliente: empresa LiticaPro → responsável; demais → e-mail */
 const getClientListSubtitle = (client: Client | null | undefined, liticaproProduct: boolean) => {

@@ -64,7 +64,7 @@ export function ClickableStatusBadge({
           {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" /> : children}
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-52 p-1" align="start">
+      <PopoverContent className="w-[min(18rem,92vw)] max-h-[min(70vh,24rem)] overflow-y-auto p-1" align="start">
         <p className="px-2 py-1.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wide">
           Alterar status
         </p>

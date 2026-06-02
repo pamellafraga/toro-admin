@@ -16,6 +16,8 @@ import { ptBR } from "date-fns/locale"
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
 import { ClientsKanbanMobile } from "@/components/dashboard/clients-kanban-mobile"
+import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
+import { STATUS_LEAD_FILTER_TABS, normalizeStatusLead } from "@/lib/clients/status-lead"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
 import {
@@ -90,21 +92,6 @@ function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | nu
   ]
 }
 
-/** Contato (etapa do comercial com o cliente): inativo = fundo claro + texto escuro; ativo = sólido + branco */
-const STATUS_COMERCIAL_OPCOES = [
-  { id: "all", label: "Todos", btn: "bg-primary hover:bg-primary/90 text-white", inactive: "bg-gray-100 text-gray-800 border border-gray-200 hover:bg-gray-200" },
-  { id: "", label: "—", btn: "bg-gray-600 hover:bg-gray-500 text-white", inactive: "bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200" },
-  { id: "tentando_contato", label: "Tentando contato", btn: "bg-slate-600 hover:bg-slate-500 text-white", inactive: "bg-slate-100 text-slate-800 border border-slate-200 hover:bg-slate-200" },
-  { id: "em_conversa", label: "Em conversa", btn: "bg-sky-600 hover:bg-sky-500 text-white", inactive: "bg-sky-100 text-sky-800 border border-sky-200 hover:bg-sky-200" },
-  { id: "agendado", label: "Agendado", btn: "bg-indigo-600 hover:bg-indigo-500 text-white", inactive: "bg-indigo-100 text-indigo-800 border border-indigo-200 hover:bg-indigo-200" },
-  { id: "contratando", label: "Contratando", btn: "bg-amber-600 hover:bg-amber-500 text-white", inactive: "bg-amber-100 text-amber-800 border border-amber-200 hover:bg-amber-200" },
-  { id: "negociando", label: "Negociando", btn: "bg-violet-600 hover:bg-violet-500 text-white", inactive: "bg-violet-100 text-violet-800 border border-violet-200 hover:bg-violet-200" },
-  { id: "ativo", label: "Ativo", btn: "bg-emerald-600 hover:bg-emerald-500 text-white", inactive: "bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200" },
-  { id: "perdido", label: "Perdido", btn: "bg-red-600 hover:bg-red-500 text-white", inactive: "bg-red-100 text-red-800 border border-red-200 hover:bg-red-200" },
-  { id: "bloqueado", label: "Bloqueado", btn: "bg-black hover:bg-gray-800 text-white border-2 border-black", inactive: "bg-gray-800 text-white border-2 border-gray-800 hover:bg-gray-700" },
-  { id: "sem_interesse", label: "Sem interesse", btn: "bg-gray-500 hover:bg-gray-600 text-white border-2 border-gray-500", inactive: "bg-gray-400 text-white border-2 border-gray-400 hover:bg-gray-500" },
-] as const
-
 export default function ClientesPage() {
   const { isAdmin, isComercial, comercialDisplayName } = useAuth()
   const [search, setSearch] = useState("")
@@ -120,6 +107,7 @@ export default function ClientesPage() {
   const [importText, setImportText] = useState("")
   const [importing, setImporting] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editForm, setEditForm] = useState<Partial<Client> & { customer_type?: ClientCustomerType }>({})
@@ -190,13 +178,7 @@ export default function ClientesPage() {
     { revalidateOnFocus: true, dedupingInterval: 5000 },
   )
 
-  /** Status em branco (null/""/novo) = "—", não designado; só aparece em "Todos", não é filtro */
-  const getStatusLead = (c: Client) => {
-    const s = (c.status_lead ?? "") as string
-    const t = s.trim()
-    return !t || t === "novo" ? "" : t
-  }
-  const getStatusLeadLabel = (c: Client) => (getStatusLead(c) === "" ? "—" : (STATUS_COMERCIAL_OPCOES.find((x) => x.id === getStatusLead(c))?.label ?? getStatusLead(c)))
+  const getStatusLead = (c: Client) => normalizeStatusLead(c.status_lead as string | null)
   const countByTab = (id: string) => {
     if (!clients) return 0
     if (id === "all") return clients.length
@@ -482,6 +464,27 @@ export default function ClientesPage() {
     mutate()
   }
 
+  const quickUpdateClientStatus = async (client: Client, statusId: string) => {
+    setStatusUpdatingId(client.id)
+    try {
+      const res = await fetch(`/api/clients/${client.id}/status`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status_lead: statusId || null }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error((data as { error?: string }).error || "Erro ao atualizar status")
+      toast.success("Status atualizado.")
+      await mutate()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar status.")
+      throw err
+    } finally {
+      setStatusUpdatingId(null)
+    }
+  }
+
   const toggleActive = async (client: Client) => {
     toast.success(client.is_active ? "Cliente desativado" : "Cliente ativado")
     mutate()
@@ -620,7 +623,7 @@ export default function ClientesPage() {
       {/* Contato: filtros coloridos por etapa (em branco = não designado, não é filtro) */}
       {(!isComercial || comercialClientesTab === "meu") && (
         <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-          {STATUS_COMERCIAL_OPCOES.filter((tab) => tab.id !== "").map((tab) => (
+          {STATUS_LEAD_FILTER_TABS.filter((tab) => tab.id !== "").map((tab) => (
             <button
               key={tab.id}
               type="button"
@@ -694,6 +697,8 @@ export default function ClientesPage() {
             getStatusLead={getStatusLead}
             onEdit={startEdit}
             onDelete={handleDelete}
+            onStatusChange={quickUpdateClientStatus}
+            statusUpdatingId={statusUpdatingId}
             emptyMessage={search ? "Nenhum cliente encontrado." : "Nenhum cliente cadastrado."}
           />
         ) : (
@@ -761,7 +766,7 @@ export default function ClientesPage() {
                 onChange={(e) => setEditForm({ ...editForm, status_lead: e.target.value })}
                 className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
               >
-                {STATUS_COMERCIAL_OPCOES.filter((o) => o.id !== "all").map((opt) => (
+                {STATUS_LEAD_FILTER_TABS.filter((o) => o.id !== "all").map((opt) => (
                   <option key={opt.id || "blank"} value={opt.id}>{opt.label}</option>
                 ))}
               </select>
@@ -775,7 +780,7 @@ export default function ClientesPage() {
               </div>
             </div>
             <p className="mt-3 text-center text-xs text-muted-foreground">
-              Para tipo Empresa/Profissional e endereço, use a versão desktop.
+              Toque no status no card para mudar só a etapa, sem abrir a edição completa.
             </p>
           </div>
         </div>
@@ -913,7 +918,7 @@ export default function ClientesPage() {
                             <div className="w-36">
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Contato</label>
                               <select value={editForm.status_lead ?? ""} onChange={(e) => setEditForm({ ...editForm, status_lead: e.target.value })} className="h-7 w-full rounded border border-border/80 bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none">
-                                {STATUS_COMERCIAL_OPCOES.filter((o) => o.id !== "all").map((opt) => (
+                                {STATUS_LEAD_FILTER_TABS.filter((o) => o.id !== "all").map((opt) => (
                                   <option key={opt.id || "blank"} value={opt.id}>{opt.label}</option>
                                 ))}
                               </select>
@@ -954,24 +959,11 @@ export default function ClientesPage() {
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{client.origem_captacao || "—"}</td>
                         <td className="px-4 py-3">
-                          {(() => {
-                            const etapa = getStatusLead(client)
-                            const label = getStatusLeadLabel(client)
-                            const colorMap: Record<string, string> = {
-                              "": "bg-secondary text-muted-foreground border-border",
-                              tentando_contato: "bg-slate-500/10 text-slate-400 border-slate-500/30",
-                              em_conversa: "bg-sky-500/10 text-sky-400 border-sky-500/30",
-                              agendado: "bg-indigo-500/10 text-indigo-400 border-indigo-500/30",
-                              contratando: "bg-amber-500/10 text-amber-400 border-amber-500/30",
-                              negociando: "bg-violet-500/10 text-violet-400 border-violet-500/30",
-                              ativo: "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-                              perdido: "bg-red-500/10 text-red-400 border-red-500/30",
-                              bloqueado: "bg-black/15 text-gray-900 border-gray-800/40",
-                              sem_interesse: "bg-gray-500/10 text-gray-700 border-gray-500/30",
-                            }
-                            const color = colorMap[etapa] ?? "bg-secondary text-muted-foreground border-border"
-                            return <span className={cn("inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium", color)}>{label}</span>
-                          })()}
+                          <ClientStatusBadge
+                            statusId={getStatusLead(client)}
+                            saving={statusUpdatingId === client.id}
+                            onSelect={(id) => quickUpdateClientStatus(client, id)}
+                          />
                         </td>
                         <td className="px-4 py-3">
                           <ProductStatusBadge contract={(client as ClientListItem).primary_contract} />
@@ -1040,18 +1032,6 @@ export default function ClientesPage() {
                   <div className="flex items-center gap-1">
                     <button title="Editar" onClick={() => startEdit(client)} className="rounded p-1 text-muted-foreground hover:text-primary transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                     <button title="Excluir" onClick={() => handleDelete(client)} className="rounded p-1 text-muted-foreground hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
-                    {(() => {
-                      const etapa = getStatusLead(client)
-                      const label = getStatusLeadLabel(client)
-                      const colorMap: Record<string, string> = {
-                        "": "bg-secondary text-muted-foreground",
-                        tentando_contato: "bg-slate-500/20 text-slate-400", em_conversa: "bg-sky-500/20 text-sky-400", agendado: "bg-indigo-500/20 text-indigo-400",
-                        contratando: "bg-amber-500/20 text-amber-400", negociando: "bg-violet-500/20 text-violet-400", ativo: "bg-emerald-500/20 text-emerald-400",
-                        perdido: "bg-red-500/20 text-red-400", bloqueado: "bg-black/20 text-gray-900", sem_interesse: "bg-gray-500/20 text-gray-700",
-                      }
-                      const color = colorMap[etapa] ?? "bg-secondary text-muted-foreground"
-                      return <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", color)}>{label}</span>
-                    })()}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
@@ -1061,20 +1041,13 @@ export default function ClientesPage() {
                   {client.email && <div className="flex items-center gap-1.5"><Mail className="h-3 w-3" />{client.email}</div>}
                   {client.phone && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3" />{client.phone}</div>}
                   {(client.address || client.city || client.state) && <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3 shrink-0" />{client.address || [client.city, client.state].filter(Boolean).join(", ")}</div>}
-                  <div className="mt-2 flex flex-wrap gap-2 border-t border-border/50 pt-2 text-xs">
+                  <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2 text-xs">
                     <span className="text-muted-foreground">Contato:</span>
-                    {(() => {
-                      const etapa = getStatusLead(client)
-                      const label = getStatusLeadLabel(client)
-                      const colorMap: Record<string, string> = {
-                        "": "text-muted-foreground",
-                        tentando_contato: "text-slate-400", em_conversa: "text-sky-400", agendado: "text-indigo-400",
-                        contratando: "text-amber-400", negociando: "text-violet-400", ativo: "text-emerald-400",
-                        perdido: "text-red-400", bloqueado: "text-gray-900", sem_interesse: "text-gray-600",
-                      }
-                      const color = colorMap[etapa] ?? "text-muted-foreground"
-                      return <span className={cn("font-medium", color)}>{label}</span>
-                    })()}
+                    <ClientStatusBadge
+                      statusId={getStatusLead(client)}
+                      saving={statusUpdatingId === client.id}
+                      onSelect={(id) => quickUpdateClientStatus(client, id)}
+                    />
                     <span className="text-muted-foreground/50">|</span>
                     <span className="text-muted-foreground">Origem:</span>
                     <span className="font-medium">{client.origem_captacao || "—"}</span>
