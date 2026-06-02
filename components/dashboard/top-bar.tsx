@@ -29,7 +29,7 @@ export function TopBar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
   )?.[1] ?? "Dashboard"
 
   return (
-    <header className="sticky top-0 z-40 shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md pt-[max(0.5rem,env(safe-area-inset-top))] lg:border-b-0 lg:bg-background/80 lg:pt-0">
+    <header className="sticky top-0 z-40 shrink-0 border-b border-border/50 bg-background/95 backdrop-blur-md pt-[max(0.75rem,env(safe-area-inset-top))] lg:border-b-0 lg:bg-background/80 lg:pt-0">
       <div className="flex h-12 items-center gap-3 px-3 lg:h-16 lg:px-6">
         <h1 className="min-w-0 flex-1 truncate text-base font-semibold text-foreground lg:text-lg">{title}</h1>
 

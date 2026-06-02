@@ -102,14 +102,14 @@ export function AppSidebar({
       className={cn(
         "flex flex-col border border-sidebar-border bg-sidebar shadow-sm transition-[width] duration-200 ease-out",
         mobile
-          ? "fixed inset-y-0 right-0 z-[60] w-[min(18rem,92vw)] rounded-l-2xl border-r-0"
+          ? "fixed inset-y-0 right-0 z-[60] w-[min(18rem,92vw)] rounded-l-2xl border-r-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
           : "hidden lg:flex fixed left-6 top-10 bottom-10 z-40 rounded-2xl",
         !mobile && (collapsed ? "w-16" : "w-56"),
       )}
     >
       {mobile && (
-        <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2.5 shrink-0">
-          <span className="text-sm font-semibold text-sidebar-foreground">Menu do painel</span>
+        <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border px-3 py-3">
+          <span className="text-sm font-semibold text-sidebar-foreground pr-2">Menu</span>
           <button
             type="button"
             onClick={closeMobile}

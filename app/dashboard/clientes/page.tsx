@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale"
 
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
+import { ClientsKanbanMobile } from "@/components/dashboard/clients-kanban-mobile"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
 import {
@@ -165,7 +166,9 @@ export default function ClientesPage() {
         ? "stefanie"
         : isAdmin && adminClientesTab === "xpress-solutions"
           ? "xpress-solutions"
-          : "geral"
+          : isAdmin && adminClientesTab === "geral"
+            ? "geral-todos"
+            : "geral"
 
   const clientesListKey = `clients-list-${clientesView}`
 
@@ -518,9 +521,9 @@ export default function ClientesPage() {
   const isClientActive = (c: Client) => c.is_active !== false
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 lg:gap-6">
       <div>
-        <h1 className="text-3xl font-bold text-foreground tracking-tight mb-2">Clientes</h1>
+        <h1 className="text-xl font-bold text-foreground tracking-tight mb-1.5 lg:text-3xl lg:mb-2">Clientes</h1>
         {isComercial ? (
           <>
             <p className="text-sm text-foreground/90 mb-0.5">Aba Geral: Contatos sem origem. Coloque sua origem no contato para ele ir para sua lista.</p>
@@ -554,8 +557,8 @@ export default function ClientesPage() {
           </>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground mb-2">
-              Aba Geral: website e compras manuais. Stefanie e Xpress Solutions têm abas próprias por origem de captação.
+            <p className="text-xs text-muted-foreground mb-2 lg:text-sm">
+              Aba Geral: todos os contatos. Aba Stefanie: somente contatos dela. Xpress Solutions: origem Xpress.
             </p>
             <div className="flex flex-wrap items-center gap-2 mt-2">
               {(
@@ -595,7 +598,7 @@ export default function ClientesPage() {
           />
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <div className="flex rounded-lg border border-border overflow-hidden">
+          <div className="hidden rounded-lg border border-border overflow-hidden lg:flex">
             <button title="Lista" onClick={() => setView("list")} className={cn("px-3 py-2 transition-colors", view === "list" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-secondary")}>
               <List className="h-4 w-4" />
             </button>
@@ -604,12 +607,12 @@ export default function ClientesPage() {
             </button>
           </div>
           {!isComercial && (
-            <button onClick={() => setShowImport(true)} className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary transition-colors">
-              <Upload className="h-4 w-4" /> Importar contatos
+            <button onClick={() => setShowImport(true)} className="hidden items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-secondary transition-colors sm:flex">
+              <Upload className="h-4 w-4" /> <span className="hidden sm:inline">Importar</span>
             </button>
           )}
-          <button onClick={() => setShowAdd(true)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-            <Plus className="h-4 w-4" /> Novo Cliente
+          <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors sm:gap-2 sm:px-4 sm:py-2.5">
+            <Plus className="h-4 w-4" /> <span className="hidden xs:inline sm:inline">Novo</span>
           </button>
         </div>
       </div>
@@ -682,8 +685,104 @@ export default function ClientesPage() {
         </div>
       )}
 
+      {/* Mobile: Kanban por status */}
+      <div className="lg:hidden">
+        {(!isComercial || comercialClientesTab === "meu") ? (
+          <ClientsKanbanMobile
+            clients={(filtered ?? []) as ClientListItem[]}
+            filterTab={filterTab}
+            getStatusLead={getStatusLead}
+            onEdit={startEdit}
+            onDelete={handleDelete}
+            emptyMessage={search ? "Nenhum cliente encontrado." : "Nenhum cliente cadastrado."}
+          />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {(filtered ?? []).map((client) => (
+              <div key={client.id} className="glass rounded-lg border border-border/50 p-3">
+                <div className="flex items-start gap-2">
+                  <ClientTypeAvatar
+                    customerType={client.customer_type}
+                    cpfCnpj={client.cpf_cnpj}
+                    liticaproData={client.liticapro_data}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm text-foreground">{client.name}</p>
+                    {client.phone && <p className="text-xs text-muted-foreground">{client.phone}</p>}
+                  </div>
+                  <button type="button" onClick={() => startEdit(client)} className="p-1.5 text-primary">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!filtered?.length && (
+              <p className="py-8 text-center text-sm text-muted-foreground">Nenhum contato sem origem.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {editingId && (
+        <div className="lg:hidden fixed inset-0 z-[70] flex flex-col bg-background pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+          <div className="flex shrink-0 items-center justify-between border-b border-border px-3 py-3">
+            <span className="font-semibold text-foreground">Editar contato</span>
+            <button type="button" onClick={() => setEditingId(null)} className="rounded-lg p-2 text-muted-foreground hover:bg-secondary">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            <p className="mb-3 text-sm font-medium text-foreground truncate">{editForm.name}</p>
+            <p className="mb-3 text-xs text-muted-foreground">Use os campos abaixo e salve.</p>
+            <div className="space-y-3 rounded-lg border border-border p-3">
+              <input
+                value={editForm.name ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="Nome"
+              />
+              <input
+                value={editForm.phone ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, phone: formatPhone(e.target.value) })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                placeholder="Telefone"
+              />
+              <select
+                value={editForm.origem_captacao ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              >
+                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null).map((opt) => (
+                  <option key={opt.value || "blank"} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              <select
+                value={editForm.status_lead ?? ""}
+                onChange={(e) => setEditForm({ ...editForm, status_lead: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+              >
+                {STATUS_COMERCIAL_OPCOES.filter((o) => o.id !== "all").map((opt) => (
+                  <option key={opt.id || "blank"} value={opt.id}>{opt.label}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 pt-2">
+                <button type="button" onClick={saveEdit} className="flex-1 rounded-lg bg-primary py-2.5 text-sm font-medium text-primary-foreground">
+                  Salvar
+                </button>
+                <button type="button" onClick={() => setEditingId(null)} className="rounded-lg border border-border px-4 py-2.5 text-sm">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              Para tipo Empresa/Profissional e endereço, use a versão desktop.
+            </p>
+          </div>
+        </div>
+      )}
+
       {view === "list" && (
-        <div className="glass rounded-xl overflow-hidden">
+        <div className="hidden lg:block glass rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -922,7 +1021,7 @@ export default function ClientesPage() {
 
       {view === "grid" && (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="hidden lg:grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filtered?.map((client) => (
               <div key={client.id} className={cn("glass rounded-xl p-5 hover:glow-blue-sm transition-all", !isClientActive(client) && "opacity-60")}>
                 <div className="flex items-start justify-between mb-3">

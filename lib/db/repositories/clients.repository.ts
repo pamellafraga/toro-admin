@@ -6,7 +6,13 @@ import {
 } from "@/lib/constants/origem-captacao"
 import { queryMany, queryOne } from "@/lib/db/pool"
 
-export type ClientesListView = "geral" | "stefanie" | "xpress-solutions" | "comercial-geral" | "comercial-meu"
+export type ClientesListView =
+  | "geral-todos"
+  | "geral"
+  | "stefanie"
+  | "xpress-solutions"
+  | "comercial-geral"
+  | "comercial-meu"
 
 const ORIGENS_EXCLUIDAS_ABA_GERAL = [...STEFANIE_ORIGEM_CAPTACAO, XPRESS_ORIGEM_CAPTACAO]
 
@@ -33,6 +39,12 @@ export async function listClientsForDashboard(
   view: ClientesListView,
   comercialDisplayName?: string | null,
 ): Promise<ClientRow[]> {
+  if (view === "geral-todos") {
+    return queryMany<ClientRow>(
+      `SELECT * FROM clients ORDER BY created_at ASC, name ASC LIMIT 10000`,
+    )
+  }
+
   if (view === "comercial-geral") {
     return queryMany<ClientRow>(
       `SELECT * FROM clients
