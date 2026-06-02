@@ -17,13 +17,13 @@ export default function DashboardHome() {
   const stats = data?.stats
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 lg:gap-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Olá, {userName}</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Aqui está o resumo do seu painel.</p>
+        <h2 className="text-xl font-bold text-foreground lg:text-2xl">Olá, {userName}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground lg:text-sm">Aqui está o resumo do seu painel.</p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard
           title="Contatos"
           value={stats?.totalClients ?? 0}

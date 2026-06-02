@@ -15,14 +15,14 @@ interface StatCardProps {
 export function StatCard({ title, value, subtitle, icon: Icon, trend, valueClassName, className }: StatCardProps) {
   return (
     <div className={cn(
-      "glass rounded-xl p-5 glow-blue-sm hover:glow-blue transition-all duration-300 cursor-default",
+      "glass rounded-xl p-4 lg:p-5 glow-blue-sm hover:glow-blue transition-all duration-300 cursor-default",
       "hover:-translate-y-1 hover:border-primary/30 group",
       className
     )}>
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className={cn("text-2xl font-bold", valueClassName ?? "text-foreground")}>{value}</p>
+          <p className={cn("text-xl font-bold lg:text-2xl", valueClassName ?? "text-foreground")}>{value}</p>
           {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
           {trend && (
             <p className={cn("text-xs font-medium", trend.positive ? "text-emerald-400" : "text-red-400")}>
