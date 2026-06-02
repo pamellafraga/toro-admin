@@ -25,6 +25,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -32,6 +33,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       if (stored !== null) setCollapsed(stored === "true")
     } catch {}
   }, [])
+
+  useEffect(() => {
+    setMobileNavOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [mobileNavOpen])
 
   const toggleSidebar = () => {
     setCollapsed((prev) => {
@@ -57,20 +71,31 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
   }, [loading, profile, isComercial, pathname, router, hasPermission])
 
-  // Sempre renderiza o layout com sidebar - ela se popula quando auth carrega
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-[100dvh] bg-background">
       <AppSidebar collapsed={collapsed} onToggleCollapse={toggleSidebar} />
+
+      {mobileNavOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-[55] bg-black/50 lg:hidden"
+            aria-label="Fechar menu"
+            onClick={() => setMobileNavOpen(false)}
+          />
+          <AppSidebar mobile onMobileClose={() => setMobileNavOpen(false)} />
+        </>
+      )}
+
       <div
         className={cn(
-          "flex flex-1 flex-col transition-[margin-left] duration-200 ease-out",
-          collapsed ? "ml-[6rem]" : "ml-[16rem]"
+          "flex min-w-0 flex-1 flex-col transition-[margin-left] duration-200 ease-out",
+          "ml-0",
+          collapsed ? "lg:ml-[6rem]" : "lg:ml-[16rem]",
         )}
       >
-        <TopBar />
-        <main className="flex-1 overflow-auto p-6">
-          {children}
-        </main>
+        <TopBar onOpenMobileMenu={() => setMobileNavOpen(true)} />
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-3 sm:p-4 lg:p-6">{children}</main>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 "use client"
 
 import { usePathname } from "next/navigation"
-import { Menu } from "lucide-react"
+import { MoreVertical } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 
@@ -9,6 +9,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
   "/dashboard/chamados": "Chamados",
   "/dashboard/produtos": "Produtos",
+  "/dashboard/clientes": "Clientes",
   "/dashboard/seguradoras": "Marketing",
   "/dashboard/chat": "Chat Interno",
   "/dashboard/financeiro": "Financeiro",
@@ -16,41 +17,52 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard/relatorios": "Relatórios",
   "/dashboard/notificacoes": "Notificações",
   "/dashboard/atividades": "Atividades",
-  "/dashboard/usuarios": "Gerenciamento de Usuários",
-  "/dashboard/gastos-empresa": "Gastos da Empresa",
-  "/dashboard/senhas": "Gerenciamento dos Sistemas",
+  "/dashboard/usuarios": "Usuários",
+  "/dashboard/gastos-empresa": "Gastos",
+  "/dashboard/senhas": "Sistemas",
 }
 
-export function TopBar({ onToggleSidebar }: { onToggleSidebar?: () => void }) {
+export function TopBar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) {
   const pathname = usePathname()
   const title = Object.entries(PAGE_TITLES).find(
-    ([path]) => pathname === path || (path !== "/dashboard" && pathname.startsWith(path))
+    ([path]) => pathname === path || (path !== "/dashboard" && pathname.startsWith(path)),
   )?.[1] ?? "Dashboard"
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between bg-background/80 backdrop-blur-xl px-6">
-      <div className="flex items-center gap-4">
-        <button
-          onClick={onToggleSidebar}
-          className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors lg:hidden"
-          aria-label="Menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+    <header className="sticky top-0 z-30 flex h-12 shrink-0 items-center gap-2 border-b border-border/50 bg-background/95 backdrop-blur-md px-3 lg:h-16 lg:border-b-0 lg:bg-background/80 lg:px-6">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <Link href="/dashboard" className="shrink-0 lg:hidden">
+          <Image
+            src="/logox.png"
+            alt="Xpress Solutions"
+            width={88}
+            height={28}
+            className="h-6 w-auto object-contain"
+            priority
+          />
+        </Link>
+        <h1 className="truncate text-base font-semibold text-foreground lg:text-lg">{title}</h1>
       </div>
 
-      {/* Logo — só a imagem, sem moldura nem texto */}
-      <Link href="/dashboard" className="flex items-center group">
+      <Link href="/dashboard" className="hidden shrink-0 items-center lg:flex">
         <Image
           src="/logox.png"
           alt="Xpress Solutions"
           width={120}
           height={40}
-          className="object-contain h-8 w-auto drop-shadow-[0_1px_3px_rgba(0,0,0,0.25)] group-hover:opacity-90 transition-opacity"
+          className="h-8 w-auto object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.25)] hover:opacity-90 transition-opacity"
           priority
         />
       </Link>
+
+      <button
+        type="button"
+        onClick={onOpenMobileMenu}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-secondary/80 text-foreground hover:bg-secondary lg:hidden"
+        aria-label="Abrir menu do painel"
+      >
+        <MoreVertical className="h-5 w-5" />
+      </button>
     </header>
   )
 }

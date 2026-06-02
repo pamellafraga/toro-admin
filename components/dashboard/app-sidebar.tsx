@@ -25,6 +25,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  X,
 } from "lucide-react"
 import type { Permission } from "@/lib/types"
 
@@ -42,9 +43,20 @@ const navItems: { label: string; href: string; icon: typeof Home; permission: Pe
   { label: "Gastos da Empresa", href: "/dashboard/gastos-empresa", icon: CreditCard, permission: "admin" },
 ]
 
-type AppSidebarProps = { collapsed?: boolean; onToggleCollapse?: () => void }
+type AppSidebarProps = {
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+  /** Drawer de navegação no celular */
+  mobile?: boolean
+  onMobileClose?: () => void
+}
 
-export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarProps) {
+export function AppSidebar({
+  collapsed = false,
+  onToggleCollapse,
+  mobile = false,
+  onMobileClose,
+}: AppSidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
   const { profile, hasPermission, isAdmin } = useAuth()
@@ -82,16 +94,34 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
 
   const filteredNav = navItems.filter((item) => hasPermission(item.permission))
   const [configOpen, setConfigOpen] = useState(pathname.startsWith("/dashboard/usuarios") || pathname.startsWith("/dashboard/senhas"))
+  const showLabels = mobile || !collapsed
+  const closeMobile = () => onMobileClose?.()
 
   return (
     <aside
       className={cn(
-        "fixed left-6 top-10 bottom-10 z-40 flex flex-col border border-sidebar-border bg-sidebar shadow-sm transition-[width] duration-200 ease-out rounded-2xl",
-        collapsed ? "w-16" : "w-56"
+        "flex flex-col border border-sidebar-border bg-sidebar shadow-sm transition-[width] duration-200 ease-out",
+        mobile
+          ? "fixed inset-y-0 right-0 z-[60] w-[min(18rem,92vw)] rounded-l-2xl border-r-0"
+          : "hidden lg:flex fixed left-6 top-10 bottom-10 z-40 rounded-2xl",
+        !mobile && (collapsed ? "w-16" : "w-56"),
       )}
     >
-      {/* Navigation (logo/nome da empresa ficam no topo do dashboard) */}
-      <nav className="flex-1 overflow-y-auto px-2 pt-4 pb-2">
+      {mobile && (
+        <div className="flex items-center justify-between border-b border-sidebar-border px-3 py-2.5 shrink-0">
+          <span className="text-sm font-semibold text-sidebar-foreground">Menu do painel</span>
+          <button
+            type="button"
+            onClick={closeMobile}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent"
+            aria-label="Fechar menu"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+
+      <nav className={cn("flex-1 overflow-y-auto px-2 pb-2", mobile ? "pt-2" : "pt-4")}>
         <ul className="flex flex-col gap-1">
           {filteredNav.map((item) => {
             const isActive =
@@ -103,10 +133,12 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
               <li key={item.href}>
                 <Link
                   href={item.href}
-                  title={collapsed ? item.label : undefined}
+                  title={!showLabels ? item.label : undefined}
+                  onClick={mobile ? closeMobile : undefined}
                   className={cn(
-                    "group/nav flex items-center rounded-lg text-sm font-medium transition-all duration-200",
-                    collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5",
+                    "group/nav flex items-center rounded-lg font-medium transition-all duration-200",
+                    mobile ? "gap-3 px-3 py-2 text-sm" : "text-sm",
+                    showLabels ? "gap-3 px-3 py-2.5" : "justify-center p-2.5",
                     isActive
                       ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
@@ -120,7 +152,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
                       </span>
                     )}
                   </span>
-                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {showLabels && <span className="truncate">{item.label}</span>}
                 </Link>
               </li>
             )
@@ -128,11 +160,12 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
 
           {isAdmin && (
             <>
-              {collapsed ? (
+              {!showLabels && !mobile ? (
                 <>
                   <li>
                     <Link
                       href="/dashboard/usuarios"
+                      onClick={mobile ? closeMobile : undefined}
                       title="Configurações – Usuários"
                       className={cn(
                         "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
@@ -147,6 +180,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
                   <li>
                     <Link
                       href="/dashboard/senhas"
+                      onClick={mobile ? closeMobile : undefined}
                       title="Configurações – Sistemas"
                       className={cn(
                         "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
@@ -180,6 +214,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
                       <li className="pl-6">
                         <Link
                           href="/dashboard/usuarios"
+                          onClick={mobile ? closeMobile : undefined}
                           title="Usuários"
                           className={cn(
                             "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
@@ -195,6 +230,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
                       <li className="pl-6">
                         <Link
                           href="/dashboard/senhas"
+                          onClick={mobile ? closeMobile : undefined}
                           title="Sistemas (login, senha, link das ferramentas)"
                           className={cn(
                             "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
@@ -217,29 +253,33 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
       </nav>
 
       {/* Sair em cima, Notificações embaixo; depois usuário logado */}
-      <div className="border-t border-sidebar-border p-3 space-y-2">
+      <div className={cn("border-t border-sidebar-border space-y-2 shrink-0", mobile ? "p-2" : "p-3")}>
         <div className="flex flex-col gap-1">
           <button
-            onClick={handleLogout}
-            title={collapsed ? "Sair" : undefined}
+            onClick={() => {
+              closeMobile()
+              void handleLogout()
+            }}
+            title={!showLabels ? "Sair" : undefined}
             className={cn(
               "group/logout flex w-full items-center text-sm font-medium text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
-              collapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"
+              showLabels ? "gap-3 px-3 py-2.5" : "justify-center p-2.5",
             )}
           >
             <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/logout:scale-110 group-hover/logout:-translate-x-0.5" />
-            {!collapsed && <span>Sair</span>}
+            {showLabels && <span>Sair</span>}
           </button>
           <Link
             href="/dashboard/notificacoes"
-            title={collapsed ? "Notificações" : undefined}
+            onClick={mobile ? closeMobile : undefined}
+            title={!showLabels ? "Notificações" : undefined}
             className={cn(
               "group/bell relative flex w-full items-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary transition-all duration-200",
-              collapsed ? "justify-center p-2.5" : "gap-2 px-3 py-2.5"
+              showLabels ? "gap-2 px-3 py-2.5" : "justify-center p-2.5",
             )}
           >
             <Bell className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/bell:scale-110" />
-            {!collapsed && <span>Notificações</span>}
+            {showLabels && <span>Notificações</span>}
             {notificationUnread > 0 && (
               <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-sidebar">
                 {notificationUnread > 9 ? "9+" : notificationUnread}
@@ -251,14 +291,14 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
         <div
           className={cn(
             "flex items-center rounded-lg border border-sidebar-border/50 bg-sidebar-accent/50 p-2",
-            collapsed ? "justify-center" : "gap-3"
+            showLabels ? "gap-3" : "justify-center",
           )}
-          title={collapsed ? `${profile?.name ?? ""} · ${profile?.role ?? ""}` : undefined}
+          title={!showLabels ? `${profile?.name ?? ""} · ${profile?.role ?? ""}` : undefined}
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary/40 text-sidebar-primary-foreground font-semibold text-sm">
             {profile?.name?.charAt(0)?.toUpperCase() || "U"}
           </div>
-          {!collapsed && (
+          {showLabels && (
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-sidebar-foreground truncate">{profile?.name}</p>
               <p className="text-xs text-sidebar-foreground/80 capitalize truncate">{profile?.role}</p>
@@ -268,7 +308,7 @@ export function AppSidebar({ collapsed = false, onToggleCollapse }: AppSidebarPr
       </div>
 
       {/* Botão minimizar / expandir */}
-      {onToggleCollapse && (
+      {onToggleCollapse && !mobile && (
         <button
           type="button"
           onClick={onToggleCollapse}
