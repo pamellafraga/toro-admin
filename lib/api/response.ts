@@ -22,7 +22,7 @@ export function handleApiError(e: unknown, fallback = "Erro interno."): NextResp
 
   if (!isDatabaseConfigured()) {
     return jsonError(
-      "Banco PostgreSQL não configurado. Defina DATABASE_HOST no .env.local e execute os scripts em scripts/locaweb/.",
+      "Banco PostgreSQL não configurado. Defina DATABASE_HOST nas variáveis de ambiente (Vercel ou .env.local) e execute os scripts em scripts/locaweb/.",
       503,
     )
   }
