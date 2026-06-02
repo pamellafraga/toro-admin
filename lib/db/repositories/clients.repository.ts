@@ -34,7 +34,7 @@ export async function listClientsForDashboard(
     return queryMany<ClientRow>(
       `SELECT * FROM clients
        WHERE TRIM(COALESCE(origem_captacao, '')) = ''
-       ORDER BY name
+       ORDER BY created_at ASC, name ASC
        LIMIT 10000`,
     )
   }
@@ -42,7 +42,7 @@ export async function listClientsForDashboard(
   if (view === "comercial-meu" && comercialDisplayName) {
     const origem = origemCaptacaoForComercial(comercialDisplayName)
     return queryMany<ClientRow>(
-      `SELECT * FROM clients WHERE origem_captacao = $1 ORDER BY name LIMIT 10000`,
+      `SELECT * FROM clients WHERE origem_captacao = $1 ORDER BY created_at ASC, name ASC LIMIT 10000`,
       [origem],
     )
   }
@@ -54,7 +54,7 @@ export async function listClientsForDashboard(
           OR c.id IN (
             SELECT DISTINCT client_id FROM contracts WHERE origem_comercial = $2
           )
-       ORDER BY c.name
+       ORDER BY c.created_at ASC, c.name ASC
        LIMIT 10000`,
       [STEFANIE_ORIGEM_CAPTACAO, STEFANIE_ORIGEM_COMERCIAL],
     )
@@ -67,7 +67,7 @@ export async function listClientsForDashboard(
        AND c.id NOT IN (
          SELECT DISTINCT client_id FROM contracts WHERE origem_comercial = $2
        )
-     ORDER BY c.name
+     ORDER BY c.created_at ASC, c.name ASC
      LIMIT 10000`,
     [STEFANIE_ORIGEM_CAPTACAO, STEFANIE_ORIGEM_COMERCIAL],
   )
