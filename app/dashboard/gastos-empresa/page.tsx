@@ -27,6 +27,7 @@ interface Fee {
   valueUsd: number
   valueBrl: number
   dueDate: number
+  dueMonth?: number
   billingPeriod: BillingPeriod
   notes?: string
 }
@@ -38,6 +39,7 @@ type FeeFormData = {
   valueUsd: number
   valueBrl: number
   dueDate: number
+  dueMonth: number
   billingPeriod: BillingPeriod
   notes: string
 }
@@ -49,6 +51,7 @@ const EMPTY_FORM: FeeFormData = {
   valueUsd: 0,
   valueBrl: 0,
   dueDate: 1,
+  dueMonth: 1,
   billingPeriod: "mensal",
   notes: "",
 }
@@ -62,6 +65,33 @@ const BILLING_LABELS: Record<BillingPeriod, string> = {
 const CURRENCY_LABELS: Record<FeeCurrency, string> = {
   usd: "Dólar (USD)",
   brl: "Real (BRL)",
+}
+
+const MONTH_OPTIONS = [
+  { value: 1, label: "Janeiro" },
+  { value: 2, label: "Fevereiro" },
+  { value: 3, label: "Março" },
+  { value: 4, label: "Abril" },
+  { value: 5, label: "Maio" },
+  { value: 6, label: "Junho" },
+  { value: 7, label: "Julho" },
+  { value: 8, label: "Agosto" },
+  { value: 9, label: "Setembro" },
+  { value: 10, label: "Outubro" },
+  { value: 11, label: "Novembro" },
+  { value: 12, label: "Dezembro" },
+] as const
+
+function monthLabel(month: number | undefined): string {
+  return MONTH_OPTIONS.find((m) => m.value === month)?.label ?? "—"
+}
+
+function formatDueLabel(fee: Fee): string {
+  if (fee.billingPeriod === "vitalicio") return "—"
+  if (fee.billingPeriod === "anual") {
+    return `${monthLabel(fee.dueMonth)}, dia ${fee.dueDate}`
+  }
+  return `Dia ${fee.dueDate}`
 }
 
 const INITIAL_FEES: Fee[] = [
@@ -189,6 +219,7 @@ export default function GastoEmpresaPage() {
       valueUsd: currency === "usd" ? fee.valueUsd : 0,
       valueBrl: currency === "brl" ? fee.valueBrl : getEffectiveBrl(fee, usdRate),
       dueDate: fee.dueDate,
+      dueMonth: fee.dueMonth ?? 1,
       billingPeriod: fee.billingPeriod ?? "mensal",
       notes: fee.notes ?? "",
     })
@@ -214,6 +245,11 @@ export default function GastoEmpresaPage() {
       return
     }
 
+    if (formData.billingPeriod === "anual" && (formData.dueMonth < 1 || formData.dueMonth > 12)) {
+      alert("Selecione o mês de vencimento")
+      return
+    }
+
     const isUsd = formData.currency === "usd"
     const valueUsd = isUsd ? formData.valueUsd : 0
     const valueBrl = isUsd ? convertUsdToBrl(formData.valueUsd, usdRate) : formData.valueBrl
@@ -225,6 +261,7 @@ export default function GastoEmpresaPage() {
       valueUsd,
       valueBrl,
       dueDate: formData.billingPeriod === "vitalicio" ? 0 : formData.dueDate,
+      dueMonth: formData.billingPeriod === "anual" ? formData.dueMonth : undefined,
       billingPeriod: formData.billingPeriod,
       notes: formData.notes,
     }
@@ -427,18 +464,56 @@ export default function GastoEmpresaPage() {
                 </div>
               )}
               {formData.billingPeriod !== "vitalicio" && (
-                <div>
-                  <Label htmlFor="dueDate">Dia do Vencimento</Label>
-                  <Input
-                    id="dueDate"
-                    type="number"
-                    min="1"
-                    max="31"
-                    placeholder="25"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: parseInt(e.target.value, 10) || 1 })}
-                  />
-                </div>
+                formData.billingPeriod === "anual" ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="dueMonth">Mês do vencimento</Label>
+                      <select
+                        id="dueMonth"
+                        title="Mês do vencimento"
+                        aria-label="Mês do vencimento"
+                        value={formData.dueMonth}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dueMonth: parseInt(e.target.value, 10) || 1 })
+                        }
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
+                      >
+                        {MONTH_OPTIONS.map((month) => (
+                          <option key={month.value} value={month.value}>
+                            {month.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label htmlFor="dueDate">Dia do vencimento</Label>
+                      <Input
+                        id="dueDate"
+                        type="number"
+                        min="1"
+                        max="31"
+                        placeholder="15"
+                        value={formData.dueDate}
+                        onChange={(e) =>
+                          setFormData({ ...formData, dueDate: parseInt(e.target.value, 10) || 1 })
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Label htmlFor="dueDate">Dia do Vencimento</Label>
+                    <Input
+                      id="dueDate"
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="25"
+                      value={formData.dueDate}
+                      onChange={(e) => setFormData({ ...formData, dueDate: parseInt(e.target.value, 10) || 1 })}
+                    />
+                  </div>
+                )
               )}
               <div>
                 <Label htmlFor="notes">Notas (Opcional)</Label>
@@ -577,7 +652,7 @@ export default function GastoEmpresaPage() {
                       {fee.billingPeriod !== "vitalicio" && (
                         <div className="flex justify-between border-t pt-2 text-sm">
                           <span className="text-muted-foreground">Vencimento:</span>
-                          <span className="font-semibold">Dia {fee.dueDate}</span>
+                          <span className="font-semibold text-right">{formatDueLabel(fee)}</span>
                         </div>
                       )}
                     </CardContent>
