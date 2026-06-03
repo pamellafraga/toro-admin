@@ -66,18 +66,22 @@ export function AppSidebar({
 
   useEffect(() => {
     const fetchUnread = async () => {
-      if (!profile?.id) return
-      const { count } = await supabase
-        .from("notifications")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", profile.id)
-        .eq("is_read", false)
-      setNotificationUnread(count ?? 0)
+      try {
+        const res = await fetch("/api/notifications?count=unread", {
+          credentials: "include",
+          cache: "no-store",
+        })
+        if (!res.ok) return
+        const json = (await res.json()) as { count?: number }
+        setNotificationUnread(json.count ?? 0)
+      } catch {
+        setNotificationUnread(0)
+      }
     }
     fetchUnread()
     const interval = setInterval(fetchUnread, 30000)
     return () => clearInterval(interval)
-  }, [profile?.id, supabase])
+  }, [profile?.id])
 
   const handleLogout = async () => {
     localStorage.removeItem("xpress_auth")

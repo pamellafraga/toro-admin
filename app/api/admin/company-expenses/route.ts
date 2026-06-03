@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { isAdmin, isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonForbidden, jsonOk, jsonUnauthorized } from "@/lib/api/response"
+import { processCompanyExpenseDueReminders } from "@/lib/company-expenses/due-notifications"
 import {
   deleteCompanyExpense,
   listCompanyExpenses,
@@ -14,6 +15,7 @@ export async function GET(request: NextRequest) {
   if (!isAdmin(request)) return jsonForbidden()
 
   try {
+    await processCompanyExpenseDueReminders()
     const data = await listCompanyExpenses()
     return jsonOk(data)
   } catch (e) {
