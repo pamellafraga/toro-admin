@@ -10,15 +10,31 @@ export type ClientListFilterRow = {
   primary_contract?: { status: string } | null
 }
 
+function digitsOnly(value: string | null | undefined): string {
+  return String(value ?? "").replace(/\D/g, "")
+}
+
 export function matchesClientSearch(client: ClientListFilterRow, search: string): boolean {
   const q = search.trim()
   if (!q) return true
   const lower = q.toLowerCase()
+  const qDigits = digitsOnly(q)
+
+  const phoneDigits = digitsOnly(client.phone)
+  const phoneMatch =
+    (client.phone || "").includes(q) ||
+    (qDigits.length >= 2 && phoneDigits.includes(qDigits))
+
+  const cpfDigits = digitsOnly(client.cpf_cnpj)
+  const cpfMatch =
+    (client.cpf_cnpj || "").includes(q) ||
+    (qDigits.length >= 3 && cpfDigits.includes(qDigits))
+
   return (
     (client.name || "").toLowerCase().includes(lower) ||
-    (client.cpf_cnpj || "").includes(q) ||
+    cpfMatch ||
     (client.email || "").toLowerCase().includes(lower) ||
-    (client.phone || "").includes(q)
+    phoneMatch
   )
 }
 

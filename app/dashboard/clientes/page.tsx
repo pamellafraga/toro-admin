@@ -722,7 +722,7 @@ export default function ClientesPage() {
           <div className="relative min-w-0 flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              placeholder="Buscar por nome ou CNPJ..."
+              placeholder="Buscar por nome, CNPJ, e-mail ou telefone..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
