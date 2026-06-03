@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react"
+import Link from "next/link"
 import { cn } from "@/lib/utils"
 
 interface StatCardProps {
@@ -10,15 +11,22 @@ interface StatCardProps {
   /** Cor de destaque no valor (ex: text-primary para Receita) */
   valueClassName?: string
   className?: string
+  /** Quando informado, o card inteiro vira link para a seção correspondente */
+  href?: string
 }
 
-export function StatCard({ title, value, subtitle, icon: Icon, trend, valueClassName, className }: StatCardProps) {
-  return (
-    <div className={cn(
-      "glass rounded-xl p-4 lg:p-5 glow-blue-sm hover:glow-blue transition-all duration-300 cursor-default",
-      "hover:-translate-y-1 hover:border-primary/30 group",
-      className
-    )}>
+export function StatCard({
+  title,
+  value,
+  subtitle,
+  icon: Icon,
+  trend,
+  valueClassName,
+  className,
+  href,
+}: StatCardProps) {
+  const inner = (
+    <>
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
           <p className="text-sm text-muted-foreground">{title}</p>
@@ -34,6 +42,23 @@ export function StatCard({ title, value, subtitle, icon: Icon, trend, valueClass
           <Icon className="h-5 w-5 text-primary transition-transform duration-300 group-hover:scale-110" />
         </div>
       </div>
-    </div>
+    </>
   )
+
+  const cardClass = cn(
+    "glass rounded-xl p-4 lg:p-5 glow-blue-sm hover:glow-blue transition-all duration-300 group block",
+    "hover:-translate-y-1 hover:border-primary/30",
+    href ? "cursor-pointer active:scale-[0.99]" : "cursor-default",
+    className,
+  )
+
+  if (href) {
+    return (
+      <Link href={href} className={cardClass} aria-label={`${title} — abrir ${title}`}>
+        {inner}
+      </Link>
+    )
+  }
+
+  return <div className={cardClass}>{inner}</div>
 }

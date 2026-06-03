@@ -29,18 +29,21 @@ export default function DashboardHome() {
           value={stats?.totalClients ?? 0}
           subtitle="Cadastros em Clientes"
           icon={Users}
+          href={hasPermission("clientes") ? "/dashboard/clientes" : undefined}
         />
         <StatCard
           title="Testes em andamento"
           value={stats?.trialsInProgress ?? 0}
           subtitle="LiticaPro e demais produtos"
           icon={Clock}
+          href={hasPermission("produtos") ? "/dashboard/produtos/liticapro" : undefined}
         />
         <StatCard
           title="Ferramentas ativas"
           value={stats?.activeTools ?? 0}
           subtitle="Produtos no ar"
           icon={Package}
+          href={hasPermission("produtos") ? "/dashboard/produtos" : undefined}
         />
         <StatCard
           title="Receita Mensal"
@@ -48,6 +51,13 @@ export default function DashboardHome() {
           subtitle={`${stats?.activeContracts ?? 0} contratações ativas · ${stats?.totalContracts ?? 0} totais`}
           icon={TrendingUp}
           valueClassName="text-primary"
+          href={
+            hasPermission("financeiro")
+              ? "/dashboard/financeiro"
+              : hasPermission("produtos")
+                ? "/dashboard/produtos"
+                : undefined
+          }
         />
       </div>
 
@@ -67,6 +77,7 @@ export default function DashboardHome() {
             value={stats?.activeContracts ?? 0}
             subtitle={`${stats?.totalContracts ?? 0} contratos no total`}
             icon={FileText}
+            href={hasPermission("produtos") ? "/dashboard/produtos" : undefined}
           />
         </div>
       )}
