@@ -3,7 +3,12 @@ import { isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { normalizeCpfCnpjForSave } from "@/lib/clients/cpf-cnpj-display"
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
+import {
+  shouldSyncContractFromStatusLead,
+  statusLeadToContractStatus,
+} from "@/lib/clients/status-lead-contract-sync"
 import { deleteClient, updateClientFromDashboard } from "@/lib/db/repositories/clients.repository"
+import { updateLatestContractStatusByClientId } from "@/lib/db/repositories/contracts.repository"
 
 export const dynamic = "force-dynamic"
 
@@ -40,6 +45,11 @@ export async function PATCH(
       return jsonError(duplicateClientMessage(duplicate), 409)
     }
 
+    const statusLead =
+      body.status_lead !== undefined
+        ? (String(body.status_lead ?? "").trim() || null)
+        : undefined
+
     await updateClientFromDashboard(id, {
       name,
       email: body.email ?? null,
@@ -53,9 +63,16 @@ export async function PATCH(
       state: body.state ?? null,
       zip_code: body.zip_code ?? null,
       origem_captacao: body.origem_captacao ?? null,
-      status_lead: body.status_lead ?? null,
+      status_lead: statusLead ?? null,
       customer_type: customerType as "empresa" | "profissional_liberal" | undefined,
     })
+
+    if (statusLead !== undefined && shouldSyncContractFromStatusLead(statusLead)) {
+      const contractStatus = statusLeadToContractStatus(statusLead)
+      if (contractStatus) {
+        await updateLatestContractStatusByClientId(id, contractStatus)
+      }
+    }
 
     return jsonOk({ ok: true })
   } catch (err) {

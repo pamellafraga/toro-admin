@@ -2,6 +2,11 @@ import { NextRequest } from "next/server"
 import { isAdmin, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import {
+  contractStatusToStatusLead,
+  shouldSyncStatusLeadFromContract,
+  statusLeadToContractStatus,
+} from "@/lib/clients/status-lead-contract-sync"
 import { updateClientStatusLead } from "@/lib/db/repositories/clients.repository"
 import { findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
 import { computeTrialEndsAt } from "@/lib/liticapro/trial"
@@ -29,6 +34,11 @@ export async function PATCH(
     if (body.status_lead !== undefined) {
       const statusLead = String(body.status_lead ?? "").trim() || null
       await updateClientStatusLead(existing.client_id, statusLead)
+
+      const mappedContract = statusLeadToContractStatus(statusLead)
+      if (mappedContract) {
+        await updateContract(id, { status: mappedContract })
+      }
     }
 
     if (body.product_status !== undefined) {
@@ -53,6 +63,11 @@ export async function PATCH(
       }
 
       await updateContract(id, contractUpdate)
+
+      if (shouldSyncStatusLeadFromContract(productStatus)) {
+        const lead = contractStatusToStatusLead(productStatus)
+        if (lead) await updateClientStatusLead(existing.client_id, lead)
+      }
     }
 
     if (body.status_lead === undefined && body.product_status === undefined) {

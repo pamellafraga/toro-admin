@@ -45,6 +45,35 @@ export async function listPrimaryContractByClient(): Promise<ClientPrimaryContra
 }
 
 /** Contrato LiticaPro mais recente do cliente (para atualizar em novo cadastro manual). */
+/** Contrato mais recente do cliente (para sincronizar status com Contatos). */
+export async function findLatestContractByClientId(clientId: string) {
+  return queryOne<{ id: string; status: string }>(
+    `SELECT id, status FROM contracts
+     WHERE client_id = $1
+     ORDER BY updated_at DESC NULLS LAST, created_at DESC
+     LIMIT 1`,
+    [clientId],
+  )
+}
+
+export async function updateLatestContractStatusByClientId(
+  clientId: string,
+  status: string,
+): Promise<boolean> {
+  const row = await queryOne<{ id: string }>(
+    `UPDATE contracts SET status = $2, updated_at = now()
+     WHERE id = (
+       SELECT id FROM contracts
+       WHERE client_id = $1
+       ORDER BY updated_at DESC NULLS LAST, created_at DESC
+       LIMIT 1
+     )
+     RETURNING id`,
+    [clientId, status],
+  )
+  return Boolean(row)
+}
+
 export async function findLiticaProContractByClientId(clientId: string, productId: string) {
   return queryOne<{
     id: string

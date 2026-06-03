@@ -2,7 +2,12 @@ import { NextRequest } from "next/server"
 import { isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
+import {
+  shouldSyncContractFromStatusLead,
+  statusLeadToContractStatus,
+} from "@/lib/clients/status-lead-contract-sync"
 import { updateClientStatusLead } from "@/lib/db/repositories/clients.repository"
+import { updateLatestContractStatusByClientId } from "@/lib/db/repositories/contracts.repository"
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +34,14 @@ export async function PATCH(
     }
 
     await updateClientStatusLead(id, statusLead)
+
+    if (shouldSyncContractFromStatusLead(statusLead)) {
+      const contractStatus = statusLeadToContractStatus(statusLead)
+      if (contractStatus) {
+        await updateLatestContractStatusByClientId(id, contractStatus)
+      }
+    }
+
     return jsonOk({ ok: true })
   } catch (err) {
     console.error("Erro em PATCH /api/clients/[id]/status:", err)
