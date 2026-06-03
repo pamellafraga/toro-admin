@@ -1,4 +1,4 @@
-import { queryMany, queryOne } from "@/lib/db/pool"
+import { query, queryMany, queryOne } from "@/lib/db/pool"
 
 export type CompanyExpenseRow = {
   id: string
@@ -19,7 +19,44 @@ export type CompanyExpenseInput = Omit<CompanyExpenseRow, "created_at" | "update
   id?: string
 }
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+let schemaReady: Promise<void> | null = null
+
+async function ensureCompanyExpensesSchema(): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = (async () => {
+      await query(`
+        CREATE TABLE IF NOT EXISTS company_expenses (
+          id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name           TEXT NOT NULL,
+          category       TEXT NOT NULL,
+          currency       TEXT NOT NULL DEFAULT 'usd' CHECK (currency IN ('usd', 'brl')),
+          value_usd      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          value_brl      NUMERIC(12, 2) NOT NULL DEFAULT 0,
+          due_date       INTEGER NOT NULL DEFAULT 1,
+          due_month      INTEGER CHECK (due_month IS NULL OR (due_month >= 1 AND due_month <= 12)),
+          billing_period TEXT NOT NULL DEFAULT 'mensal'
+            CHECK (billing_period IN ('mensal', 'anual', 'vitalicio')),
+          notes          TEXT,
+          created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `)
+      await query(`
+        CREATE INDEX IF NOT EXISTS idx_company_expenses_category ON company_expenses (category)
+      `)
+    })().catch((err) => {
+      schemaReady = null
+      throw err
+    })
+  }
+  await schemaReady
+}
+
 export async function listCompanyExpenses(): Promise<CompanyExpenseRow[]> {
+  await ensureCompanyExpensesSchema()
   return queryMany<CompanyExpenseRow>(
     `SELECT id, name, category, currency,
             value_usd::float8 AS value_usd,
@@ -32,7 +69,11 @@ export async function listCompanyExpenses(): Promise<CompanyExpenseRow[]> {
 }
 
 export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promise<CompanyExpenseRow> {
-  if (payload.id) {
+  await ensureCompanyExpensesSchema()
+
+  const hasValidId = payload.id && UUID_RE.test(payload.id)
+
+  if (hasValidId) {
     const row = await queryOne<CompanyExpenseRow>(
       `UPDATE company_expenses
        SET name = $1, category = $2, currency = $3,
@@ -88,5 +129,6 @@ export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promis
 }
 
 export async function deleteCompanyExpense(id: string): Promise<void> {
+  await ensureCompanyExpensesSchema()
   await queryOne(`DELETE FROM company_expenses WHERE id = $1`, [id])
 }

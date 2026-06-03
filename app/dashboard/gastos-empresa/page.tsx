@@ -18,18 +18,17 @@ import {
 } from "@/lib/exchange/usd-brl"
 import {
   mapExpenseRow,
-  mapExpenseToRow,
   type CompanyExpense,
   type BillingPeriod,
   type FeeCurrency,
 } from "@/lib/company-expenses/map-expense"
 import {
-  readCompanyExpensesFromStorage,
-  writeCompanyExpensesToStorage,
-} from "@/lib/company-expenses/storage"
+  loadCompanyExpenses,
+  persistExpensesLocally,
+  EXPENSES_API,
+  isExpenseUuid,
+} from "@/lib/company-expenses/load-expenses"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
-
-const EXPENSES_API = "/api/admin/company-expenses"
 
 type FeeFormData = {
   name: string
@@ -145,21 +144,19 @@ function formatQuoteTime(iso: string | null | undefined): string | null {
 }
 
 async function fetchCompanyExpenses(): Promise<CompanyExpense[]> {
-  try {
-    const res = await fetch(EXPENSES_API, { credentials: "include", cache: "no-store" })
-    if (res.ok) {
-      const rows = (await res.json()) as CompanyExpenseRow[]
-      writeCompanyExpensesToStorage(rows)
-      return rows.map(mapExpenseRow)
+  const result = await loadCompanyExpenses()
+  if (result.restoredFromDevice && typeof window !== "undefined") {
+    const toastKey = "xpress_expenses_restore_toast"
+    if (!sessionStorage.getItem(toastKey)) {
+      sessionStorage.setItem(toastKey, "1")
+      if (result.syncedToDatabase) {
+        toast.success("Gastos restaurados do dispositivo e sincronizados")
+      } else if (result.expenses.length > 0) {
+        toast.info("Gastos restaurados deste dispositivo")
+      }
     }
-  } catch {
-    // fallback abaixo
   }
-  return readCompanyExpensesFromStorage().map(mapExpenseRow)
-}
-
-function persistExpensesLocally(expenses: CompanyExpense[]) {
-  writeCompanyExpensesToStorage(expenses.map(mapExpenseToRow))
+  return result.expenses
 }
 
 export default function GastoEmpresaPage() {
@@ -276,7 +273,7 @@ export default function GastoEmpresaPage() {
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: editingId || undefined,
+          id: editingId && isExpenseUuid(editingId) ? editingId : undefined,
           name: expense.name,
           category: expense.category,
           currency: expense.currency,
