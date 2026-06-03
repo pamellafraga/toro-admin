@@ -1,4 +1,5 @@
 import { query, queryMany, queryOne } from "@/lib/db/pool"
+import { DEFAULT_COMPANY_EXPENSES } from "@/lib/company-expenses/default-expenses"
 
 export type CompanyExpenseRow = {
   id: string
@@ -55,8 +56,32 @@ async function ensureCompanyExpensesSchema(): Promise<void> {
   await schemaReady
 }
 
+async function ensureDefaultExpensesPresent(): Promise<void> {
+  for (const item of DEFAULT_COMPANY_EXPENSES) {
+    await queryOne(
+      `INSERT INTO company_expenses
+         (id, name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
+       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+       WHERE NOT EXISTS (SELECT 1 FROM company_expenses WHERE id = $1)`,
+      [
+        item.id,
+        item.name,
+        item.category,
+        item.currency,
+        item.value_usd,
+        item.value_brl,
+        item.due_date,
+        item.due_month,
+        item.billing_period,
+        item.notes,
+      ],
+    )
+  }
+}
+
 export async function listCompanyExpenses(): Promise<CompanyExpenseRow[]> {
   await ensureCompanyExpensesSchema()
+  await ensureDefaultExpensesPresent()
   return queryMany<CompanyExpenseRow>(
     `SELECT id, name, category, currency,
             value_usd::float8 AS value_usd,

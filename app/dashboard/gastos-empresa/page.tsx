@@ -28,6 +28,14 @@ import {
   EXPENSES_API,
   isExpenseUuid,
 } from "@/lib/company-expenses/load-expenses"
+import {
+  getEffectiveBrl,
+  monthlyEquivalentBrl,
+  monthlyEquivalentUsd,
+  resolveFeeCurrency,
+  sumMonthlyTotals,
+  sumOneTimeTotals,
+} from "@/lib/company-expenses/totals"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
 
 type FeeFormData = {
@@ -93,48 +101,6 @@ function formatDueLabel(fee: CompanyExpense): string {
 }
 
 const INITIAL_FEES: CompanyExpense[] = []
-
-function resolveFeeCurrency(fee: CompanyExpense): FeeCurrency {
-  if (fee.currency) return fee.currency
-  return Number(fee.valueUsd) > 0 ? "usd" : "brl"
-}
-
-function getEffectiveBrl(fee: CompanyExpense, rate: number): number {
-  if (resolveFeeCurrency(fee) === "brl") {
-    return Number(fee.valueBrl) || 0
-  }
-  const usd = Number(fee.valueUsd)
-  if (usd > 0) return convertUsdToBrl(usd, rate)
-  return Number(fee.valueBrl) || 0
-}
-
-/** Valor equivalente mensal para totais recorrentes (anual ÷ 12; vitalício não entra). */
-function monthlyEquivalentUsd(fee: CompanyExpense): number {
-  if (resolveFeeCurrency(fee) !== "usd") return 0
-  const usd = Number(fee.valueUsd)
-  if (!Number.isFinite(usd) || usd <= 0) return 0
-  switch (fee.billingPeriod) {
-    case "anual":
-      return usd / 12
-    case "vitalicio":
-      return 0
-    default:
-      return usd
-  }
-}
-
-function monthlyEquivalentBrl(fee: CompanyExpense, rate: number): number {
-  const brl = getEffectiveBrl(fee, rate)
-  if (brl <= 0) return 0
-  switch (fee.billingPeriod) {
-    case "anual":
-      return brl / 12
-    case "vitalicio":
-      return 0
-    default:
-      return brl
-  }
-}
 
 function formatQuoteTime(iso: string | null | undefined): string | null {
   if (!iso) return null
@@ -372,14 +338,14 @@ export default function GastoEmpresaPage() {
     [fees, usdRate],
   )
 
-  const totalUsd = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentUsd(fee), 0)
-  const totalBrl = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentBrl(fee, usdRate), 0)
-  const oneTimeUsd = feesForDisplay
-    .filter((f) => f.billingPeriod === "vitalicio" && f.currency === "usd")
-    .reduce((sum, fee) => sum + fee.valueUsd, 0)
-  const oneTimeBrl = feesForDisplay
-    .filter((f) => f.billingPeriod === "vitalicio")
-    .reduce((sum, fee) => sum + fee.valueBrl, 0)
+  const { totalUsd, totalBrl } = useMemo(
+    () => sumMonthlyTotals(feesForDisplay, usdRate),
+    [feesForDisplay, usdRate],
+  )
+  const { oneTimeUsd, oneTimeBrl } = useMemo(
+    () => sumOneTimeTotals(feesForDisplay, usdRate),
+    [feesForDisplay, usdRate],
+  )
 
   const groupedFees = categories.map((cat) => ({
     category: cat,
@@ -739,8 +705,8 @@ export default function GastoEmpresaPage() {
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Equiv. mensal:</span>
                           <span>
-                            {fee.currency === "usd" ? `US $${monthlyEquivalentUsd(fee).toFixed(2)} · ` : ""}
-                            R$ {monthlyEquivalentBrl(fee, usdRate).toFixed(2)}
+                            US ${monthlyEquivalentUsd(fee, usdRate).toFixed(2)} · R${" "}
+                            {monthlyEquivalentBrl(fee, usdRate).toFixed(2)}
                           </span>
                         </div>
                       )}
