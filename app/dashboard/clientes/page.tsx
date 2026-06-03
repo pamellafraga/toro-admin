@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useRef } from "react"
+import React, { useState, useRef, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import {
   Search, Plus, Minus, X, Save, Users, MapPin, Mail, Phone,
@@ -165,7 +165,7 @@ export default function ClientesPage() {
   const clientesListKey = `clients-list-${clientesView}`
 
   const { mutate: globalMutate } = useSWRConfig()
-  const { data: clients, mutate } = useSWR(
+  const { data: clients, error: clientsError, mutate } = useSWR(
     clientesListKey,
     async () => {
       const res = await fetch(`/api/clients?view=${encodeURIComponent(clientesView)}`, {
@@ -174,13 +174,43 @@ export default function ClientesPage() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error((err as { error?: string }).error || "Erro ao carregar clientes")
+        throw new Error((err as { error?: string }).error || "Erro ao carregar contatos")
       }
       const json = (await res.json()) as { clients: ClientListItem[] }
       return json.clients ?? []
     },
     { revalidateOnFocus: true, dedupingInterval: 5000 },
   )
+
+  const { data: tabCounts } = useSWR(
+    isAdmin ? "clients-admin-tab-counts" : null,
+    async () => {
+      const views = ["geral-todos", "stefanie", "xpress-solutions"] as const
+      const counts: Record<string, number> = {}
+      await Promise.all(
+        views.map(async (v) => {
+          const res = await fetch(`/api/clients?view=${encodeURIComponent(v)}`, {
+            credentials: "include",
+            cache: "no-store",
+          })
+          if (!res.ok) {
+            counts[v] = 0
+            return
+          }
+          const json = (await res.json()) as { clients: unknown[] }
+          counts[v] = json.clients?.length ?? 0
+        }),
+      )
+      return counts
+    },
+    { revalidateOnFocus: true, dedupingInterval: 10000 },
+  )
+
+  useEffect(() => {
+    if (clientsError) {
+      toast.error(clientsError.message)
+    }
+  }, [clientsError])
 
   const getStatusLead = (c: Client) => normalizeStatusLead(c.status_lead as string | null)
   const countByTab = (id: string) => {
@@ -599,7 +629,11 @@ export default function ClientesPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setAdminClientesTab(tab.id)}
+                  onClick={() => {
+                    setAdminClientesTab(tab.id)
+                    setFilterTab("all")
+                    mutate()
+                  }}
                   className={cn(
                     "rounded-lg px-4 py-2.5 text-sm font-medium border-2 transition-colors",
                     adminClientesTab === tab.id
@@ -608,6 +642,11 @@ export default function ClientesPage() {
                   )}
                 >
                   {tab.label}
+                  {tabCounts && (
+                    <span className="ml-1.5 tabular-nums opacity-90">
+                      ({tab.id === "geral" ? tabCounts["geral-todos"] : tabCounts[tab.id] ?? 0})
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -1042,7 +1081,7 @@ export default function ClientesPage() {
                   )}
                   </React.Fragment>
                 )) : (
-                  <tr><td colSpan={7} className="px-4 py-16 text-center"><Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">{search ? "Nenhum cliente encontrado." : "Nenhum cliente cadastrado."}</p></td></tr>
+                  <tr><td colSpan={7} className="px-4 py-16 text-center"><Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">{search ? "Nenhum contato encontrado." : adminClientesTab === "xpress-solutions" ? "Nenhum contato com origem Xpress Solutions." : adminClientesTab === "Stefanie" ? "Nenhum contato da Stefanie." : "Nenhum contato cadastrado."}</p></td></tr>
                 )}
               </tbody>
             </table>

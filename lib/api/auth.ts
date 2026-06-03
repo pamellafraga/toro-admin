@@ -10,10 +10,14 @@ export function parseAuthCookie(request: NextRequest): AuthSession | null {
     if (!cookie) return null
     const parsed = JSON.parse(cookie)
     if (!(parsed.authenticated || parsed.user)) return null
+    const roleRaw = String(parsed.role ?? "").trim().toLowerCase()
+    const role: AuthSession["role"] =
+      roleRaw === "comercial" ? "comercial" : "admin"
+
     return {
       user: parsed.user ?? "",
       displayName: parsed.displayName ?? parsed.user ?? "",
-      role: parsed.role === "admin" ? "admin" : "comercial",
+      role,
       authenticated: true,
     }
   } catch {

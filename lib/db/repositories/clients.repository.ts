@@ -1,7 +1,7 @@
 import {
   STEFANIE_ORIGEM_CAPTACAO,
   STEFANIE_ORIGEM_COMERCIAL,
-  XPRESS_ORIGEM_CAPTACAO,
+  XPRESS_ORIGEM_CAPTACAO_VALUES,
   origemCaptacaoForComercial,
 } from "@/lib/constants/origem-captacao"
 import { queryMany, queryOne } from "@/lib/db/pool"
@@ -14,7 +14,10 @@ export type ClientesListView =
   | "comercial-geral"
   | "comercial-meu"
 
-const ORIGENS_EXCLUIDAS_ABA_GERAL = [...STEFANIE_ORIGEM_CAPTACAO, XPRESS_ORIGEM_CAPTACAO]
+const ORIGENS_EXCLUIDAS_ABA_GERAL = [
+  ...STEFANIE_ORIGEM_CAPTACAO,
+  ...XPRESS_ORIGEM_CAPTACAO_VALUES,
+]
 
 type ClientRow = {
   id: string
@@ -77,11 +80,13 @@ export async function listClientsForDashboard(
 
   if (view === "xpress-solutions") {
     return queryMany<ClientRow>(
-      `SELECT * FROM clients
-       WHERE origem_captacao = $1
-       ORDER BY created_at ASC, name ASC
+      `SELECT * FROM clients c
+       WHERE lower(trim(COALESCE(c.origem_captacao, ''))) = 'xpress solutions'
+          OR c.origem_captacao = ANY($1::text[])
+          OR lower(trim(COALESCE(c.liticapro_data->>'origem_captacao', ''))) = 'xpress solutions'
+       ORDER BY c.created_at ASC, c.name ASC
        LIMIT 10000`,
-      [XPRESS_ORIGEM_CAPTACAO],
+      [XPRESS_ORIGEM_CAPTACAO_VALUES],
     )
   }
 
