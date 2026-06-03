@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,9 +8,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Plus, Trash2, Edit2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 /** Taxa de conversão USD → BRL em 11/03/2026 (fonte: mídia financeira) */
 const USD_TO_BRL_RATE = 5.16
+
+type BillingPeriod = "mensal" | "anual" | "vitalicio"
 
 interface Fee {
   id: string
@@ -19,48 +22,107 @@ interface Fee {
   valueUsd: number
   valueBrl: number
   dueDate: number
+  billingPeriod: BillingPeriod
   notes?: string
+}
+
+type FeeFormData = {
+  name: string
+  category: string
+  valueUsd: number
+  valueBrl: number
+  dueDate: number
+  billingPeriod: BillingPeriod
+  notes: string
+}
+
+const EMPTY_FORM: FeeFormData = {
+  name: "",
+  category: "FERRAMENTAS DE CRIAÇÃO",
+  valueUsd: 0,
+  valueBrl: 0,
+  dueDate: 1,
+  billingPeriod: "mensal",
+  notes: "",
+}
+
+const BILLING_LABELS: Record<BillingPeriod, string> = {
+  mensal: "Mensal",
+  anual: "Anual",
+  vitalicio: "Vitalício (1x)",
+}
+
+const INITIAL_FEES: Fee[] = [
+  {
+    id: "1",
+    name: "v0 by Vercel",
+    category: "FERRAMENTAS DE CRIAÇÃO",
+    valueUsd: 20.0,
+    valueBrl: 106.29,
+    dueDate: 25,
+    billingPeriod: "mensal",
+    notes: "Plataforma de desenvolvimento",
+  },
+  {
+    id: "2",
+    name: "Copilot Pro",
+    category: "FERRAMENTAS DE CRIAÇÃO",
+    valueUsd: 10.0,
+    valueBrl: 51.86,
+    dueDate: 25,
+    billingPeriod: "mensal",
+    notes: "Assistente de IA avançado",
+  },
+]
+
+function getEffectiveBrl(fee: Fee): number {
+  const usd = Number(fee.valueUsd)
+  const brl = Number(fee.valueBrl)
+  if (usd > 0 && (brl === 0 || !Number.isFinite(brl))) {
+    return Math.round(usd * USD_TO_BRL_RATE * 100) / 100
+  }
+  return Number.isFinite(brl) ? brl : 0
+}
+
+/** Valor equivalente mensal para totais recorrentes (anual ÷ 12; vitalício não entra). */
+function monthlyEquivalentUsd(fee: Fee): number {
+  const usd = Number(fee.valueUsd)
+  if (!Number.isFinite(usd) || usd <= 0) return 0
+  switch (fee.billingPeriod) {
+    case "anual":
+      return usd / 12
+    case "vitalicio":
+      return 0
+    default:
+      return usd
+  }
+}
+
+function monthlyEquivalentBrl(fee: Fee): number {
+  const brl = getEffectiveBrl(fee)
+  if (brl <= 0) return 0
+  switch (fee.billingPeriod) {
+    case "anual":
+      return brl / 12
+    case "vitalicio":
+      return 0
+    default:
+      return brl
+  }
 }
 
 export default function GastoEmpresaPage() {
   const { isAdmin } = useAuth()
-  const [fees, setFees] = useState<Fee[]>([
-    {
-      id: "1",
-      name: "v0 by Vercel",
-      category: "FERRAMENTAS DE CRIAÇÃO",
-      valueUsd: 20.0,
-      valueBrl: 106.29,
-      dueDate: 25,
-      notes: "Plataforma de desenvolvimento",
-    },
-    {
-      id: "2",
-      name: "Copilot Pro",
-      category: "FERRAMENTAS DE CRIAÇÃO",
-      valueUsd: 10.0,
-      valueBrl: 51.86,
-      dueDate: 25,
-      notes: "Assistente de IA avançado",
-    },
-  ])
-
+  const [fees, setFees] = useState<Fee[]>(INITIAL_FEES)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    name: "",
-    category: "FERRAMENTAS DE CRIAÇÃO",
-    valueUsd: 0,
-    valueBrl: 0,
-    dueDate: 1,
-    notes: "",
-  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [formData, setFormData] = useState<FeeFormData>(EMPTY_FORM)
 
   const categories = ["FERRAMENTAS DE CRIAÇÃO", "DOMÍNIOS E HOSPEDAGENS"]
 
-  // Corrige itens que têm USD mas BRL zerado: preenche BRL convertido no estado
   useEffect(() => {
     const needsFix = fees.some(
-      (f) => Number(f.valueUsd) > 0 && (Number(f.valueBrl) === 0 || Number.isNaN(Number(f.valueBrl)))
+      (f) => Number(f.valueUsd) > 0 && (Number(f.valueBrl) === 0 || Number.isNaN(Number(f.valueBrl))),
     )
     if (!needsFix) return
     setFees((prev) =>
@@ -73,55 +135,86 @@ export default function GastoEmpresaPage() {
           }
         }
         return f
-      })
+      }),
     )
   }, [fees.length])
 
-  const handleAddFee = () => {
+  const resetForm = useCallback(() => {
+    setFormData(EMPTY_FORM)
+    setEditingId(null)
+  }, [])
+
+  const openAddDialog = () => {
+    resetForm()
+    setIsDialogOpen(true)
+  }
+
+  const openEditDialog = (fee: Fee) => {
+    setEditingId(fee.id)
+    setFormData({
+      name: fee.name,
+      category: fee.category,
+      valueUsd: fee.valueUsd,
+      valueBrl: getEffectiveBrl(fee),
+      dueDate: fee.dueDate,
+      billingPeriod: fee.billingPeriod ?? "mensal",
+      notes: fee.notes ?? "",
+    })
+    setIsDialogOpen(true)
+  }
+
+  const handleDialogChange = (open: boolean) => {
+    setIsDialogOpen(open)
+    if (!open) resetForm()
+  }
+
+  const handleSaveFee = () => {
     if (!formData.name || formData.valueUsd <= 0) {
-      alert("Por favor, preencha todos os campos obrigatórios")
+      alert("Por favor, preencha nome e valor em USD")
       return
     }
 
     const valueBrl =
       formData.valueBrl > 0 ? formData.valueBrl : Math.round(formData.valueUsd * USD_TO_BRL_RATE * 100) / 100
 
-    const newFee: Fee = {
-      id: Date.now().toString(),
+    const payload: Omit<Fee, "id"> = {
       name: formData.name,
       category: formData.category,
       valueUsd: formData.valueUsd,
       valueBrl,
-      dueDate: formData.dueDate,
+      dueDate: formData.billingPeriod === "vitalicio" ? 0 : formData.dueDate,
+      billingPeriod: formData.billingPeriod,
       notes: formData.notes,
     }
 
-    setFees([...fees, newFee])
-    setFormData({ name: "", category: "FERRAMENTAS DE CRIAÇÃO", valueUsd: 0, valueBrl: 0, dueDate: 1, notes: "" })
+    if (editingId) {
+      setFees((prev) => prev.map((f) => (f.id === editingId ? { ...payload, id: editingId } : f)))
+    } else {
+      setFees((prev) => [...prev, { ...payload, id: Date.now().toString() }])
+    }
+
+    resetForm()
     setIsDialogOpen(false)
   }
 
   const handleDeleteFee = (id: string) => {
-    setFees(fees.filter((fee) => fee.id !== id))
+    if (!confirm("Remover este gasto?")) return
+    setFees((prev) => prev.filter((fee) => fee.id !== id))
   }
 
-  const getEffectiveBrl = (fee: Fee): number => {
-    const usd = Number(fee.valueUsd)
-    const brl = Number(fee.valueBrl)
-    if (usd > 0 && (brl === 0 || !Number.isFinite(brl))) {
-      return Math.round(usd * USD_TO_BRL_RATE * 100) / 100
-    }
-    return Number.isFinite(brl) ? brl : 0
-  }
-
-  // Lista para exibição: todo item com USD e BRL zerado já sai com BRL convertido
   const feesForDisplay = useMemo(
-    () => fees.map((f) => ({ ...f, valueBrl: getEffectiveBrl(f) })),
-    [fees]
+    () => fees.map((f) => ({ ...f, valueBrl: getEffectiveBrl(f), billingPeriod: f.billingPeriod ?? "mensal" })),
+    [fees],
   )
 
-  const totalBrl = feesForDisplay.reduce((sum, fee) => sum + fee.valueBrl, 0)
-  const totalUsd = fees.reduce((sum, fee) => sum + fee.valueUsd, 0)
+  const totalUsd = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentUsd(fee), 0)
+  const totalBrl = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentBrl(fee), 0)
+  const oneTimeUsd = feesForDisplay
+    .filter((f) => f.billingPeriod === "vitalicio")
+    .reduce((sum, fee) => sum + fee.valueUsd, 0)
+  const oneTimeBrl = feesForDisplay
+    .filter((f) => f.billingPeriod === "vitalicio")
+    .reduce((sum, fee) => sum + fee.valueBrl, 0)
 
   const groupedFees = categories.map((cat) => ({
     category: cat,
@@ -130,32 +223,36 @@ export default function GastoEmpresaPage() {
 
   if (!isAdmin) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex h-screen items-center justify-center">
         <p className="text-lg text-muted-foreground">Acesso restrito a administradores</p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Gastos da Empresa</h1>
-          <p className="text-muted-foreground mt-2">Gerencie os custos de ferramentas, domínios e hospedagens</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Gastos da Empresa</h1>
+          <p className="mt-1 text-sm text-muted-foreground sm:mt-2">
+            Gerencie os custos de ferramentas, domínios e hospedagens
+          </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogChange}>
           <DialogTrigger asChild>
-            <Button className="gap-2">
+            <Button className="w-full gap-2 sm:w-auto" onClick={openAddDialog}>
               <Plus className="h-4 w-4" />
               Adicionar Gasto
             </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Adicionar Novo Gasto</DialogTitle>
-              <DialogDescription>Preencha os dados do novo gasto mensal</DialogDescription>
+          <DialogContent className="flex max-h-[min(96dvh,720px)] flex-col overflow-hidden p-0 sm:max-w-lg">
+            <DialogHeader className="shrink-0 border-b border-border px-4 py-3 sm:px-6">
+              <DialogTitle>{editingId ? "Editar Gasto" : "Adicionar Novo Gasto"}</DialogTitle>
+              <DialogDescription>
+                {editingId ? "Atualize os dados do gasto" : "Preencha os dados do gasto"}
+              </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
               <div>
                 <Label htmlFor="name">Nome da Ferramenta/Serviço</Label>
                 <Input
@@ -173,11 +270,30 @@ export default function GastoEmpresaPage() {
                   aria-label="Categoria do gasto"
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
                 >
                   {categories.map((cat) => (
                     <option key={cat} value={cat}>
                       {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="billingPeriod">Periodicidade do pagamento</Label>
+                <select
+                  id="billingPeriod"
+                  title="Periodicidade do pagamento"
+                  aria-label="Periodicidade do pagamento"
+                  value={formData.billingPeriod}
+                  onChange={(e) =>
+                    setFormData({ ...formData, billingPeriod: e.target.value as BillingPeriod })
+                  }
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
+                >
+                  {(Object.keys(BILLING_LABELS) as BillingPeriod[]).map((key) => (
+                    <option key={key} value={key}>
+                      {BILLING_LABELS[key]}
                     </option>
                   ))}
                 </select>
@@ -213,18 +329,20 @@ export default function GastoEmpresaPage() {
                   />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="dueDate">Dia do Vencimento</Label>
-                <Input
-                  id="dueDate"
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="25"
-                  value={formData.dueDate}
-                  onChange={(e) => setFormData({ ...formData, dueDate: parseInt(e.target.value) || 1 })}
-                />
-              </div>
+              {formData.billingPeriod !== "vitalicio" && (
+                <div>
+                  <Label htmlFor="dueDate">Dia do Vencimento</Label>
+                  <Input
+                    id="dueDate"
+                    type="number"
+                    min="1"
+                    max="31"
+                    placeholder="25"
+                    value={formData.dueDate}
+                    onChange={(e) => setFormData({ ...formData, dueDate: parseInt(e.target.value, 10) || 1 })}
+                  />
+                </div>
+              )}
               <div>
                 <Label htmlFor="notes">Notas (Opcional)</Label>
                 <Input
@@ -234,41 +352,40 @@ export default function GastoEmpresaPage() {
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                 />
               </div>
-              <Button onClick={handleAddFee} className="w-full">
-                Adicionar Gasto
+            </div>
+            <div className="shrink-0 border-t border-border px-4 py-3 sm:px-6">
+              <Button onClick={handleSaveFee} className="w-full">
+                {editingId ? "Salvar alterações" : "Adicionar Gasto"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* Resumo Total */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="border-2 border-primary/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total em USD</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">US ${totalUsd.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Mensal</p>
-          </CardContent>
-        </Card>
-        <Card className="border-2 border-primary/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total em BRL</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">R$ {totalBrl.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Mensal</p>
-          </CardContent>
-        </Card>
+      {/* Resumo compacto */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+        <div className="rounded-lg border border-primary/20 bg-card px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total USD</p>
+          <p className="text-lg font-bold leading-tight text-primary sm:text-xl">US ${totalUsd.toFixed(2)}</p>
+          <p className="text-[10px] text-muted-foreground">Equiv. mensal</p>
+        </div>
+        <div className="rounded-lg border border-primary/20 bg-card px-3 py-2">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total BRL</p>
+          <p className="text-lg font-bold leading-tight text-primary sm:text-xl">R$ {totalBrl.toFixed(2)}</p>
+          <p className="text-[10px] text-muted-foreground">Equiv. mensal</p>
+        </div>
       </div>
+      {(oneTimeUsd > 0 || oneTimeBrl > 0) && (
+        <p className="text-xs text-muted-foreground">
+          Pagamentos únicos (vitalício): US ${oneTimeUsd.toFixed(2)} · R$ {oneTimeBrl.toFixed(2)}
+        </p>
+      )}
 
       {/* Cards por Categoria */}
-      <div className="space-y-6">
+      <div className="space-y-5 sm:space-y-6">
         {groupedFees.map((group) => (
           <div key={group.category}>
-            <h2 className="text-xl font-semibold mb-4">🛠️ {group.category}</h2>
+            <h2 className="mb-3 text-lg font-semibold sm:mb-4 sm:text-xl">🛠️ {group.category}</h2>
             {group.items.length === 0 ? (
               <Card>
                 <CardContent className="pt-6 text-center text-muted-foreground">
@@ -276,41 +393,73 @@ export default function GastoEmpresaPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 md:gap-4">
                 {group.items.map((fee) => (
-                  <Card key={fee.id} className="overflow-hidden hover:shadow-lg transition-shadow">
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <CardTitle className="text-base">{fee.name}</CardTitle>
-                          {fee.notes && <CardDescription className="text-xs mt-1">{fee.notes}</CardDescription>}
+                  <Card key={fee.id} className="overflow-hidden transition-shadow hover:shadow-lg">
+                    <CardHeader className="pb-2 pt-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <CardTitle className="text-base leading-snug">{fee.name}</CardTitle>
+                          {fee.notes && <CardDescription className="mt-1 text-xs">{fee.notes}</CardDescription>}
                         </div>
-                        {isAdmin && (
+                        <div className="flex shrink-0 items-center gap-1">
                           <button
+                            type="button"
+                            onClick={() => openEditDialog(fee)}
+                            className="rounded-md p-1.5 text-primary hover:bg-primary/10"
+                            title="Editar gasto"
+                            aria-label="Editar gasto"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDeleteFee(fee.id)}
-                            className="text-destructive hover:text-destructive/80 ml-2"
+                            className="rounded-md p-1.5 text-destructive hover:bg-destructive/10"
                             title="Deletar gasto"
+                            aria-label="Deletar gasto"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
-                        )}
+                        </div>
                       </div>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Valor USD:</span>
-                          <span className="font-semibold">US ${Number(fee.valueUsd).toFixed(2)}</span>
+                    <CardContent className="space-y-2 pb-4">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Pagamento:</span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-medium",
+                            fee.billingPeriod === "mensal" && "bg-primary/10 text-primary",
+                            fee.billingPeriod === "anual" && "bg-amber-500/10 text-amber-700 dark:text-amber-400",
+                            fee.billingPeriod === "vitalicio" && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+                          )}
+                        >
+                          {BILLING_LABELS[fee.billingPeriod]}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Valor USD:</span>
+                        <span className="font-semibold">US ${Number(fee.valueUsd).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Valor BRL:</span>
+                        <span className="font-semibold">R$ {fee.valueBrl.toFixed(2)}</span>
+                      </div>
+                      {fee.billingPeriod === "anual" && (
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Equiv. mensal:</span>
+                          <span>
+                            US ${monthlyEquivalentUsd(fee).toFixed(2)} · R$ {monthlyEquivalentBrl(fee).toFixed(2)}
+                          </span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Valor BRL:</span>
-                          <span className="font-semibold">R$ {fee.valueBrl.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between text-sm border-t pt-2">
+                      )}
+                      {fee.billingPeriod !== "vitalicio" && (
+                        <div className="flex justify-between border-t pt-2 text-sm">
                           <span className="text-muted-foreground">Vencimento:</span>
                           <span className="font-semibold">Dia {fee.dueDate}</span>
                         </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
