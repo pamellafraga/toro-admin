@@ -120,6 +120,14 @@ function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | nu
   ]
 }
 
+type AdminClientesTab = "geral" | "Stefanie" | "xpress-solutions"
+
+const ADMIN_TAB_COUNT_VIEW: Record<AdminClientesTab, string> = {
+  geral: "geral-todos",
+  Stefanie: "stefanie",
+  "xpress-solutions": "xpress-solutions",
+}
+
 export default function ClientesPage() {
   const { isAdmin, isComercial, comercialDisplayName } = useAuth()
   const [search, setSearch] = useState("")
@@ -128,7 +136,7 @@ export default function ClientesPage() {
   const [view, setView] = useState<"grid" | "list">("list")
   const [filterTab, setFilterTab] = useState<string>("all")
   /** Admin: abas por origem de captação */
-  const [adminClientesTab, setAdminClientesTab] = useState<"geral" | "Stefanie" | "xpress-solutions">("geral")
+  const [adminClientesTab, setAdminClientesTab] = useState<AdminClientesTab>("geral")
   /** Comercial: só "geral" (lista toda) ou "meu" (painel dele — clientes com origem dele) */
   const [comercialClientesTab, setComercialClientesTab] = useState<"geral" | "meu">("geral")
   const [showImport, setShowImport] = useState(false)
@@ -675,7 +683,7 @@ export default function ClientesPage() {
                   {tab.label}
                   {tabCounts && (
                     <span className="ml-1.5 tabular-nums opacity-90">
-                      ({tab.id === "geral" ? tabCounts["geral-todos"] : tabCounts[tab.id] ?? 0})
+                      ({tabCounts[ADMIN_TAB_COUNT_VIEW[tab.id]] ?? 0})
                     </span>
                   )}
                 </button>
