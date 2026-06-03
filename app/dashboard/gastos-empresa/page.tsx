@@ -8,29 +8,28 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Trash2, Edit2, RefreshCw } from "lucide-react"
+import { Plus, Trash2, Edit2, RefreshCw, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import {
   convertUsdToBrl,
   USD_BRL_FALLBACK_RATE,
   type UsdBrlQuote,
 } from "@/lib/exchange/usd-brl"
+import {
+  mapExpenseRow,
+  mapExpenseToRow,
+  type CompanyExpense,
+  type BillingPeriod,
+  type FeeCurrency,
+} from "@/lib/company-expenses/map-expense"
+import {
+  readCompanyExpensesFromStorage,
+  writeCompanyExpensesToStorage,
+} from "@/lib/company-expenses/storage"
+import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
 
-type BillingPeriod = "mensal" | "anual" | "vitalicio"
-type FeeCurrency = "usd" | "brl"
-
-interface Fee {
-  id: string
-  name: string
-  category: string
-  currency: FeeCurrency
-  valueUsd: number
-  valueBrl: number
-  dueDate: number
-  dueMonth?: number
-  billingPeriod: BillingPeriod
-  notes?: string
-}
+const EXPENSES_API = "/api/admin/company-expenses"
 
 type FeeFormData = {
   name: string
@@ -86,7 +85,7 @@ function monthLabel(month: number | undefined): string {
   return MONTH_OPTIONS.find((m) => m.value === month)?.label ?? "—"
 }
 
-function formatDueLabel(fee: Fee): string {
+function formatDueLabel(fee: CompanyExpense): string {
   if (fee.billingPeriod === "vitalicio") return "—"
   if (fee.billingPeriod === "anual") {
     return `${monthLabel(fee.dueMonth)}, dia ${fee.dueDate}`
@@ -94,37 +93,14 @@ function formatDueLabel(fee: Fee): string {
   return `Dia ${fee.dueDate}`
 }
 
-const INITIAL_FEES: Fee[] = [
-  {
-    id: "1",
-    name: "v0 by Vercel",
-    category: "FERRAMENTAS DE CRIAÇÃO",
-    currency: "usd",
-    valueUsd: 20.0,
-    valueBrl: 106.29,
-    dueDate: 25,
-    billingPeriod: "mensal",
-    notes: "Plataforma de desenvolvimento",
-  },
-  {
-    id: "2",
-    name: "Copilot Pro",
-    category: "FERRAMENTAS DE CRIAÇÃO",
-    currency: "usd",
-    valueUsd: 10.0,
-    valueBrl: 51.86,
-    dueDate: 25,
-    billingPeriod: "mensal",
-    notes: "Assistente de IA avançado",
-  },
-]
+const INITIAL_FEES: CompanyExpense[] = []
 
-function resolveFeeCurrency(fee: Fee): FeeCurrency {
+function resolveFeeCurrency(fee: CompanyExpense): FeeCurrency {
   if (fee.currency) return fee.currency
   return Number(fee.valueUsd) > 0 ? "usd" : "brl"
 }
 
-function getEffectiveBrl(fee: Fee, rate: number): number {
+function getEffectiveBrl(fee: CompanyExpense, rate: number): number {
   if (resolveFeeCurrency(fee) === "brl") {
     return Number(fee.valueBrl) || 0
   }
@@ -134,7 +110,7 @@ function getEffectiveBrl(fee: Fee, rate: number): number {
 }
 
 /** Valor equivalente mensal para totais recorrentes (anual ÷ 12; vitalício não entra). */
-function monthlyEquivalentUsd(fee: Fee): number {
+function monthlyEquivalentUsd(fee: CompanyExpense): number {
   if (resolveFeeCurrency(fee) !== "usd") return 0
   const usd = Number(fee.valueUsd)
   if (!Number.isFinite(usd) || usd <= 0) return 0
@@ -148,7 +124,7 @@ function monthlyEquivalentUsd(fee: Fee): number {
   }
 }
 
-function monthlyEquivalentBrl(fee: Fee, rate: number): number {
+function monthlyEquivalentBrl(fee: CompanyExpense, rate: number): number {
   const brl = getEffectiveBrl(fee, rate)
   if (brl <= 0) return 0
   switch (fee.billingPeriod) {
@@ -168,12 +144,39 @@ function formatQuoteTime(iso: string | null | undefined): string | null {
   return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
 }
 
+async function fetchCompanyExpenses(): Promise<CompanyExpense[]> {
+  try {
+    const res = await fetch(EXPENSES_API, { credentials: "include", cache: "no-store" })
+    if (res.ok) {
+      const rows = (await res.json()) as CompanyExpenseRow[]
+      writeCompanyExpensesToStorage(rows)
+      return rows.map(mapExpenseRow)
+    }
+  } catch {
+    // fallback abaixo
+  }
+  return readCompanyExpensesFromStorage().map(mapExpenseRow)
+}
+
+function persistExpensesLocally(expenses: CompanyExpense[]) {
+  writeCompanyExpensesToStorage(expenses.map(mapExpenseToRow))
+}
+
 export default function GastoEmpresaPage() {
   const { isAdmin } = useAuth()
-  const [fees, setFees] = useState<Fee[]>(INITIAL_FEES)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<FeeFormData>(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+
+  const {
+    data: fees = INITIAL_FEES,
+    mutate,
+    isLoading: feesLoading,
+  } = useSWR<CompanyExpense[]>(isAdmin ? EXPENSES_API : null, fetchCompanyExpenses, {
+    revalidateOnFocus: true,
+    dedupingInterval: 3000,
+  })
 
   const {
     data: quote,
@@ -209,7 +212,7 @@ export default function GastoEmpresaPage() {
     setIsDialogOpen(true)
   }
 
-  const openEditDialog = (fee: Fee) => {
+  const openEditDialog = (fee: CompanyExpense) => {
     const currency = resolveFeeCurrency(fee)
     setEditingId(fee.id)
     setFormData({
@@ -231,7 +234,7 @@ export default function GastoEmpresaPage() {
     if (!open) resetForm()
   }
 
-  const handleSaveFee = () => {
+  const handleSaveFee = async () => {
     if (!formData.name) {
       alert("Por favor, preencha o nome da ferramenta/serviço")
       return
@@ -244,7 +247,6 @@ export default function GastoEmpresaPage() {
       alert("Por favor, informe o valor em BRL")
       return
     }
-
     if (formData.billingPeriod === "anual" && (formData.dueMonth < 1 || formData.dueMonth > 12)) {
       alert("Selecione o mês de vencimento")
       return
@@ -254,7 +256,8 @@ export default function GastoEmpresaPage() {
     const valueUsd = isUsd ? formData.valueUsd : 0
     const valueBrl = isUsd ? convertUsdToBrl(formData.valueUsd, usdRate) : formData.valueBrl
 
-    const payload: Omit<Fee, "id"> = {
+    const expense: CompanyExpense = {
+      id: editingId ?? "",
       name: formData.name,
       category: formData.category,
       currency: formData.currency,
@@ -266,19 +269,99 @@ export default function GastoEmpresaPage() {
       notes: formData.notes,
     }
 
-    if (editingId) {
-      setFees((prev) => prev.map((f) => (f.id === editingId ? { ...payload, id: editingId } : f)))
-    } else {
-      setFees((prev) => [...prev, { ...payload, id: Date.now().toString() }])
-    }
+    setSaving(true)
+    try {
+      const res = await fetch(EXPENSES_API, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editingId || undefined,
+          name: expense.name,
+          category: expense.category,
+          currency: expense.currency,
+          value_usd: expense.valueUsd,
+          value_brl: expense.valueBrl,
+          due_date: expense.dueDate,
+          due_month: expense.dueMonth ?? null,
+          billing_period: expense.billingPeriod,
+          notes: expense.notes ?? null,
+        }),
+      })
+      const json = (await res.json().catch(() => ({}))) as CompanyExpenseRow & { error?: string }
+      if (!res.ok) throw new Error(json.error || "Erro ao salvar gasto")
 
-    resetForm()
-    setIsDialogOpen(false)
+      const saved = mapExpenseRow(json)
+      await mutate(
+        (prev) => {
+          const list = prev ?? []
+          const next = editingId
+            ? list.map((f) => (f.id === editingId ? saved : f))
+            : [...list, saved]
+          persistExpensesLocally(next)
+          return next
+        },
+        { revalidate: false },
+      )
+      toast.success(editingId ? "Gasto atualizado" : "Gasto salvo")
+      resetForm()
+      setIsDialogOpen(false)
+    } catch (err) {
+      const fallbackId = editingId ?? crypto.randomUUID()
+      const saved: CompanyExpense = { ...expense, id: fallbackId }
+      await mutate(
+        (prev) => {
+          const list = prev ?? []
+          const next = editingId
+            ? list.map((f) => (f.id === editingId ? saved : f))
+            : [...list, saved]
+          persistExpensesLocally(next)
+          return next
+        },
+        { revalidate: false },
+      )
+      toast.warning(
+        err instanceof Error ? err.message : "Salvo localmente — banco indisponível no momento.",
+      )
+      resetForm()
+      setIsDialogOpen(false)
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const handleDeleteFee = (id: string) => {
+  const handleDeleteFee = async (id: string) => {
     if (!confirm("Remover este gasto?")) return
-    setFees((prev) => prev.filter((fee) => fee.id !== id))
+
+    try {
+      const res = await fetch(`${EXPENSES_API}?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        credentials: "include",
+      })
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(json.error || "Erro ao remover")
+      }
+      await mutate(
+        (prev) => {
+          const next = (prev ?? []).filter((fee) => fee.id !== id)
+          persistExpensesLocally(next)
+          return next
+        },
+        { revalidate: false },
+      )
+      toast.success("Gasto removido")
+    } catch (err) {
+      await mutate(
+        (prev) => {
+          const next = (prev ?? []).filter((fee) => fee.id !== id)
+          persistExpensesLocally(next)
+          return next
+        },
+        { revalidate: false },
+      )
+      toast.warning(err instanceof Error ? err.message : "Removido localmente")
+    }
   }
 
   const feesForDisplay = useMemo(
@@ -526,8 +609,17 @@ export default function GastoEmpresaPage() {
               </div>
             </div>
             <div className="shrink-0 border-t border-border px-4 py-3 sm:px-6">
-              <Button onClick={handleSaveFee} className="w-full">
-                {editingId ? "Salvar alterações" : "Adicionar Gasto"}
+              <Button onClick={handleSaveFee} disabled={saving} className="w-full">
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : editingId ? (
+                  "Salvar alterações"
+                ) : (
+                  "Adicionar Gasto"
+                )}
               </Button>
             </div>
           </DialogContent>
@@ -571,7 +663,13 @@ export default function GastoEmpresaPage() {
 
       {/* Cards por Categoria */}
       <div className="space-y-5 sm:space-y-6">
-        {groupedFees.map((group) => (
+        {feesLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Carregando gastos...
+          </div>
+        ) : (
+        groupedFees.map((group) => (
           <div key={group.category}>
             <h2 className="mb-3 text-lg font-semibold sm:mb-4 sm:text-xl">🛠️ {group.category}</h2>
             {group.items.length === 0 ? (
@@ -661,7 +759,8 @@ export default function GastoEmpresaPage() {
               </div>
             )}
           </div>
-        ))}
+        ))
+        )}
       </div>
     </div>
   )
