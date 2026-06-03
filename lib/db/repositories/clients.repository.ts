@@ -173,6 +173,10 @@ export async function searchClientByName(name: string) {
   )
 }
 
+export async function findClientById(id: string): Promise<ClientRow | null> {
+  return queryOne<ClientRow>(`SELECT * FROM clients WHERE id = $1 LIMIT 1`, [id])
+}
+
 export async function findClientByCpfCnpj(cpfCnpj: string) {
   return queryOne<{ id: string; name: string; liticapro_data: Record<string, unknown> | null }>(
     `SELECT id, name, liticapro_data FROM clients WHERE cpf_cnpj = $1 LIMIT 1`,
@@ -335,19 +339,23 @@ export async function updateClientForContract(
 }
 
 export async function updateClient(id: string, payload: Record<string, unknown>): Promise<void> {
+  const updateCpf = payload.cpf_cnpj != null && String(payload.cpf_cnpj).trim() !== ""
   await queryOne(
     `UPDATE clients SET
-       name = $1, email = $2, phone = $3, company = COALESCE($4, company),
-       address = $5, number = $6, district = $7, city = $8, state = $9, zip_code = $10,
-       origem_captacao = COALESCE($11, origem_captacao),
-       status_lead = COALESCE($12, status_lead),
-       liticapro_data = COALESCE($13::jsonb, liticapro_data),
+       name = $1, email = $2, phone = $3,
+       cpf_cnpj = CASE WHEN $15 = true THEN $4 ELSE cpf_cnpj END,
+       company = COALESCE($5, company),
+       address = $6, number = $7, district = $8, city = $9, state = $10, zip_code = $11,
+       origem_captacao = COALESCE($12, origem_captacao),
+       status_lead = COALESCE($13, status_lead),
+       liticapro_data = COALESCE($14::jsonb, liticapro_data),
        updated_at = now()
-     WHERE id = $14`,
+     WHERE id = $16`,
     [
       payload.name,
       payload.email,
       payload.phone,
+      payload.cpf_cnpj ?? null,
       payload.company ?? null,
       payload.address,
       payload.number,
@@ -358,6 +366,7 @@ export async function updateClient(id: string, payload: Record<string, unknown>)
       payload.origem_captacao ?? null,
       payload.status_lead ?? null,
       payload.liticapro_data ? JSON.stringify(payload.liticapro_data) : null,
+      updateCpf,
       id,
     ],
   )

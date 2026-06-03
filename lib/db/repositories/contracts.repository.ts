@@ -44,6 +44,24 @@ export async function listPrimaryContractByClient(): Promise<ClientPrimaryContra
   )
 }
 
+/** Contrato LiticaPro mais recente do cliente (para atualizar em novo cadastro manual). */
+export async function findLiticaProContractByClientId(clientId: string, productId: string) {
+  return queryOne<{
+    id: string
+    status: string
+    payment_status: string
+    trial_ends_at: string | null
+    liticapro_meta: Record<string, unknown> | null
+  }>(
+    `SELECT c.id, c.status, c.payment_status, c.trial_ends_at, c.liticapro_meta
+     FROM contracts c
+     WHERE c.client_id = $1 AND c.product_id = $2
+     ORDER BY c.updated_at DESC NULLS LAST, c.created_at DESC
+     LIMIT 1`,
+    [clientId, productId],
+  )
+}
+
 export async function findContractById(id: string) {
   return queryOne<{ id: string; client_id: string; product_id: string; status: string }>(
     `SELECT id, client_id, product_id, status FROM contracts WHERE id = $1`,

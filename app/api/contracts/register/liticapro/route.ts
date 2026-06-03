@@ -4,8 +4,17 @@ import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
 import { deleteUserByUsername } from "@/lib/db/repositories/dashboard-users.repository"
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
-import { findClientByCpfCnpj, insertClient, updateClient } from "@/lib/db/repositories/clients.repository"
-import { insertContract } from "@/lib/db/repositories/contracts.repository"
+import {
+  findClientByCpfCnpj,
+  findClientById,
+  insertClient,
+  updateClient,
+} from "@/lib/db/repositories/clients.repository"
+import {
+  findLiticaProContractByClientId,
+  insertContract,
+  updateContract,
+} from "@/lib/db/repositories/contracts.repository"
 import { insertNotification } from "@/lib/db/repositories/notifications.repository"
 import { findOrCreateProductFromCatalog } from "@/lib/db/repositories/products.repository"
 import { LITICAPRO_TRIAL_DAYS } from "@/lib/liticapro/constants"
@@ -114,7 +123,30 @@ export async function POST(req: NextRequest) {
       liticaproData.linked_cnpjs = linkedCnpjs
     }
 
-    const existing = await findClientByCpfCnpj(cpfCnpjRaw)
+    const linkedClientId = String(body.client_id ?? "").trim() || null
+    const existingByLink = linkedClientId ? await findClientById(linkedClientId) : null
+    const existingByCpf = await findClientByCpfCnpj(cpfCnpjRaw)
+
+    if (
+      existingByLink &&
+      existingByCpf &&
+      existingByLink.id !== existingByCpf.id
+    ) {
+      return jsonError(
+        `Este CNPJ/CPF já está em outro contato (${existingByCpf.name}). Desvincule ou use o contato correto.`,
+        409,
+      )
+    }
+
+    const existingRow = existingByLink ?? existingByCpf
+    const existing = existingRow
+      ? {
+          id: existingRow.id,
+          name: existingRow.name,
+          liticapro_data: existingRow.liticapro_data as Record<string, unknown> | null,
+        }
+      : null
+
     if (existing?.liticapro_data) {
       liticaproData = { ...existing.liticapro_data, ...liticaproData }
     }
@@ -174,24 +206,45 @@ export async function POST(req: NextRequest) {
       ? `Comercial - ${auth.displayName}`
       : origemComercialFromCaptacao(origemCaptacao)
 
-    const contract = await insertContract({
-      client_id: clientId,
-      product_id: product.id,
-      status: "trial",
-      payment_status: "trial",
-      start_date: startDate,
-      monthly_value: 0,
-      notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
-      origem_comercial: origemComercial,
-      trial_ends_at: trialEnds.toISOString(),
-      plan: null,
-      liticapro_meta: {
-        customer_type: customerType,
-        trial_days: LITICAPRO_TRIAL_DAYS,
-        states_of_interest: statesOfInterest,
-        registered_at: registeredAt.toISOString(),
-      },
-    })
+    const liticaproMeta = {
+      customer_type: customerType,
+      trial_days: LITICAPRO_TRIAL_DAYS,
+      states_of_interest: statesOfInterest,
+      registered_at: registeredAt.toISOString(),
+    }
+
+    const existingContract = await findLiticaProContractByClientId(clientId, product.id)
+    let contract: { id: string }
+
+    if (existingContract) {
+      await updateContract(existingContract.id, {
+        status: "trial",
+        payment_status: "trial",
+        start_date: startDate,
+        monthly_value: 0,
+        notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
+        trial_ends_at: trialEnds.toISOString(),
+        liticapro_meta: {
+          ...(existingContract.liticapro_meta ?? {}),
+          ...liticaproMeta,
+        },
+      })
+      contract = { id: existingContract.id }
+    } else {
+      contract = await insertContract({
+        client_id: clientId,
+        product_id: product.id,
+        status: "trial",
+        payment_status: "trial",
+        start_date: startDate,
+        monthly_value: 0,
+        notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
+        origem_comercial: origemComercial,
+        trial_ends_at: trialEnds.toISOString(),
+        plan: null,
+        liticapro_meta: liticaproMeta,
+      })
+    }
 
     const trialLabel = trialEnds.toLocaleDateString("pt-BR")
     await insertNotification({

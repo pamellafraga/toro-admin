@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect, useCallback, type ReactNode } from "react"
-import { Building2, User, Loader2, Plus, Trash2, Search } from "lucide-react"
+import { Building2, User, Loader2, Plus, Trash2, Search, Link2 } from "lucide-react"
+import type { Client } from "@/lib/types"
+import { isPlaceholderCpfCnpj } from "@/lib/clients/cpf-cnpj-display"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { formatCep, formatCnpj, formatCpf, formatPhone } from "@/lib/format/br"
@@ -125,6 +127,8 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
   // Comum
   const [email, setEmail] = useState("")
   const [phone, setPhone] = useState("")
+  const [linkedClient, setLinkedClient] = useState<Client | null>(null)
+  const [lookingUpContact, setLookingUpContact] = useState(false)
   const [statesOfInterest, setStatesOfInterest] = useState<string[]>([])
   const [origemCaptacao, setOrigemCaptacao] = useState("")
 
@@ -182,6 +186,8 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
     setBillingState("")
     setEmail("")
     setPhone("")
+    setLinkedClient(null)
+    setLookingUpContact(false)
     setStatesOfInterest([])
     setOrigemCaptacao("")
     setDevEmpresa("")
@@ -310,6 +316,96 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
     )
   }
 
+  const applyLinkedClient = useCallback(
+    (client: Client) => {
+      setLinkedClient(client)
+      const lp = (client.liticapro_data ?? {}) as Record<string, unknown>
+      if (client.email && client.email.includes("@")) setEmail(client.email)
+      if (client.phone) setPhone(formatPhone(client.phone))
+      if (client.origem_captacao) setOrigemCaptacao(client.origem_captacao)
+
+      const docDigits = isPlaceholderCpfCnpj(client.cpf_cnpj)
+        ? ""
+        : String(client.cpf_cnpj ?? "").replace(/\D/g, "")
+
+      if (customerType === "empresa" || docDigits.length === 14) {
+        if (docDigits.length === 14) setCnpj(formatCnpj(docDigits))
+        if (client.name) setCompanyLegalName(client.name)
+        if (client.company_name) setCompanyTradeName(client.company_name)
+        if (lp.responsible_name) setResponsibleName(String(lp.responsible_name))
+        else if (client.name && !companyLegalName) setResponsibleName(client.name)
+        if (client.zip_code) setCompanyZip(formatCep(client.zip_code))
+        if (client.address) setCompanyAddress(client.address)
+        if (client.number) setCompanyNumber(client.number)
+        if (client.district) setCompanyDistrict(client.district)
+        if (client.city) setCompanyCity(client.city)
+        if (client.state) setCompanyState(client.state)
+      }
+
+      if (customerType === "profissional_liberal" || docDigits.length === 11) {
+        if (docDigits.length === 11) setCpf(formatCpf(docDigits))
+        setFullName(client.name)
+        if (lp.birth_date) setBirthDate(String(lp.birth_date))
+      }
+
+      if (!customerType && client.name) {
+        setResponsibleName(client.name)
+        setFullName(client.name)
+      }
+
+      if (lp.business_segment) setBusinessSegment(String(lp.business_segment))
+      if (Array.isArray(lp.states_of_interest)) {
+        setStatesOfInterest(lp.states_of_interest as string[])
+      }
+    },
+    [customerType, companyLegalName],
+  )
+
+  const lookupContactByValue = useCallback(
+    async (value: string) => {
+      const digits = value.replace(/\D/g, "")
+      const trimmed = value.trim()
+      let query = ""
+      if (digits.length >= 10) {
+        query = `phone=${encodeURIComponent(digits)}`
+      } else if (trimmed.includes("@") && trimmed.length >= 5) {
+        query = `email=${encodeURIComponent(trimmed.toLowerCase())}`
+      } else {
+        return
+      }
+
+      setLookingUpContact(true)
+      try {
+        const res = await fetch(`/api/clients/search?${query}`, { credentials: "include" })
+        const data = (await res.json()) as { client: Client | null }
+        if (data.client) {
+          applyLinkedClient(data.client)
+          toast.success(`Contato encontrado: ${data.client.name}`)
+        } else if (linkedClient) {
+          setLinkedClient(null)
+        }
+      } catch {
+        // ignora falha de rede
+      } finally {
+        setLookingUpContact(false)
+      }
+    },
+    [applyLinkedClient, linkedClient],
+  )
+
+  useEffect(() => {
+    if (step !== 2) return
+    const primary = phone.replace(/\D/g, "").length >= 10 ? phone : email
+    const digits = primary.replace(/\D/g, "")
+    const trimmed = primary.trim()
+    if (digits.length < 10 && !trimmed.includes("@")) return
+
+    const t = setTimeout(() => {
+      lookupContactByValue(primary)
+    }, 600)
+    return () => clearTimeout(t)
+  }, [phone, email, step, lookupContactByValue])
+
   const handleSubmit = async () => {
     setError(null)
     setSaving(true)
@@ -320,6 +416,7 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
         phone,
         origem_captacao: origemCaptacao,
         states_of_interest: statesOfInterest,
+        ...(linkedClient?.id ? { client_id: linkedClient.id } : {}),
       }
 
       if (customerType === "empresa") {
@@ -602,6 +699,9 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
               phone={phone} setPhone={setPhone}
               statesOfInterest={statesOfInterest} toggleState={toggleState}
               origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
+              linkedClient={linkedClient}
+              lookingUpContact={lookingUpContact}
+              onClearLink={() => setLinkedClient(null)}
             />
 
             <LiticaProCnaeAndRamoSection
@@ -715,6 +815,9 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
               statesOfInterest={statesOfInterest} toggleState={toggleState}
               origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
               emailRequired={false}
+              linkedClient={linkedClient}
+              lookingUpContact={lookingUpContact}
+              onClearLink={() => setLinkedClient(null)}
             />
 
             {isAdmin && (
@@ -742,6 +845,9 @@ function CommonFields({
   statesOfInterest, toggleState,
   origemCaptacao, setOrigemCaptacao,
   emailRequired = true,
+  linkedClient,
+  lookingUpContact,
+  onClearLink,
 }: {
   email: string
   setEmail: (v: string) => void
@@ -752,26 +858,66 @@ function CommonFields({
   origemCaptacao: string
   setOrigemCaptacao: (v: string) => void
   emailRequired?: boolean
+  linkedClient?: Client | null
+  lookingUpContact?: boolean
+  onClearLink?: () => void
 }) {
   return (
     <>
       <FormSection title="Contato">
-        <div className="grid grid-cols-2 gap-3">
+        {linkedClient && (
+          <div className="mb-2 flex items-start gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+            <Link2 className="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                Vinculado ao contato: {linkedClient.name}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Ao finalizar, o cadastro atualiza Contatos e Produtos LiticaPro deste contato.
+              </p>
+            </div>
+            {onClearLink && (
+              <button
+                type="button"
+                onClick={onClearLink}
+                className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground underline"
+              >
+                Desvincular
+              </button>
+            )}
+          </div>
+        )}
+        {lookingUpContact && (
+          <p className="mb-2 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Buscando contato no sistema...
+          </p>
+        )}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div>
             <label className={labelClass}>
-              E-mail principal (acesso à plataforma){emailRequired ? " *" : ""}
+              E-mail ou telefone do contato{emailRequired ? " *" : ""}
             </label>
             <input
-              type="email"
+              type="text"
+              inputMode="email"
+              autoComplete="off"
               className={inputClass}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder={emailRequired ? undefined : "Opcional"}
+              placeholder={emailRequired ? "e-mail ou WhatsApp já cadastrado" : "Opcional — e-mail ou telefone"}
             />
+            <p className="mt-0.5 text-[10px] text-muted-foreground">
+              Digite o telefone aqui ou no campo ao lado para localizar o contato.
+            </p>
           </div>
           <div>
             <label className={labelClass}>Telefone / WhatsApp *</label>
-            <input className={inputClass} value={phone} onChange={(e) => setPhone(formatPhone(e.target.value))} />
+            <input
+              className={inputClass}
+              value={phone}
+              onChange={(e) => setPhone(formatPhone(e.target.value))}
+              placeholder="(00) 00000-0000"
+            />
           </div>
         </div>
       </FormSection>
