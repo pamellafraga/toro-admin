@@ -2,10 +2,11 @@ import { NextRequest } from "next/server"
 import { isAdmin, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import { applyStatusLeadToContracts } from "@/lib/clients/apply-status-lead-to-contract"
 import {
   contractStatusToStatusLead,
   shouldSyncStatusLeadFromContract,
-  statusLeadToContractStatus,
+  shouldSyncContractFromStatusLead,
 } from "@/lib/clients/status-lead-contract-sync"
 import { updateClientStatusLead } from "@/lib/db/repositories/clients.repository"
 import { findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
@@ -35,9 +36,9 @@ export async function PATCH(
       const statusLead = String(body.status_lead ?? "").trim() || null
       await updateClientStatusLead(existing.client_id, statusLead)
 
-      const mappedContract = statusLeadToContractStatus(statusLead)
-      if (mappedContract) {
-        await updateContract(id, { status: mappedContract })
+      if (shouldSyncContractFromStatusLead(statusLead)) {
+        await updateContract(id, { status: "aguardando_produto" })
+        await applyStatusLeadToContracts(existing.client_id, statusLead)
       }
     }
 

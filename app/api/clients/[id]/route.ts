@@ -3,12 +3,9 @@ import { isAuthenticated } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { normalizeCpfCnpjForSave } from "@/lib/clients/cpf-cnpj-display"
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
-import {
-  shouldSyncContractFromStatusLead,
-  statusLeadToContractStatus,
-} from "@/lib/clients/status-lead-contract-sync"
+import { applyStatusLeadToContracts } from "@/lib/clients/apply-status-lead-to-contract"
+import { shouldSyncContractFromStatusLead } from "@/lib/clients/status-lead-contract-sync"
 import { deleteClient, updateClientFromDashboard } from "@/lib/db/repositories/clients.repository"
-import { updateLatestContractStatusByClientId } from "@/lib/db/repositories/contracts.repository"
 
 export const dynamic = "force-dynamic"
 
@@ -68,10 +65,7 @@ export async function PATCH(
     })
 
     if (statusLead !== undefined && shouldSyncContractFromStatusLead(statusLead)) {
-      const contractStatus = statusLeadToContractStatus(statusLead)
-      if (contractStatus) {
-        await updateLatestContractStatusByClientId(id, contractStatus)
-      }
+      await applyStatusLeadToContracts(id, statusLead)
     }
 
     return jsonOk({ ok: true })

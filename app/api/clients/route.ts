@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { isAuthenticated, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
+import { backfillContratandoAguardandoProduto } from "@/lib/clients/apply-status-lead-to-contract"
 import { mapClientRow } from "@/lib/clients/map-client-row"
 import {
   duplicateClientMessage,
@@ -47,6 +48,10 @@ export async function GET(req: NextRequest) {
       auth.role !== "admin"
     ) {
       return jsonError("Visualização inválida.", 400)
+    }
+
+    if (auth.role === "admin") {
+      await backfillContratandoAguardandoProduto()
     }
 
     const rows = await listClientsForDashboard(view, auth.displayName)

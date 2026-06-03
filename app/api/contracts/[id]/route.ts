@@ -2,6 +2,10 @@ import { NextRequest } from "next/server"
 import { isAdmin, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
+import {
+  contractStatusToStatusLead,
+  shouldSyncStatusLeadFromContract,
+} from "@/lib/clients/status-lead-contract-sync"
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { updateClientForContract, updateClientLiticaProData } from "@/lib/db/repositories/clients.repository"
 import { deleteContract, findContractById, findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
@@ -35,9 +39,16 @@ export async function PATCH(
       paymentStatus === "cancelled" ||
       paymentStatus === "expired"
 
-    const statusLead = pagamentoPerdido
+    const contractStatus = admin ? String(body.status ?? "").trim() || undefined : undefined
+
+    let statusLead = pagamentoPerdido
       ? "perdido"
       : String(body.status_lead ?? "").trim() || null
+
+    if (contractStatus && shouldSyncStatusLeadFromContract(contractStatus)) {
+      const lead = contractStatusToStatusLead(contractStatus)
+      if (lead) statusLead = lead
+    }
 
     const duplicate = await findDuplicateClient({
       cpfCnpj: cpfCnpjRaw,
@@ -74,7 +85,7 @@ export async function PATCH(
         : undefined
 
     await updateContract(id, {
-      status: admin ? String(body.status ?? "").trim() || undefined : undefined,
+      status: contractStatus,
       payment_status: paymentStatus,
       monthly_value: monthlyValue,
       start_date: String(body.start_date ?? "").trim() || undefined,

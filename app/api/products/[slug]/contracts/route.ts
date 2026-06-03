@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
 import { parseAuthCookie, isAdmin } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
+import { backfillContratandoAguardandoProduto } from "@/lib/clients/apply-status-lead-to-contract"
 import { findOrCreateProductFromCatalog, listProductContracts } from "@/lib/db/repositories/products.repository"
 import { stripDeveloperCredentialsFromClient } from "@/lib/liticapro/developer-credentials"
 import { getProductBySlug } from "@/lib/products/catalog"
@@ -21,6 +22,9 @@ export async function GET(
     const origemComercial = isComercial ? `Comercial - ${auth.displayName}` : null
 
     const product = await findOrCreateProductFromCatalog(catalog)
+    if (isAdmin(req)) {
+      await backfillContratandoAguardandoProduto()
+    }
     const rows = await listProductContracts(product.id, origemComercial)
 
     const contracts = isAdmin(req)
