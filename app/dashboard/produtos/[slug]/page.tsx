@@ -1204,8 +1204,9 @@ export default function ProductDetailPage() {
 
         if (ro && isLiticaPro) {
           return (
-            <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4">
-              <div className="w-full max-w-[min(96vw,1280px)] rounded-2xl bg-background border border-border p-5 shadow-xl">
+            <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:p-4">
+              <div className="my-auto flex w-full max-w-[min(96vw,1280px)] max-h-[min(96vh,920px)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl">
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
                 <LiticaProContractDetailView
                   clientName={editForm.client_name}
                   cpfCnpj={editForm.client_cpf_cnpj}
@@ -1236,15 +1237,21 @@ export default function ProductDetailPage() {
                   onEdit={() => setViewOnly(false)}
                   onClose={closeContractModal}
                 />
+                </div>
               </div>
             </div>
           )
         }
 
         return (
-        <div className={cn("fixed inset-0 z-40 flex bg-black/60 p-3", isLiticaPro ? "items-center justify-center" : "items-start justify-center overflow-y-auto")}>
-          <div className={cn("w-full rounded-2xl bg-background border border-border p-4 shadow-xl", isLiticaPro ? "max-w-[min(96vw,1280px)]" : "max-w-4xl my-2")}>
-            <div className="flex items-center justify-between mb-3">
+        <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:p-4">
+          <div
+            className={cn(
+              "my-auto flex w-full flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-xl",
+              isLiticaPro ? "max-w-[min(96vw,1280px)] max-h-[min(96vh,920px)]" : "max-w-4xl max-h-[min(96vh,900px)]",
+            )}
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
               <div>
                 <h3 className="text-lg font-semibold text-foreground">
                   {ro ? "Detalhes do contrato" : "Editar contrato e cliente"}
@@ -1259,6 +1266,7 @@ export default function ProductDetailPage() {
               </div>
               <button type="button" onClick={closeContractModal} className="rounded-full border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-secondary">Fechar</button>
             </div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
             <div className="space-y-3">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Dados do cliente</p>
               <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
@@ -1491,7 +1499,9 @@ export default function ProductDetailPage() {
                   setSenha={(v) => setEditForm((p) => ({ ...p, dev_senha: v }))}
                 />
               )}
-              <div className="flex gap-2 pt-1">
+            </div>
+            </div>
+            <div className="flex shrink-0 gap-2 border-t border-border bg-background px-4 py-3">
                 {ro ? (
                   <>
                     <button type="button" onClick={() => setViewOnly(false)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90">
@@ -1509,7 +1519,6 @@ export default function ProductDetailPage() {
                     <button type="button" onClick={closeContractModal} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary">Cancelar</button>
                   </>
                 )}
-              </div>
             </div>
           </div>
         </div>
