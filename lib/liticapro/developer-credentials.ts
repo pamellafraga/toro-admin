@@ -10,6 +10,31 @@ export function parseDeveloperCredentials(raw: unknown): LiticaProDeveloperCrede
   return { empresa, usuario, senha }
 }
 
+/** Lê credenciais salvas em liticapro_data do contato. */
+export function readDeveloperCredentialsFromLiticaProData(
+  liticaproData: unknown,
+): LiticaProDeveloperCredentials | null {
+  if (!liticaproData || typeof liticaproData !== "object") return null
+  return parseDeveloperCredentials((liticaproData as Record<string, unknown>).dados_desenvolvedor)
+}
+
+/** Mantém senha/usuário/empresa já salvos quando o formulário veio parcialmente vazio. */
+export function mergeDeveloperCredentials(
+  existing: LiticaProDeveloperCredentials | null | undefined,
+  incoming: LiticaProDeveloperCredentials | null | undefined,
+): LiticaProDeveloperCredentials | null {
+  if (!existing && !incoming) return null
+  const base = existing ?? { empresa: "", usuario: "", senha: "" }
+  const next = incoming ?? { empresa: "", usuario: "", senha: "" }
+  const merged = {
+    empresa: next.empresa || base.empresa,
+    usuario: next.usuario || base.usuario,
+    senha: next.senha || base.senha,
+  }
+  if (!merged.empresa && !merged.usuario && !merged.senha) return null
+  return merged
+}
+
 /** Sugere usuário a partir do nome do responsável (ex.: Guilherme Meireles Lopes → GUILHERME MEIRELES). */
 export function suggestDeveloperUsername(fullName: string): string {
   const parts = fullName.trim().split(/\s+/).filter(Boolean)

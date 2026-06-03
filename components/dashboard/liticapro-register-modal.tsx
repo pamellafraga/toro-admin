@@ -7,7 +7,7 @@ import { isPlaceholderCpfCnpj } from "@/lib/clients/cpf-cnpj-display"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { formatCep, formatCnpj, formatCpf, formatPhone } from "@/lib/format/br"
-import { suggestDeveloperUsername } from "@/lib/liticapro/developer-credentials"
+import { suggestDeveloperUsername, readDeveloperCredentialsFromLiticaProData } from "@/lib/liticapro/developer-credentials"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-guard"
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
@@ -319,6 +319,18 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
     )
   }
 
+  const applyDeveloperCredentials = useCallback(
+    (liticaproData: unknown) => {
+      if (!isAdmin) return
+      const dev = readDeveloperCredentialsFromLiticaProData(liticaproData)
+      if (!dev) return
+      if (dev.empresa) setDevEmpresa(dev.empresa)
+      if (dev.usuario) setDevUsuario(dev.usuario)
+      if (dev.senha) setDevSenha(dev.senha)
+    },
+    [isAdmin],
+  )
+
   const applyLinkedClient = useCallback(
     (client: Client) => {
       setLinkedClient(client)
@@ -367,8 +379,10 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
       if (Array.isArray(lp.states_of_interest)) {
         setStatesOfInterest(lp.states_of_interest as string[])
       }
+
+      applyDeveloperCredentials(lp)
     },
-    [customerType, companyLegalName],
+    [customerType, companyLegalName, isComercial, comercialDisplayName, applyDeveloperCredentials],
   )
 
   const lookupContactByValue = useCallback(
@@ -519,11 +533,15 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
         }))
       }
 
-      if (isAdmin && (devEmpresa || devUsuario || devSenha)) {
-        payload.dados_desenvolvedor = {
-          empresa: devEmpresa.trim(),
-          usuario: devUsuario.trim(),
-          senha: devSenha.trim(),
+      if (isAdmin) {
+        const saved = linkedClient
+          ? readDeveloperCredentialsFromLiticaProData(linkedClient.liticapro_data)
+          : null
+        const empresa = devEmpresa.trim() || saved?.empresa || ""
+        const usuario = devUsuario.trim() || saved?.usuario || ""
+        const senha = devSenha.trim() || saved?.senha || ""
+        if (empresa || usuario || senha) {
+          payload.dados_desenvolvedor = { empresa, usuario, senha }
         }
       }
 

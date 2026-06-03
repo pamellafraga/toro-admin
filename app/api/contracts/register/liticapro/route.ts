@@ -20,7 +20,7 @@ import { findOrCreateProductFromCatalog } from "@/lib/db/repositories/products.r
 import { LITICAPRO_TRIAL_DAYS } from "@/lib/liticapro/constants"
 import { computeTrialEndsAt } from "@/lib/liticapro/trial"
 import { fetchCnpjFromGov } from "@/lib/liticapro/cnpj-lookup"
-import { parseDeveloperCredentials } from "@/lib/liticapro/developer-credentials"
+import { parseDeveloperCredentials, mergeDeveloperCredentials, readDeveloperCredentialsFromLiticaProData } from "@/lib/liticapro/developer-credentials"
 import { origemComercialFromCaptacao } from "@/lib/constants/origem-captacao"
 import {
   canComercialMutateClient,
@@ -174,8 +174,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (isAdmin(req)) {
-      const dev = parseDeveloperCredentials(body.dados_desenvolvedor)
-      if (dev) liticaproData.dados_desenvolvedor = dev
+      const incoming = parseDeveloperCredentials(body.dados_desenvolvedor)
+      const existingDev = existingRow
+        ? readDeveloperCredentialsFromLiticaProData(existingRow.liticapro_data)
+        : null
+      const merged = mergeDeveloperCredentials(existingDev, incoming)
+      if (merged) liticaproData.dados_desenvolvedor = merged
     } else {
       delete liticaproData.dados_desenvolvedor
     }
