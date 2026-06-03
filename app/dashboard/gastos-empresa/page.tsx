@@ -1,17 +1,20 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useMemo, useCallback, useEffect } from "react"
+import useSWR from "swr"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Plus, Trash2, Edit2 } from "lucide-react"
+import { Plus, Trash2, Edit2, RefreshCw } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-/** Taxa de conversão USD → BRL em 11/03/2026 (fonte: mídia financeira) */
-const USD_TO_BRL_RATE = 5.16
+import {
+  convertUsdToBrl,
+  USD_BRL_FALLBACK_RATE,
+  type UsdBrlQuote,
+} from "@/lib/exchange/usd-brl"
 
 type BillingPeriod = "mensal" | "anual" | "vitalicio"
 
@@ -75,13 +78,10 @@ const INITIAL_FEES: Fee[] = [
   },
 ]
 
-function getEffectiveBrl(fee: Fee): number {
+function getEffectiveBrl(fee: Fee, rate: number): number {
   const usd = Number(fee.valueUsd)
-  const brl = Number(fee.valueBrl)
-  if (usd > 0 && (brl === 0 || !Number.isFinite(brl))) {
-    return Math.round(usd * USD_TO_BRL_RATE * 100) / 100
-  }
-  return Number.isFinite(brl) ? brl : 0
+  if (usd > 0) return convertUsdToBrl(usd, rate)
+  return 0
 }
 
 /** Valor equivalente mensal para totais recorrentes (anual ÷ 12; vitalício não entra). */
@@ -98,8 +98,8 @@ function monthlyEquivalentUsd(fee: Fee): number {
   }
 }
 
-function monthlyEquivalentBrl(fee: Fee): number {
-  const brl = getEffectiveBrl(fee)
+function monthlyEquivalentBrl(fee: Fee, rate: number): number {
+  const brl = getEffectiveBrl(fee, rate)
   if (brl <= 0) return 0
   switch (fee.billingPeriod) {
     case "anual":
@@ -111,6 +111,13 @@ function monthlyEquivalentBrl(fee: Fee): number {
   }
 }
 
+function formatQuoteTime(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })
+}
+
 export default function GastoEmpresaPage() {
   const { isAdmin } = useAuth()
   const [fees, setFees] = useState<Fee[]>(INITIAL_FEES)
@@ -118,26 +125,29 @@ export default function GastoEmpresaPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<FeeFormData>(EMPTY_FORM)
 
+  const {
+    data: quote,
+    isLoading: quoteLoading,
+    mutate: refreshQuote,
+  } = useSWR<UsdBrlQuote>(
+    "usd-brl-rate",
+    async () => {
+      const res = await fetch("/api/exchange/usd-brl", { credentials: "include", cache: "no-store" })
+      if (!res.ok) throw new Error("Cotação indisponível")
+      return res.json() as Promise<UsdBrlQuote>
+    },
+    { refreshInterval: 15 * 60 * 1000, revalidateOnFocus: true },
+  )
+
+  const usdRate = quote?.rate ?? USD_BRL_FALLBACK_RATE
+
   const categories = ["FERRAMENTAS DE CRIAÇÃO", "DOMÍNIOS E HOSPEDAGENS"]
 
   useEffect(() => {
-    const needsFix = fees.some(
-      (f) => Number(f.valueUsd) > 0 && (Number(f.valueBrl) === 0 || Number.isNaN(Number(f.valueBrl))),
-    )
-    if (!needsFix) return
-    setFees((prev) =>
-      prev.map((f) => {
-        const usd = Number(f.valueUsd)
-        if (usd > 0 && (Number(f.valueBrl) === 0 || Number.isNaN(Number(f.valueBrl)))) {
-          return {
-            ...f,
-            valueBrl: Math.round(usd * USD_TO_BRL_RATE * 100) / 100,
-          }
-        }
-        return f
-      }),
-    )
-  }, [fees.length])
+    if (formData.valueUsd <= 0) return
+    const converted = convertUsdToBrl(formData.valueUsd, usdRate)
+    setFormData((prev) => (prev.valueBrl === converted ? prev : { ...prev, valueBrl: converted }))
+  }, [usdRate, formData.valueUsd])
 
   const resetForm = useCallback(() => {
     setFormData(EMPTY_FORM)
@@ -155,7 +165,7 @@ export default function GastoEmpresaPage() {
       name: fee.name,
       category: fee.category,
       valueUsd: fee.valueUsd,
-      valueBrl: getEffectiveBrl(fee),
+      valueBrl: getEffectiveBrl(fee, usdRate),
       dueDate: fee.dueDate,
       billingPeriod: fee.billingPeriod ?? "mensal",
       notes: fee.notes ?? "",
@@ -174,8 +184,7 @@ export default function GastoEmpresaPage() {
       return
     }
 
-    const valueBrl =
-      formData.valueBrl > 0 ? formData.valueBrl : Math.round(formData.valueUsd * USD_TO_BRL_RATE * 100) / 100
+    const valueBrl = convertUsdToBrl(formData.valueUsd, usdRate)
 
     const payload: Omit<Fee, "id"> = {
       name: formData.name,
@@ -203,12 +212,17 @@ export default function GastoEmpresaPage() {
   }
 
   const feesForDisplay = useMemo(
-    () => fees.map((f) => ({ ...f, valueBrl: getEffectiveBrl(f), billingPeriod: f.billingPeriod ?? "mensal" })),
-    [fees],
+    () =>
+      fees.map((f) => ({
+        ...f,
+        valueBrl: getEffectiveBrl(f, usdRate),
+        billingPeriod: f.billingPeriod ?? "mensal",
+      })),
+    [fees, usdRate],
   )
 
   const totalUsd = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentUsd(fee), 0)
-  const totalBrl = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentBrl(fee), 0)
+  const totalBrl = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentBrl(fee, usdRate), 0)
   const oneTimeUsd = feesForDisplay
     .filter((f) => f.billingPeriod === "vitalicio")
     .reduce((sum, fee) => sum + fee.valueUsd, 0)
@@ -312,21 +326,26 @@ export default function GastoEmpresaPage() {
                       setFormData({
                         ...formData,
                         valueUsd: usd,
-                        valueBrl: usd > 0 ? Math.round(usd * USD_TO_BRL_RATE * 100) / 100 : 0,
+                        valueBrl: convertUsdToBrl(usd, usdRate),
                       })
                     }}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="valueBrl">Valor (BRL) — convertido automaticamente</Label>
+                  <Label htmlFor="valueBrl">Valor (BRL) — cotação ao vivo</Label>
                   <Input
                     id="valueBrl"
                     type="number"
                     step="0.01"
-                    placeholder="0.00"
+                    readOnly
+                    tabIndex={-1}
+                    className="cursor-default bg-muted/40"
                     value={formData.valueBrl || ""}
-                    onChange={(e) => setFormData({ ...formData, valueBrl: parseFloat(e.target.value) || 0 })}
                   />
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    1 USD = R$ {usdRate.toFixed(4)}
+                    {quoteLoading ? " · atualizando..." : ""}
+                  </p>
                 </div>
               </div>
               {formData.billingPeriod !== "vitalicio" && (
@@ -380,6 +399,22 @@ export default function GastoEmpresaPage() {
           Pagamentos únicos (vitalício): US ${oneTimeUsd.toFixed(2)} · R$ {oneTimeBrl.toFixed(2)}
         </p>
       )}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>
+          Cotação USD/BRL: <strong className="text-foreground">R$ {usdRate.toFixed(4)}</strong>
+          {quote?.source && quote.source !== "fallback" ? ` · ${quote.source}` : quote?.source === "fallback" ? " · estimativa" : ""}
+          {formatQuoteTime(quote?.updatedAt) ? ` · ${formatQuoteTime(quote?.updatedAt)}` : ""}
+        </span>
+        <button
+          type="button"
+          onClick={() => refreshQuote()}
+          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] hover:bg-secondary"
+          title="Atualizar cotação"
+        >
+          <RefreshCw className={cn("h-3 w-3", quoteLoading && "animate-spin")} />
+          Atualizar
+        </button>
+      </div>
 
       {/* Cards por Categoria */}
       <div className="space-y-5 sm:space-y-6">
@@ -450,7 +485,7 @@ export default function GastoEmpresaPage() {
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Equiv. mensal:</span>
                           <span>
-                            US ${monthlyEquivalentUsd(fee).toFixed(2)} · R$ {monthlyEquivalentBrl(fee).toFixed(2)}
+                            US ${monthlyEquivalentUsd(fee).toFixed(2)} · R$ {monthlyEquivalentBrl(fee, usdRate).toFixed(2)}
                           </span>
                         </div>
                       )}
