@@ -17,11 +17,13 @@ import {
 } from "@/lib/exchange/usd-brl"
 
 type BillingPeriod = "mensal" | "anual" | "vitalicio"
+type FeeCurrency = "usd" | "brl"
 
 interface Fee {
   id: string
   name: string
   category: string
+  currency: FeeCurrency
   valueUsd: number
   valueBrl: number
   dueDate: number
@@ -32,6 +34,7 @@ interface Fee {
 type FeeFormData = {
   name: string
   category: string
+  currency: FeeCurrency
   valueUsd: number
   valueBrl: number
   dueDate: number
@@ -42,6 +45,7 @@ type FeeFormData = {
 const EMPTY_FORM: FeeFormData = {
   name: "",
   category: "FERRAMENTAS DE CRIAÇÃO",
+  currency: "usd",
   valueUsd: 0,
   valueBrl: 0,
   dueDate: 1,
@@ -55,11 +59,17 @@ const BILLING_LABELS: Record<BillingPeriod, string> = {
   vitalicio: "Vitalício (1x)",
 }
 
+const CURRENCY_LABELS: Record<FeeCurrency, string> = {
+  usd: "Dólar (USD)",
+  brl: "Real (BRL)",
+}
+
 const INITIAL_FEES: Fee[] = [
   {
     id: "1",
     name: "v0 by Vercel",
     category: "FERRAMENTAS DE CRIAÇÃO",
+    currency: "usd",
     valueUsd: 20.0,
     valueBrl: 106.29,
     dueDate: 25,
@@ -70,6 +80,7 @@ const INITIAL_FEES: Fee[] = [
     id: "2",
     name: "Copilot Pro",
     category: "FERRAMENTAS DE CRIAÇÃO",
+    currency: "usd",
     valueUsd: 10.0,
     valueBrl: 51.86,
     dueDate: 25,
@@ -78,14 +89,23 @@ const INITIAL_FEES: Fee[] = [
   },
 ]
 
+function resolveFeeCurrency(fee: Fee): FeeCurrency {
+  if (fee.currency) return fee.currency
+  return Number(fee.valueUsd) > 0 ? "usd" : "brl"
+}
+
 function getEffectiveBrl(fee: Fee, rate: number): number {
+  if (resolveFeeCurrency(fee) === "brl") {
+    return Number(fee.valueBrl) || 0
+  }
   const usd = Number(fee.valueUsd)
   if (usd > 0) return convertUsdToBrl(usd, rate)
-  return 0
+  return Number(fee.valueBrl) || 0
 }
 
 /** Valor equivalente mensal para totais recorrentes (anual ÷ 12; vitalício não entra). */
 function monthlyEquivalentUsd(fee: Fee): number {
+  if (resolveFeeCurrency(fee) !== "usd") return 0
   const usd = Number(fee.valueUsd)
   if (!Number.isFinite(usd) || usd <= 0) return 0
   switch (fee.billingPeriod) {
@@ -144,10 +164,10 @@ export default function GastoEmpresaPage() {
   const categories = ["FERRAMENTAS DE CRIAÇÃO", "DOMÍNIOS E HOSPEDAGENS"]
 
   useEffect(() => {
-    if (formData.valueUsd <= 0) return
+    if (formData.currency !== "usd" || formData.valueUsd <= 0) return
     const converted = convertUsdToBrl(formData.valueUsd, usdRate)
     setFormData((prev) => (prev.valueBrl === converted ? prev : { ...prev, valueBrl: converted }))
-  }, [usdRate, formData.valueUsd])
+  }, [usdRate, formData.valueUsd, formData.currency])
 
   const resetForm = useCallback(() => {
     setFormData(EMPTY_FORM)
@@ -160,12 +180,14 @@ export default function GastoEmpresaPage() {
   }
 
   const openEditDialog = (fee: Fee) => {
+    const currency = resolveFeeCurrency(fee)
     setEditingId(fee.id)
     setFormData({
       name: fee.name,
       category: fee.category,
-      valueUsd: fee.valueUsd,
-      valueBrl: getEffectiveBrl(fee, usdRate),
+      currency,
+      valueUsd: currency === "usd" ? fee.valueUsd : 0,
+      valueBrl: currency === "brl" ? fee.valueBrl : getEffectiveBrl(fee, usdRate),
       dueDate: fee.dueDate,
       billingPeriod: fee.billingPeriod ?? "mensal",
       notes: fee.notes ?? "",
@@ -179,17 +201,28 @@ export default function GastoEmpresaPage() {
   }
 
   const handleSaveFee = () => {
-    if (!formData.name || formData.valueUsd <= 0) {
-      alert("Por favor, preencha nome e valor em USD")
+    if (!formData.name) {
+      alert("Por favor, preencha o nome da ferramenta/serviço")
+      return
+    }
+    if (formData.currency === "usd" && formData.valueUsd <= 0) {
+      alert("Por favor, informe o valor em USD")
+      return
+    }
+    if (formData.currency === "brl" && formData.valueBrl <= 0) {
+      alert("Por favor, informe o valor em BRL")
       return
     }
 
-    const valueBrl = convertUsdToBrl(formData.valueUsd, usdRate)
+    const isUsd = formData.currency === "usd"
+    const valueUsd = isUsd ? formData.valueUsd : 0
+    const valueBrl = isUsd ? convertUsdToBrl(formData.valueUsd, usdRate) : formData.valueBrl
 
     const payload: Omit<Fee, "id"> = {
       name: formData.name,
       category: formData.category,
-      valueUsd: formData.valueUsd,
+      currency: formData.currency,
+      valueUsd,
       valueBrl,
       dueDate: formData.billingPeriod === "vitalicio" ? 0 : formData.dueDate,
       billingPeriod: formData.billingPeriod,
@@ -215,6 +248,7 @@ export default function GastoEmpresaPage() {
     () =>
       fees.map((f) => ({
         ...f,
+        currency: resolveFeeCurrency(f),
         valueBrl: getEffectiveBrl(f, usdRate),
         billingPeriod: f.billingPeriod ?? "mensal",
       })),
@@ -224,7 +258,7 @@ export default function GastoEmpresaPage() {
   const totalUsd = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentUsd(fee), 0)
   const totalBrl = feesForDisplay.reduce((sum, fee) => sum + monthlyEquivalentBrl(fee, usdRate), 0)
   const oneTimeUsd = feesForDisplay
-    .filter((f) => f.billingPeriod === "vitalicio")
+    .filter((f) => f.billingPeriod === "vitalicio" && f.currency === "usd")
     .reduce((sum, fee) => sum + fee.valueUsd, 0)
   const oneTimeBrl = feesForDisplay
     .filter((f) => f.billingPeriod === "vitalicio")
@@ -312,42 +346,86 @@ export default function GastoEmpresaPage() {
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="valueUsd">Valor (USD)</Label>
-                  <Input
-                    id="valueUsd"
-                    type="number"
-                    step="0.01"
-                    placeholder="0.00"
-                    value={formData.valueUsd || ""}
-                    onChange={(e) => {
-                      const usd = parseFloat(e.target.value) || 0
-                      setFormData({
-                        ...formData,
-                        valueUsd: usd,
-                        valueBrl: convertUsdToBrl(usd, usdRate),
-                      })
-                    }}
-                  />
+              <div>
+                <Label htmlFor="currency">Moeda do valor</Label>
+                <select
+                  id="currency"
+                  title="Moeda do valor"
+                  aria-label="Moeda do valor"
+                  value={formData.currency}
+                  onChange={(e) => {
+                    const currency = e.target.value as FeeCurrency
+                    setFormData({
+                      ...formData,
+                      currency,
+                      valueUsd: currency === "usd" ? formData.valueUsd : 0,
+                      valueBrl: currency === "brl" ? formData.valueBrl : 0,
+                    })
+                  }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
+                >
+                  {(Object.keys(CURRENCY_LABELS) as FeeCurrency[]).map((key) => (
+                    <option key={key} value={key}>
+                      {CURRENCY_LABELS[key]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {formData.currency === "usd" ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="valueUsd">Valor (USD)</Label>
+                    <Input
+                      id="valueUsd"
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={formData.valueUsd || ""}
+                      onChange={(e) => {
+                        const usd = parseFloat(e.target.value) || 0
+                        setFormData({
+                          ...formData,
+                          valueUsd: usd,
+                          valueBrl: convertUsdToBrl(usd, usdRate),
+                        })
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="valueBrl">Valor (BRL) — cotação ao vivo</Label>
+                    <Input
+                      id="valueBrl"
+                      type="number"
+                      step="0.01"
+                      readOnly
+                      tabIndex={-1}
+                      className="cursor-default bg-muted/40"
+                      value={formData.valueBrl || ""}
+                    />
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      1 USD = R$ {usdRate.toFixed(4)}
+                      {quoteLoading ? " · atualizando..." : ""}
+                    </p>
+                  </div>
                 </div>
+              ) : (
                 <div>
-                  <Label htmlFor="valueBrl">Valor (BRL) — cotação ao vivo</Label>
+                  <Label htmlFor="valueBrlOnly">Valor (BRL)</Label>
                   <Input
-                    id="valueBrl"
+                    id="valueBrlOnly"
                     type="number"
                     step="0.01"
-                    readOnly
-                    tabIndex={-1}
-                    className="cursor-default bg-muted/40"
+                    placeholder="0,00"
                     value={formData.valueBrl || ""}
+                    onChange={(e) =>
+                      setFormData({ ...formData, valueBrl: parseFloat(e.target.value) || 0 })
+                    }
                   />
                   <p className="mt-1 text-[10px] text-muted-foreground">
-                    1 USD = R$ {usdRate.toFixed(4)}
-                    {quoteLoading ? " · atualizando..." : ""}
+                    Gasto cobrado diretamente em reais, sem conversão de dólar.
                   </p>
                 </div>
-              </div>
+              )}
               {formData.billingPeriod !== "vitalicio" && (
                 <div>
                   <Label htmlFor="dueDate">Dia do Vencimento</Label>
@@ -474,9 +552,15 @@ export default function GastoEmpresaPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Valor USD:</span>
-                        <span className="font-semibold">US ${Number(fee.valueUsd).toFixed(2)}</span>
+                        <span className="text-muted-foreground">Moeda:</span>
+                        <span className="text-xs font-medium">{CURRENCY_LABELS[fee.currency]}</span>
                       </div>
+                      {fee.currency === "usd" && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">Valor USD:</span>
+                          <span className="font-semibold">US ${Number(fee.valueUsd).toFixed(2)}</span>
+                        </div>
+                      )}
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Valor BRL:</span>
                         <span className="font-semibold">R$ {fee.valueBrl.toFixed(2)}</span>
@@ -485,7 +569,8 @@ export default function GastoEmpresaPage() {
                         <div className="flex justify-between text-xs text-muted-foreground">
                           <span>Equiv. mensal:</span>
                           <span>
-                            US ${monthlyEquivalentUsd(fee).toFixed(2)} · R$ {monthlyEquivalentBrl(fee, usdRate).toFixed(2)}
+                            {fee.currency === "usd" ? `US $${monthlyEquivalentUsd(fee).toFixed(2)} · ` : ""}
+                            R$ {monthlyEquivalentBrl(fee, usdRate).toFixed(2)}
                           </span>
                         </div>
                       )}
