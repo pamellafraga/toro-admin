@@ -53,7 +53,7 @@ export function ClientsStatusFilterSheet({ filterTab, onSelect, countByTab, clas
             const count = countByTab(tab.id)
             const selected = filterTab === tab.id
             return (
-              <li key={tab.id || "all"}>
+              <li key={tab.id === "" ? "status-blank" : tab.id}>
                 <button
                   type="button"
                   onClick={() => {

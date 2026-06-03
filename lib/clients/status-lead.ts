@@ -69,8 +69,9 @@ export const STATUS_LEAD_KANBAN_COLUMNS = [
 ] as const
 
 export function normalizeStatusLead(raw: string | null | undefined): string {
-  const s = (raw ?? "").trim()
-  return !s || s === "novo" ? "" : s
+  const s = (raw ?? "").trim().toLowerCase()
+  if (!s || s === "novo") return ""
+  return s
 }
 
 export function getStatusLeadLabel(statusId: string): string {

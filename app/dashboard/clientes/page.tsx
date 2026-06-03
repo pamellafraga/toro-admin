@@ -29,6 +29,10 @@ import {
   comercialMutateDeniedMessage,
   getOrigemCaptacaoFormOptions,
 } from "@/lib/clients/comercial-client-guard"
+import {
+  countClientsForStatusTab,
+  filterClientsForList,
+} from "@/lib/clients/client-list-filters"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
 import {
   resolveClientCustomerType,
@@ -264,24 +268,16 @@ export default function ClientesPage() {
   }, [clientsError])
 
   const getStatusLead = (c: Client) => normalizeStatusLead(c.status_lead as string | null)
-  const countByTab = (id: string) => {
-    if (!clients) return 0
-    if (id === "all") return clients.length
-    return clients.filter((c) => getStatusLead(c) === id).length
-  }
+  const skipStatusFilter = isComercial && comercialClientesTab === "geral"
+  const listSource = (clients ?? []) as ClientListItem[]
 
-  const filtered = clients?.filter((c) => {
-    const matchSearch = !search ||
-      (c.name || "").toLowerCase().includes(search.toLowerCase()) ||
-      (c.cpf_cnpj || "").includes(search) ||
-      (c.email || "").toLowerCase().includes(search.toLowerCase()) ||
-      (c.phone || "").includes(search)
-    // Status "em branco" = não designado; não é filtro — só aparece na lista quando "Todos"
-    const matchTab =
-      (isComercial && comercialClientesTab === "geral") ||
-      filterTab === "all" ||
-      getStatusLead(c) === filterTab
-    return matchSearch && matchTab
+  const countByTab = (id: string) =>
+    countClientsForStatusTab(listSource, id, search, skipStatusFilter)
+
+  const filtered = filterClientsForList(listSource, {
+    search,
+    filterTab,
+    skipStatusFilter,
   })
 
   const handleAdd = async () => {
@@ -766,7 +762,7 @@ export default function ClientesPage() {
         <div className="hidden flex-wrap gap-2 lg:flex">
           {STATUS_LEAD_FILTER_TABS.map((tab) => (
             <button
-              key={tab.id || "all"}
+              key={tab.id === "" ? "status-blank" : tab.id}
               type="button"
               onClick={() => setFilterTab(tab.id)}
               className={cn(
@@ -1167,7 +1163,7 @@ export default function ClientesPage() {
                   )}
                   </React.Fragment>
                 )) : (
-                  <tr><td colSpan={7} className="px-4 py-16 text-center"><Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">{search ? "Nenhum contato encontrado." : adminClientesTab === "xpress-solutions" ? "Nenhum contato com origem Xpress Solutions." : adminClientesTab === "Stefanie" ? "Nenhum contato da Stefanie." : "Nenhum contato cadastrado."}</p></td></tr>
+                  <tr><td colSpan={7} className="px-4 py-16 text-center"><Users className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">{search.trim() ? `Nenhum contato encontrado para "${search.trim()}".` : filterTab !== "all" ? "Nenhum contato com este status." : adminClientesTab === "xpress-solutions" ? "Nenhum contato com origem Xpress Solutions." : adminClientesTab === "Stefanie" ? "Nenhum contato da Stefanie." : "Nenhum contato cadastrado."}</p></td></tr>
                 )}
               </tbody>
             </table>
