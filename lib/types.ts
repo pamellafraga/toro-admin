@@ -162,7 +162,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   home: 'Home',
   chamados: 'Chamados',
   produtos: 'Produtos',
-  clientes: 'Clientes',
+  clientes: 'Contatos',
   seguradoras: 'Seguradoras',
   chat: 'Chat Interno',
   financeiro: 'Financeiro',

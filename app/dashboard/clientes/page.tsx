@@ -15,7 +15,11 @@ import { ptBR } from "date-fns/locale"
 
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
-import { ClientsKanbanMobile } from "@/components/dashboard/clients-kanban-mobile"
+import { ClientsMobileCardList } from "@/components/dashboard/clients-mobile-card-list"
+import {
+  ClientsStatusFilterSheet,
+  ClientsStatusFilterSummary,
+} from "@/components/dashboard/clients-status-filter-sheet"
 import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
 import { STATUS_LEAD_FILTER_TABS, normalizeStatusLead } from "@/lib/clients/status-lead"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
@@ -541,11 +545,13 @@ export default function ClientesPage() {
   }
 
   const isClientActive = (c: Client) => c.is_active !== false
+  const showStatusFilter = !isComercial || comercialClientesTab === "meu"
+  const showMobileCards = !isComercial || comercialClientesTab === "meu"
 
   return (
     <div className="flex flex-col gap-4 lg:gap-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight mb-1.5 lg:text-3xl lg:mb-2">Clientes</h1>
+        <h1 className="text-xl font-bold text-foreground tracking-tight mb-1.5 lg:text-3xl lg:mb-2">Contatos</h1>
         {isComercial ? (
           <>
             <p className="text-sm text-foreground/90 mb-0.5">Aba Geral: Contatos sem origem. Coloque sua origem no contato para ele ir para sua lista.</p>
@@ -610,14 +616,24 @@ export default function ClientesPage() {
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3">
-        <div className="relative flex-1 min-w-0">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            placeholder="Buscar por nome ou CNPJ..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="relative min-w-0 flex-1">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              placeholder="Buscar por nome ou CNPJ..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="h-10 w-full rounded-lg border border-border bg-secondary pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            />
+          </div>
+          {showStatusFilter && (
+            <ClientsStatusFilterSheet
+              filterTab={filterTab}
+              onSelect={setFilterTab}
+              countByTab={countByTab}
+              className="lg:hidden"
+            />
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="hidden rounded-lg border border-border overflow-hidden lg:flex">
@@ -639,23 +655,28 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {/* Contato: filtros coloridos por etapa (em branco = não designado, não é filtro) */}
-      {(!isComercial || comercialClientesTab === "meu") && (
-        <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-          {STATUS_LEAD_FILTER_TABS.filter((tab) => tab.id !== "").map((tab) => (
+      {/* Desktop: filtros por status em linha */}
+      {showStatusFilter && (
+        <div className="hidden flex-wrap gap-2 lg:flex">
+          {STATUS_LEAD_FILTER_TABS.map((tab) => (
             <button
-              key={tab.id}
+              key={tab.id || "all"}
               type="button"
               onClick={() => setFilterTab(tab.id)}
               className={cn(
-                "shrink-0 rounded-lg px-4 py-2 text-xs font-medium transition-all",
-                filterTab === tab.id ? tab.btn + " ring-2 ring-offset-2 ring-offset-background ring-white/30" : tab.inactive
+                "rounded-lg px-4 py-2 text-xs font-medium transition-all",
+                filterTab === tab.id ? tab.btn + " ring-2 ring-offset-2 ring-offset-background ring-white/30" : tab.inactive,
               )}
             >
-              {tab.label} ({countByTab(tab.id)})
+              {tab.label}{" "}
+              <span className="ml-0.5 font-bold tabular-nums">({countByTab(tab.id)})</span>
             </button>
           ))}
         </div>
+      )}
+
+      {showStatusFilter && (
+        <ClientsStatusFilterSummary filterTab={filterTab} countByTab={countByTab} />
       )}
 
       <ClientRegisterModal
@@ -707,18 +728,17 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* Mobile: Kanban por status */}
+      {/* Mobile: lista em cards */}
       <div className="lg:hidden">
-        {(!isComercial || comercialClientesTab === "meu") ? (
-          <ClientsKanbanMobile
+        {showMobileCards ? (
+          <ClientsMobileCardList
             clients={(filtered ?? []) as ClientListItem[]}
-            filterTab={filterTab}
             getStatusLead={getStatusLead}
             onEdit={startEdit}
             onDelete={handleDelete}
             onStatusChange={quickUpdateClientStatus}
             statusUpdatingId={statusUpdatingId}
-            emptyMessage={search ? "Nenhum cliente encontrado." : "Nenhum cliente cadastrado."}
+            emptyMessage={search ? "Nenhum contato encontrado." : "Nenhum contato cadastrado."}
           />
         ) : (
           <div className="flex flex-col gap-2">

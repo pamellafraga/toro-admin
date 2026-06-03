@@ -33,7 +33,7 @@ const navItems: { label: string; href: string; icon: typeof Home; permission: Pe
   { label: "Home", href: "/dashboard", icon: Home, permission: "home" },
   { label: "Chamados", href: "/dashboard/chamados", icon: Headphones, permission: "chamados" },
   { label: "Produtos", href: "/dashboard/produtos", icon: Package, permission: "produtos" },
-  { label: "Clientes", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
+  { label: "Contatos", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
   { label: "Financeiro", href: "/dashboard/financeiro", icon: DollarSign, permission: "financeiro" },
   { label: "NF-e", href: "/dashboard/nfe", icon: InvoiceIcon, permission: "financeiro" },
   { label: "Chat Interno", href: "/dashboard/chat", icon: MessageCircle, permission: "chat" },

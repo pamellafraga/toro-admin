@@ -27,7 +27,7 @@ export default function DashboardHome() {
         <StatCard
           title="Contatos"
           value={stats?.totalClients ?? 0}
-          subtitle="Cadastros em Clientes"
+          subtitle="Ver todos os contatos"
           icon={Users}
           href={hasPermission("clientes") ? "/dashboard/clientes" : undefined}
         />

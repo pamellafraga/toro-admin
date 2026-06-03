@@ -9,7 +9,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
   "/dashboard/chamados": "Chamados",
   "/dashboard/produtos": "Produtos",
-  "/dashboard/clientes": "Clientes",
+  "/dashboard/clientes": "Contatos",
   "/dashboard/seguradoras": "Marketing",
   "/dashboard/chat": "Chat Interno",
   "/dashboard/financeiro": "Financeiro",
