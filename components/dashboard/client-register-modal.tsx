@@ -3,7 +3,8 @@
 import { useEffect, useState, type ReactNode } from "react"
 import { Building2, Loader2, Save, User } from "lucide-react"
 import { formatCep } from "@/lib/format/br"
-import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-guard"
 import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
 
 const inputClass =
@@ -44,17 +45,7 @@ export interface NewClientFormState {
 const STATUS_COMERCIAL_FORM = STATUS_LEAD_OPTIONS
 
 function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | null) {
-  if (isComercial && comercialDisplayName) {
-    const auto = origemCaptacaoForComercial(comercialDisplayName)
-    return [
-      { value: "", label: "Em branco" },
-      { value: auto, label: auto },
-    ]
-  }
-  return [
-    { value: "", label: "—" },
-    ...ORIGEM_CAPTACAO_OPCOES.map((opt) => ({ value: opt, label: opt })),
-  ]
+  return getOrigemCaptacaoFormOptions(isComercial, comercialDisplayName)
 }
 
 interface Props {

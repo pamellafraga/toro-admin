@@ -23,7 +23,12 @@ import {
 } from "@/components/dashboard/clients-status-filter-sheet"
 import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
 import { STATUS_LEAD_FILTER_TABS, normalizeStatusLead } from "@/lib/clients/status-lead"
-import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import {
+  canComercialMutateClient,
+  comercialMutateDeniedMessage,
+  getOrigemCaptacaoFormOptions,
+} from "@/lib/clients/comercial-client-guard"
 import { resolveProductStatusDisplay } from "@/lib/contracts/product-status-display"
 import {
   resolveClientCustomerType,
@@ -105,19 +110,13 @@ const EMPTY_NEW_CLIENT: NewClientFormState = {
   status_lead: "",
 }
 
-/** Opções de origem no formulário: admin vê todas; comercial só em branco ou o próprio nome */
-function getOpcoesOrigem(isComercial: boolean, comercialDisplayName: string | null) {
-  if (isComercial && comercialDisplayName) {
-    const auto = origemCaptacaoForComercial(comercialDisplayName)
-    return [
-      { value: "", label: "Em branco" },
-      { value: auto, label: auto },
-    ]
-  }
-  return [
-    { value: "", label: "—" },
-    ...ORIGEM_CAPTACAO_OPCOES.map((opt) => ({ value: opt, label: opt })),
-  ]
+/** Opções de origem no formulário: admin vê todas; comercial só o próprio nome */
+function getOpcoesOrigem(
+  isComercial: boolean,
+  comercialDisplayName: string | null,
+  currentOrigem?: string | null,
+) {
+  return getOrigemCaptacaoFormOptions(isComercial, comercialDisplayName, currentOrigem)
 }
 
 type AdminClientesTab = "geral" | "Stefanie" | "xpress-solutions"
@@ -152,9 +151,22 @@ export default function ClientesPage() {
   const [registerPurchaseClient, setRegisterPurchaseClient] = useState<Client | null>(null)
 
   const openRegisterPurchase = (client: Client) => {
+    if (
+      isComercial &&
+      comercialDisplayName &&
+      !canComercialMutateClient(comercialDisplayName, client.origem_captacao)
+    ) {
+      toast.error(comercialMutateDeniedMessage())
+      return
+    }
     setRegisterPurchaseClient(client)
     setRegisterPurchaseOpen(true)
   }
+
+  const canEditClient = (client: Client) =>
+    !isComercial ||
+    !comercialDisplayName ||
+    canComercialMutateClient(comercialDisplayName, client.origem_captacao)
 
   const formatCpfCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "")
@@ -444,6 +456,10 @@ export default function ClientesPage() {
   }
 
   const startEdit = (client: Client) => {
+    if (!canEditClient(client)) {
+      toast.error(comercialMutateDeniedMessage())
+      return
+    }
     setEditingId(client.id)
     let address = client.address || ""
     let number = client.number || ""
@@ -480,13 +496,17 @@ export default function ClientesPage() {
         number = number || parts[1] || ""
       }
     }
+    let origemCaptacao = client.origem_captacao || ""
+    if (isComercial && comercialDisplayName && !origemCaptacao.trim()) {
+      origemCaptacao = origemCaptacaoForComercial(comercialDisplayName)
+    }
     setEditForm({
       name: client.name, email: client.email || "", phone: client.phone || "",
       cpf_cnpj: formatCpfCnpjForDisplay(client.cpf_cnpj),
       company_name: client.company_name || "",
       address, city, state, zip_code, number, district,
       notes: client.notes || "", is_active: client.is_active !== false,
-      origem_captacao: client.origem_captacao || "",
+      origem_captacao: origemCaptacao,
       status_lead: (client.status_lead as string) ?? "",
       customer_type: resolveClientCustomerType(client.liticapro_data, client.cpf_cnpj),
     })
@@ -557,6 +577,10 @@ export default function ClientesPage() {
   }
 
   const quickUpdateClientStatus = async (client: Client, statusId: string) => {
+    if (!canEditClient(client)) {
+      toast.error(comercialMutateDeniedMessage())
+      return
+    }
     setStatusUpdatingId(client.id)
     try {
       const res = await fetch(`/api/clients/${client.id}/status`, {
@@ -583,6 +607,10 @@ export default function ClientesPage() {
   }
 
   const handleDelete = async (client: Client) => {
+    if (!canEditClient(client)) {
+      toast.error(comercialMutateDeniedMessage())
+      return
+    }
     if (!confirm(`Tem certeza que deseja excluir o cliente "${client.name}"? Contratos e NF-e vinculados também serão removidos.`)) return
     const { error } = await (async () => {
       const res = await fetch(`/api/clients/${client.id}`, {
@@ -876,9 +904,10 @@ export default function ClientesPage() {
               <select
                 value={editForm.origem_captacao ?? ""}
                 onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })}
-                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                disabled={getOpcoesOrigem(isComercial, comercialDisplayName ?? null, editForm.origem_captacao).some((o) => o.readOnly)}
+                className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm disabled:opacity-70"
               >
-                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null).map((opt) => (
+                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null, editForm.origem_captacao).map((opt) => (
                   <option key={opt.value || "blank"} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
@@ -1030,8 +1059,13 @@ export default function ClientesPage() {
                           <div className="flex flex-wrap items-end gap-x-2 gap-y-1.5 pt-1.5 border-t border-border/40">
                             <div className="min-w-[11.5rem] w-auto max-w-[16rem] shrink-0">
                               <label className="block text-[10px] text-muted-foreground/70 mb-0.5">Origem</label>
-                              <select value={editForm.origem_captacao ?? ""} onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })} className="h-7 w-full min-w-[11.5rem] rounded border border-border/80 bg-background pl-2 pr-7 text-xs text-foreground focus:border-primary focus:outline-none">
-                                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null).map((opt) => (
+                              <select
+                                value={editForm.origem_captacao ?? ""}
+                                onChange={(e) => setEditForm({ ...editForm, origem_captacao: e.target.value })}
+                                disabled={getOpcoesOrigem(isComercial, comercialDisplayName ?? null, editForm.origem_captacao).some((o) => o.readOnly)}
+                                className="h-7 w-full min-w-[11.5rem] rounded border border-border/80 bg-background pl-2 pr-7 text-xs text-foreground focus:border-primary focus:outline-none disabled:opacity-70"
+                              >
+                                {getOpcoesOrigem(isComercial, comercialDisplayName ?? null, editForm.origem_captacao).map((opt) => (
                                   <option key={opt.value || "blank"} value={opt.value}>{opt.label}</option>
                                 ))}
                               </select>
@@ -1096,12 +1130,16 @@ export default function ClientesPage() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">{format(new Date(client.created_at), "dd/MM/yyyy", { locale: ptBR })}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-nowrap items-center justify-end gap-1">
+                            {canEditClient(client) && (
+                              <>
                             <RegisterManualPurchaseButton client={client} onClick={openRegisterPurchase} />
                             <button onClick={() => setExpandedId((id) => (id === client.id ? null : client.id))} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title={expandedId === client.id ? "Recolher" : "Ver mais"}>
                               {expandedId === client.id ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                             </button>
                             <button onClick={() => startEdit(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                             <button onClick={() => handleDelete(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </>

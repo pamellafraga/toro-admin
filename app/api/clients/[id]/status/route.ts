@@ -1,10 +1,14 @@
 import { NextRequest } from "next/server"
-import { isAuthenticated } from "@/lib/api/auth"
+import { isAuthenticated, parseAuthCookie } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonOk, jsonUnauthorized } from "@/lib/api/response"
 import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
 import { applyStatusLeadToContracts } from "@/lib/clients/apply-status-lead-to-contract"
+import {
+  canComercialMutateClient,
+  comercialMutateDeniedMessage,
+} from "@/lib/clients/comercial-client-guard"
 import { shouldSyncContractFromStatusLead } from "@/lib/clients/status-lead-contract-sync"
-import { updateClientStatusLead } from "@/lib/db/repositories/clients.repository"
+import { findClientById, updateClientStatusLead } from "@/lib/db/repositories/clients.repository"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +22,17 @@ export async function PATCH(
   try {
     if (!isAuthenticated(req)) return jsonUnauthorized()
 
+    const auth = parseAuthCookie(req)
     const { id } = await params
+    const existingClient = await findClientById(id)
+    if (!existingClient) return jsonError("Contato não encontrado.", 404)
+
+    if (auth?.role === "comercial" && auth.displayName) {
+      if (!canComercialMutateClient(auth.displayName, existingClient.origem_captacao)) {
+        return jsonError(comercialMutateDeniedMessage(), 403)
+      }
+    }
+
     const body = await req.json()
     const raw = body.status_lead
     const statusLead =

@@ -8,6 +8,7 @@ import {
   findDuplicateClient,
   hasClientIdentity,
 } from "@/lib/clients/duplicate-check"
+import { resolveComercialOrigemOnCreate } from "@/lib/clients/comercial-client-guard"
 import {
   insertClient,
   listClientsForDashboard,
@@ -75,6 +76,7 @@ export async function POST(req: NextRequest) {
   try {
     if (!isAuthenticated(req)) return jsonUnauthorized()
 
+    const auth = parseAuthCookie(req)!
     const body = await req.json()
     const customerType = body.customer_type as string | undefined
     if (customerType !== "empresa" && customerType !== "profissional_liberal") {
@@ -129,6 +131,13 @@ export async function POST(req: NextRequest) {
       return jsonError(duplicateClientMessage(duplicate), 409)
     }
 
+    let origemCaptacao: string | null = body.origem_captacao || null
+    if (auth.role === "comercial" && auth.displayName) {
+      const resolved = resolveComercialOrigemOnCreate(auth.displayName, origemCaptacao)
+      if (!resolved.ok) return jsonError(resolved.error, 403)
+      origemCaptacao = resolved.value
+    }
+
     const inserted = await insertClient({
       name,
       email,
@@ -141,7 +150,7 @@ export async function POST(req: NextRequest) {
       city: body.city ?? null,
       state: body.state ?? null,
       zip_code: body.zip_code ?? null,
-      origem_captacao: body.origem_captacao || null,
+      origem_captacao: origemCaptacao,
       status_lead: body.status_lead || null,
       liticapro_data: { customer_type: customerType },
     })

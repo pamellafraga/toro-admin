@@ -22,6 +22,12 @@ import { computeTrialEndsAt } from "@/lib/liticapro/trial"
 import { fetchCnpjFromGov } from "@/lib/liticapro/cnpj-lookup"
 import { parseDeveloperCredentials } from "@/lib/liticapro/developer-credentials"
 import { origemComercialFromCaptacao } from "@/lib/constants/origem-captacao"
+import {
+  canComercialMutateClient,
+  comercialMutateDeniedMessage,
+  comercialOwnOrigem,
+  resolveComercialOrigemOnUpdate,
+} from "@/lib/clients/comercial-client-guard"
 import { getProductBySlug } from "@/lib/products/catalog"
 
 export const dynamic = "force-dynamic"
@@ -39,7 +45,7 @@ export async function POST(req: NextRequest) {
 
     const email = String(body.email ?? "").trim().toLowerCase()
     const phone = String(body.phone ?? "").trim()
-    const origemCaptacao = String(body.origem_captacao ?? "").trim()
+    let origemCaptacao = String(body.origem_captacao ?? "").trim()
     const statesOfInterest = Array.isArray(body.states_of_interest)
       ? (body.states_of_interest as string[]).map((s) => String(s).toUpperCase()).filter(Boolean)
       : []
@@ -48,6 +54,15 @@ export async function POST(req: NextRequest) {
     if (!phone) return jsonError("Telefone/WhatsApp é obrigatório.", 400)
     if (!origemCaptacao) return jsonError("Origem da captação é obrigatória.", 400)
     if (statesOfInterest.length === 0) return jsonError("Selecione ao menos um estado de interesse.", 400)
+
+    const isComercialUser = auth?.role === "comercial" && auth.displayName
+    if (isComercialUser) {
+      const own = comercialOwnOrigem(auth.displayName!)
+      if (origemCaptacao !== own) {
+        return jsonError("Você só pode registrar compras com sua origem comercial.", 403)
+      }
+      origemCaptacao = own
+    }
 
     const catalog = getProductBySlug("liticapro")
     if (!catalog) return jsonError("Produto LiticaPro não configurado.", 500)
@@ -143,9 +158,16 @@ export async function POST(req: NextRequest) {
       ? {
           id: existingRow.id,
           name: existingRow.name,
+          origem_captacao: existingRow.origem_captacao,
           liticapro_data: existingRow.liticapro_data as Record<string, unknown> | null,
         }
       : null
+
+    if (isComercialUser && existing) {
+      if (!canComercialMutateClient(auth!.displayName!, existing.origem_captacao)) {
+        return jsonError(comercialMutateDeniedMessage(), 403)
+      }
+    }
 
     if (existing?.liticapro_data) {
       liticaproData = { ...existing.liticapro_data, ...liticaproData }
@@ -176,6 +198,18 @@ export async function POST(req: NextRequest) {
       origem_captacao: origemCaptacao,
       status_lead: "ativo",
       liticapro_data: liticaproData,
+    }
+
+    if (existing && isComercialUser) {
+      const resolved = resolveComercialOrigemOnUpdate(
+        auth!.displayName!,
+        existing.origem_captacao,
+        origemCaptacao,
+      )
+      if (!resolved.ok) return jsonError(resolved.error, 403)
+      clientPayload.origem_captacao = resolved.value ?? origemCaptacao
+    } else if (existing && (existing.origem_captacao ?? "").trim()) {
+      clientPayload.origem_captacao = existing.origem_captacao!.trim()
     }
 
     const duplicate = await findDuplicateClient({

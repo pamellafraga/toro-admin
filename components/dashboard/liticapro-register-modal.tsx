@@ -8,7 +8,8 @@ import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { formatCep, formatCnpj, formatCpf, formatPhone } from "@/lib/format/br"
 import { suggestDeveloperUsername } from "@/lib/liticapro/developer-credentials"
-import { ORIGEM_CAPTACAO_OPCOES } from "@/lib/constants/origem-captacao"
+import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
+import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-guard"
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection, LiticaProCnaeAndRamoCompact } from "@/components/dashboard/liticapro-cnae-section"
 import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
@@ -91,7 +92,7 @@ function buildCompanyGovPayload(
 }
 
 export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient }: Props) {
-  const { isAdmin } = useAuth()
+  const { isAdmin, isComercial, comercialDisplayName } = useAuth()
   const [step, setStep] = useState<1 | 2>(1)
   const [customerType, setCustomerType] = useState<CustomerType>(null)
   const [saving, setSaving] = useState(false)
@@ -324,7 +325,14 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
       const lp = (client.liticapro_data ?? {}) as Record<string, unknown>
       if (client.email && client.email.includes("@")) setEmail(client.email)
       if (client.phone) setPhone(formatPhone(client.phone))
-      if (client.origem_captacao) setOrigemCaptacao(client.origem_captacao)
+      if (client.origem_captacao) {
+        if (isComercial && comercialDisplayName) {
+          const own = origemCaptacaoForComercial(comercialDisplayName)
+          if ((client.origem_captacao ?? "").trim() === own) setOrigemCaptacao(own)
+        } else {
+          setOrigemCaptacao(client.origem_captacao)
+        }
+      }
 
       const docDigits = isPlaceholderCpfCnpj(client.cpf_cnpj)
         ? ""
@@ -394,6 +402,12 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
     },
     [applyLinkedClient, linkedClient],
   )
+
+  useEffect(() => {
+    if (!open || !isComercial || !comercialDisplayName) return
+    const own = origemCaptacaoForComercial(comercialDisplayName)
+    setOrigemCaptacao(own)
+  }, [open, isComercial, comercialDisplayName])
 
   useEffect(() => {
     if (!open || !initialClient) return
@@ -727,6 +741,8 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
               phone={phone} setPhone={setPhone}
               statesOfInterest={statesOfInterest} toggleState={toggleState}
               origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
+              isComercial={isComercial}
+              comercialDisplayName={comercialDisplayName}
               linkedClient={linkedClient}
               lookingUpContact={lookingUpContact}
               onClearLink={() => setLinkedClient(null)}
@@ -842,6 +858,8 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
               phone={phone} setPhone={setPhone}
               statesOfInterest={statesOfInterest} toggleState={toggleState}
               origemCaptacao={origemCaptacao} setOrigemCaptacao={setOrigemCaptacao}
+              isComercial={isComercial}
+              comercialDisplayName={comercialDisplayName}
               emailRequired={false}
               linkedClient={linkedClient}
               lookingUpContact={lookingUpContact}
@@ -872,6 +890,8 @@ function CommonFields({
   email, setEmail, phone, setPhone,
   statesOfInterest, toggleState,
   origemCaptacao, setOrigemCaptacao,
+  isComercial = false,
+  comercialDisplayName = null,
   emailRequired = true,
   linkedClient,
   lookingUpContact,
@@ -885,6 +905,8 @@ function CommonFields({
   toggleState: (uf: string) => void
   origemCaptacao: string
   setOrigemCaptacao: (v: string) => void
+  isComercial?: boolean
+  comercialDisplayName?: string | null
   emailRequired?: boolean
   linkedClient?: Client | null
   lookingUpContact?: boolean
@@ -957,11 +979,24 @@ function CommonFields({
       <FormSection title="Origem da captação">
         <div>
           <label className={labelClass}>Origem da captação *</label>
-          <select className={inputClass} value={origemCaptacao} onChange={(e) => setOrigemCaptacao(e.target.value)}>
-            <option value="">Selecione...</option>
-            {ORIGEM_CAPTACAO_OPCOES.map((o) => (
-              <option key={o} value={o}>{o}</option>
-            ))}
+          <select
+            className={inputClass}
+            value={origemCaptacao}
+            onChange={(e) => setOrigemCaptacao(e.target.value)}
+            disabled={isComercial && Boolean(comercialDisplayName)}
+          >
+            {isComercial && comercialDisplayName ? (
+              <option value={origemCaptacaoForComercial(comercialDisplayName)}>
+                {origemCaptacaoForComercial(comercialDisplayName)}
+              </option>
+            ) : (
+              <>
+                <option value="">Selecione...</option>
+                {ORIGEM_CAPTACAO_OPCOES.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </>
+            )}
           </select>
         </div>
       </FormSection>
