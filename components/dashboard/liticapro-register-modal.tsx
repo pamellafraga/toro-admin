@@ -535,7 +535,7 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-3">
       <div className="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl bg-background border border-border p-4 shadow-xl">
         <div className="flex items-start justify-between mb-3">
           <div>

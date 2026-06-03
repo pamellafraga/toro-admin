@@ -3,6 +3,7 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Mail, Pencil, Phone, ShoppingCart, Trash2 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
 import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
 import type { Client } from "@/lib/types"
@@ -102,16 +103,20 @@ export function ClientsMobileCardList({
               </span>
             </div>
 
-            <div className="mt-2 flex justify-end gap-1">
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-1.5">
               {onRegisterPurchase && (
                 <button
                   type="button"
                   onClick={() => onRegisterPurchase(client)}
-                  className="rounded-md p-1.5 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600"
+                  className={cn(
+                    "inline-flex items-center gap-1 rounded-lg border border-emerald-600/40 bg-emerald-500/15 px-2.5 py-1.5",
+                    "text-[11px] font-semibold text-emerald-800 hover:bg-emerald-500/25 dark:text-emerald-300",
+                  )}
                   aria-label="Registrar compra manual"
-                  title="Registrar compra manual"
+                  title="Registrar compra manual — LiticaPro"
                 >
-                  <ShoppingCart className="h-4 w-4" />
+                  <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
+                  Compra manual
                 </button>
               )}
               <button

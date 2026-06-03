@@ -44,6 +44,29 @@ type PrimaryContract = {
 
 type ClientListItem = Client & { primary_contract: PrimaryContract | null }
 
+function RegisterManualPurchaseButton({
+  client,
+  onClick,
+}: {
+  client: Client
+  onClick: (c: Client) => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation()
+        onClick(client)
+      }}
+      className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-600/40 bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-500/25 dark:text-emerald-300"
+      title="Registrar compra manual — LiticaPro"
+    >
+      <ShoppingCart className="h-3.5 w-3.5 shrink-0" aria-hidden />
+      <span className="whitespace-nowrap">Compra manual</span>
+    </button>
+  )
+}
+
 function ProductStatusBadge({ contract }: { contract: PrimaryContract | null | undefined }) {
   if (!contract?.status) {
     return <span className="text-muted-foreground text-xs">—</span>
@@ -803,9 +826,7 @@ export default function ClientesPage() {
                     {client.phone && <p className="text-xs text-muted-foreground">{client.phone}</p>}
                   </div>
                   <div className="flex shrink-0 gap-0.5">
-                    <button type="button" onClick={() => openRegisterPurchase(client)} className="p-1.5 text-muted-foreground hover:text-emerald-600" title="Registrar compra manual">
-                      <ShoppingCart className="h-4 w-4" />
-                    </button>
+                    <RegisterManualPurchaseButton client={client} onClick={openRegisterPurchase} />
                     <button type="button" onClick={() => startEdit(client)} className="p-1.5 text-primary" title="Editar">
                       <Pencil className="h-4 w-4" />
                     </button>
@@ -890,7 +911,7 @@ export default function ClientesPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Contato</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Produto</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Data de cadastro</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Ações</th>
+                  <th className="min-w-[12.5rem] px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wide">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -1020,6 +1041,10 @@ export default function ClientesPage() {
                               {editForm.is_active ? "Ativo" : "Inativo"}
                             </button>
                             <div className="flex-1 min-w-2" />
+                            <RegisterManualPurchaseButton
+                              client={client}
+                              onClick={openRegisterPurchase}
+                            />
                             <button onClick={saveEdit} className="flex items-center gap-1 h-7 rounded bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
                               <Save className="h-3 w-3" /> Salvar
                             </button>
@@ -1062,11 +1087,11 @@ export default function ClientesPage() {
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{format(new Date(client.created_at), "dd/MM/yyyy", { locale: ptBR })}</td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1">
+                          <div className="flex flex-nowrap items-center justify-end gap-1">
+                            <RegisterManualPurchaseButton client={client} onClick={openRegisterPurchase} />
                             <button onClick={() => setExpandedId((id) => (id === client.id ? null : client.id))} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title={expandedId === client.id ? "Recolher" : "Ver mais"}>
                               {expandedId === client.id ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                             </button>
-                            <button onClick={() => openRegisterPurchase(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors" title="Registrar compra manual"><ShoppingCart className="h-3.5 w-3.5" /></button>
                             <button onClick={() => startEdit(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                             <button onClick={() => handleDelete(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
@@ -1123,7 +1148,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button title="Registrar compra manual" onClick={() => openRegisterPurchase(client)} className="rounded p-1 text-muted-foreground hover:text-emerald-600 transition-colors"><ShoppingCart className="h-3.5 w-3.5" /></button>
+                    <RegisterManualPurchaseButton client={client} onClick={openRegisterPurchase} />
                     <button title="Editar" onClick={() => startEdit(client)} className="rounded p-1 text-muted-foreground hover:text-primary transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                     <button title="Excluir" onClick={() => handleDelete(client)} className="rounded p-1 text-muted-foreground hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
