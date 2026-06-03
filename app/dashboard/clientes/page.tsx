@@ -4,7 +4,7 @@ import { useAuth } from "@/lib/auth-context"
 import {
   Search, Plus, Minus, X, Save, Users, MapPin, Mail, Phone,
   LayoutGrid, List, Pencil, Building2, Trash2, Upload, Loader2,
-  CheckCircle, XCircle, User,
+  CheckCircle, XCircle, User, ShoppingCart,
 } from "lucide-react"
 import useSWR, { useSWRConfig } from "swr"
 import type { Client } from "@/lib/types"
@@ -14,6 +14,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
 import { ClientRegisterModal, type NewClientFormState } from "@/components/dashboard/client-register-modal"
+import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-register-modal"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
 import { ClientsMobileCardList } from "@/components/dashboard/clients-mobile-card-list"
 import {
@@ -116,6 +117,13 @@ export default function ClientesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [editForm, setEditForm] = useState<Partial<Client> & { customer_type?: ClientCustomerType }>({})
   const [newClient, setNewClient] = useState<NewClientFormState>(EMPTY_NEW_CLIENT)
+  const [registerPurchaseOpen, setRegisterPurchaseOpen] = useState(false)
+  const [registerPurchaseClient, setRegisterPurchaseClient] = useState<Client | null>(null)
+
+  const openRegisterPurchase = (client: Client) => {
+    setRegisterPurchaseClient(client)
+    setRegisterPurchaseOpen(true)
+  }
 
   const formatCpfCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "")
@@ -775,6 +783,7 @@ export default function ClientesPage() {
             getStatusLead={getStatusLead}
             onEdit={startEdit}
             onDelete={handleDelete}
+            onRegisterPurchase={openRegisterPurchase}
             onStatusChange={quickUpdateClientStatus}
             statusUpdatingId={statusUpdatingId}
             emptyMessage={search ? "Nenhum contato encontrado." : "Nenhum contato cadastrado."}
@@ -793,9 +802,14 @@ export default function ClientesPage() {
                     <p className="font-medium text-sm text-foreground">{client.name}</p>
                     {client.phone && <p className="text-xs text-muted-foreground">{client.phone}</p>}
                   </div>
-                  <button type="button" onClick={() => startEdit(client)} className="p-1.5 text-primary">
-                    <Pencil className="h-4 w-4" />
-                  </button>
+                  <div className="flex shrink-0 gap-0.5">
+                    <button type="button" onClick={() => openRegisterPurchase(client)} className="p-1.5 text-muted-foreground hover:text-emerald-600" title="Registrar compra manual">
+                      <ShoppingCart className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => startEdit(client)} className="p-1.5 text-primary" title="Editar">
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -1052,6 +1066,7 @@ export default function ClientesPage() {
                             <button onClick={() => setExpandedId((id) => (id === client.id ? null : client.id))} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title={expandedId === client.id ? "Recolher" : "Ver mais"}>
                               {expandedId === client.id ? <Minus className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
                             </button>
+                            <button onClick={() => openRegisterPurchase(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600 transition-colors" title="Registrar compra manual"><ShoppingCart className="h-3.5 w-3.5" /></button>
                             <button onClick={() => startEdit(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors" title="Editar"><Pencil className="h-3.5 w-3.5" /></button>
                             <button onClick={() => handleDelete(client)} className="rounded-lg p-1.5 text-muted-foreground hover:bg-red-500/10 hover:text-red-400 transition-colors" title="Excluir"><Trash2 className="h-3.5 w-3.5" /></button>
                           </div>
@@ -1108,6 +1123,7 @@ export default function ClientesPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button title="Registrar compra manual" onClick={() => openRegisterPurchase(client)} className="rounded p-1 text-muted-foreground hover:text-emerald-600 transition-colors"><ShoppingCart className="h-3.5 w-3.5" /></button>
                     <button title="Editar" onClick={() => startEdit(client)} className="rounded p-1 text-muted-foreground hover:text-primary transition-colors"><Pencil className="h-3.5 w-3.5" /></button>
                     <button title="Excluir" onClick={() => handleDelete(client)} className="rounded p-1 text-muted-foreground hover:text-red-400 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                   </div>
@@ -1141,6 +1157,23 @@ export default function ClientesPage() {
           {filtered?.length === 0 && <div className="flex flex-col items-center justify-center py-16"><Users className="h-12 w-12 text-muted-foreground/20 mb-3" /><p className="text-muted-foreground">{search ? "Nenhum cliente encontrado" : "Nenhum cliente cadastrado"}</p></div>}
         </>
       )}
+
+      <LiticaProRegisterModal
+        open={registerPurchaseOpen}
+        initialClient={registerPurchaseClient}
+        onClose={() => {
+          setRegisterPurchaseOpen(false)
+          setRegisterPurchaseClient(null)
+        }}
+        onSuccess={async () => {
+          await mutate()
+          await globalMutate(
+            (key) => typeof key === "string" && key.startsWith("clients-list-"),
+            undefined,
+            { revalidate: true },
+          )
+        }}
+      />
     </div>
   )
 }

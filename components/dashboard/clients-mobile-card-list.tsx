@@ -2,7 +2,7 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Mail, Pencil, Phone, Trash2 } from "lucide-react"
+import { Mail, Pencil, Phone, ShoppingCart, Trash2 } from "lucide-react"
 import { ClientTypeAvatar } from "@/components/dashboard/client-type-avatar"
 import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
 import type { Client } from "@/lib/types"
@@ -16,6 +16,7 @@ type Props = {
   getStatusLead: (c: Client) => string
   onEdit: (c: Client) => void
   onDelete: (c: Client) => void
+  onRegisterPurchase?: (c: Client) => void
   onStatusChange: (client: Client, statusId: string) => Promise<void>
   statusUpdatingId?: string | null
   emptyMessage?: string
@@ -26,6 +27,7 @@ export function ClientsMobileCardList({
   getStatusLead,
   onEdit,
   onDelete,
+  onRegisterPurchase,
   onStatusChange,
   statusUpdatingId,
   emptyMessage = "Nenhum contato",
@@ -100,7 +102,18 @@ export function ClientsMobileCardList({
               </span>
             </div>
 
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex justify-end gap-1">
+              {onRegisterPurchase && (
+                <button
+                  type="button"
+                  onClick={() => onRegisterPurchase(client)}
+                  className="rounded-md p-1.5 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600"
+                  aria-label="Registrar compra manual"
+                  title="Registrar compra manual"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => onDelete(client)}

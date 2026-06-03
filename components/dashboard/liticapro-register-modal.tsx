@@ -20,6 +20,8 @@ interface Props {
   open: boolean
   onClose: () => void
   onSuccess: () => void
+  /** Contato da listagem — pré-preenche e vincula no cadastro */
+  initialClient?: Client | null
 }
 
 const inputClass =
@@ -88,7 +90,7 @@ function buildCompanyGovPayload(
   }
 }
 
-export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
+export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient }: Props) {
   const { isAdmin } = useAuth()
   const [step, setStep] = useState<1 | 2>(1)
   const [customerType, setCustomerType] = useState<CustomerType>(null)
@@ -394,7 +396,33 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess }: Props) {
   )
 
   useEffect(() => {
+    if (!open || !initialClient) return
+
+    const docDigits = isPlaceholderCpfCnpj(initialClient.cpf_cnpj)
+      ? ""
+      : String(initialClient.cpf_cnpj ?? "").replace(/\D/g, "")
+
+    const resolvedType: CustomerType =
+      initialClient.customer_type === "profissional_liberal" || docDigits.length === 11
+        ? "profissional_liberal"
+        : initialClient.customer_type === "empresa" ||
+            docDigits.length === 14 ||
+            Boolean(initialClient.company_name?.trim())
+          ? "empresa"
+          : "empresa"
+
+    setCustomerType(resolvedType)
+    setStep(2)
+  }, [open, initialClient?.id])
+
+  useEffect(() => {
+    if (!open || !initialClient || customerType === null) return
+    applyLinkedClient(initialClient)
+  }, [open, initialClient?.id, customerType, applyLinkedClient])
+
+  useEffect(() => {
     if (step !== 2) return
+    if (initialClient) return
     const primary = phone.replace(/\D/g, "").length >= 10 ? phone : email
     const digits = primary.replace(/\D/g, "")
     const trimmed = primary.trim()
