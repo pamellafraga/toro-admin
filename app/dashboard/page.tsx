@@ -34,7 +34,7 @@ export default function DashboardHome() {
         <StatCard
           title="Testes em andamento"
           value={stats?.trialsInProgress ?? 0}
-          subtitle="LiticaPro e demais produtos"
+          subtitle="LicitaPregão e demais produtos"
           icon={Clock}
           href={hasPermission("produtos") ? "/dashboard/produtos/liticapro" : undefined}
         />

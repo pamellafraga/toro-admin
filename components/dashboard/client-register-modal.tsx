@@ -134,7 +134,7 @@ export function ClientRegisterModal({
             <p className="text-xs text-muted-foreground mt-1">
               {step === 1
                 ? "Selecione o tipo de cadastro para continuar."
-                : "Cadastro geral de contato — use Produtos → LiticaPro para registrar teste grátis ou assinatura."}
+                : "Cadastro geral de contato — use Produtos → LicitaPregão para registrar teste grátis ou assinatura."}
             </p>
           </div>
           <button

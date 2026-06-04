@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
     }
 
     const catalog = getProductBySlug("liticapro")
-    if (!catalog) return jsonError("Produto LiticaPro não configurado.", 500)
+    if (!catalog) return jsonError("Produto LicitaPregão não configurado.", 500)
     const product = await findOrCreateProductFromCatalog(catalog)
 
     let cpfCnpjRaw = ""
@@ -286,7 +286,7 @@ export async function POST(req: NextRequest) {
 
     const trialLabel = trialEnds.toLocaleDateString("pt-BR")
     await insertNotification({
-      title: "LiticaPro — novo teste grátis",
+      title: "LicitaPregão — novo teste grátis",
       message: `${clientName} cadastrado em ${registeredAt.toLocaleDateString("pt-BR")}. Teste de ${LITICAPRO_TRIAL_DAYS} dias expira em ${trialLabel}. Após expirar, entre em contato para verificar renovação.`,
       type: "info",
       link: "/dashboard/produtos/liticapro",
@@ -295,7 +295,7 @@ export async function POST(req: NextRequest) {
     await logActivity(
       { displayName: auth?.displayName },
       {
-        action: `Cadastrou teste LiticaPro (${customerType}): ${clientName}`,
+        action: `Cadastrou teste LicitaPregão (${customerType}): ${clientName}`,
         entity_type: "contract",
         entity_id: contract.id,
         details: { client_id: clientId, trial_ends_at: trialEnds.toISOString() },
@@ -313,6 +313,6 @@ export async function POST(req: NextRequest) {
     })
   } catch (err) {
     console.error("register/liticapro:", err)
-    return handleApiError(err, "Erro ao registrar LiticaPro.")
+    return handleApiError(err, "Erro ao registrar LicitaPregão.")
   }
 }

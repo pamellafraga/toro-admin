@@ -13,7 +13,7 @@ export interface ProductCatalogEntry {
 export const PRODUCT_CATALOG: ProductCatalogEntry[] = [
   {
     slug: "liticapro",
-    name: "LiticaPro",
+    name: "LicitaPregão",
     description: "Monitoramento de licitações públicas no Brasil",
     icon: "search",
     planosLabel: "Monitoramento de editais e licitações em todo o país",

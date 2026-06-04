@@ -175,7 +175,7 @@ export default function ProdutosPage() {
       <div>
         <h2 className="text-2xl font-bold text-foreground">Produtos</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          LiticaPro (licitações públicas) e SEGURA (gestão de apólices).
+          LicitaPregão (licitações públicas) e SEGURA (gestão de apólices).
         </p>
         {isComercial && (
           <p className="text-xs text-amber-400/90 mt-1">Contadores e totais são da sua história inteira (todas as vendas registradas por você).</p>

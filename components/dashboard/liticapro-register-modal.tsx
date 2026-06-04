@@ -571,7 +571,7 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
       <div className="w-full max-w-6xl max-h-[92vh] overflow-y-auto rounded-2xl bg-background border border-border p-4 shadow-xl">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h3 className="text-lg font-semibold text-foreground">Registrar compra — LiticaPro</h3>
+            <h3 className="text-lg font-semibold text-foreground">Registrar compra — LicitaPregão</h3>
             <p className="text-xs text-muted-foreground mt-1">
               Teste grátis de 7 dias a partir da data de cadastro. Plano e pagamento serão definidos após o período de teste.
             </p>
@@ -941,7 +941,7 @@ function CommonFields({
                 Vinculado ao contato: {linkedClient.name}
               </p>
               <p className="text-[10px] text-muted-foreground mt-0.5">
-                Ao finalizar, o cadastro atualiza Contatos e Produtos LiticaPro deste contato.
+                Ao finalizar, o cadastro atualiza Contatos e Produtos LicitaPregão deste contato.
               </p>
             </div>
             {onClearLink && (

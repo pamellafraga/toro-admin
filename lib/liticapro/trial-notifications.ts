@@ -21,7 +21,7 @@ export async function processExpiredLiticaProTrials(): Promise<number> {
       ? format(new Date(row.trial_ends_at), "dd/MM/yyyy", { locale: ptBR })
       : "—"
     await insertNotification({
-      title: "LiticaPro — teste grátis encerrado",
+      title: "LicitaPregão — teste grátis encerrado",
       message: `O teste de ${row.client_name} (cadastro ${cadastro}) expirou em ${expirou}. Entre em contato para verificar renovação, plano e pagamento${row.client_email ? ` — ${row.client_email}` : ""}.`,
       type: "warning",
       link: "/dashboard/produtos/liticapro",

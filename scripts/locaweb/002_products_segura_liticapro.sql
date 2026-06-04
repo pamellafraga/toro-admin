@@ -1,4 +1,4 @@
--- Renomeia Software de Gestão → SEGURA e adiciona LiticaPro
+-- Renomeia Software de Gestão → SEGURA e adiciona LicitaPregão
 ALTER TABLE products ADD COLUMN IF NOT EXISTS slug TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS monthly_price DECIMAL(10,2) NOT NULL DEFAULT 0;
 
@@ -17,9 +17,9 @@ DELETE FROM products
 WHERE name IN ('Gestao de Apolices de Garantias', 'Gestao de Contratos', 'Xpress Chat')
   AND slug IS NULL;
 
--- LiticaPro
+-- LicitaPregão
 INSERT INTO products (name, description, icon, slug, product_status, is_active)
-SELECT 'LiticaPro', 'Monitoramento de licitações públicas no Brasil', 'search', 'liticapro', 'no_ar', true
+SELECT 'LicitaPregão', 'Monitoramento de licitações públicas no Brasil', 'search', 'liticapro', 'no_ar', true
 WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = 'liticapro');
 
 -- Índice único só depois dos dados corrigidos

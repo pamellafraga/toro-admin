@@ -148,7 +148,7 @@ const getEtapaLead = (client: Client | null | undefined) =>
 const getEtapaLeadLabel = (client: Client | null | undefined) =>
   getStatusLeadLabel(getEtapaLead(client))
 
-/** Subtítulo na coluna Cliente: empresa LiticaPro → responsável; demais → e-mail */
+/** Subtítulo na coluna Cliente: empresa LicitaPregão → responsável; demais → e-mail */
 const getClientListSubtitle = (client: Client | null | undefined, liticaproProduct: boolean) => {
   if (!client) return ""
   if (liticaproProduct) {
@@ -1260,7 +1260,7 @@ export default function ProductDetailPage() {
                   {ro
                     ? "Visualização completa dos dados — use Editar para alterar."
                     : isLiticaPro
-                      ? "Dados LiticaPro — sem plano ou dia de pagamento nesta etapa."
+                      ? "Dados LicitaPregão — sem plano ou dia de pagamento nesta etapa."
                       : "Vincule um cliente a este produto com valor e data de início."}
                 </p>
               </div>

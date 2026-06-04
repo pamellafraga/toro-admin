@@ -264,5 +264,5 @@ SELECT 'SEGURA', 'Apólice de Seguro - Modalidade Garantias', 'shield-check', 's
 WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = 'segura');
 
 INSERT INTO products (name, description, icon, slug, product_status)
-SELECT 'LiticaPro', 'Monitoramento de licitações públicas no Brasil', 'search', 'liticapro', 'no_ar'
+SELECT 'LicitaPregão', 'Monitoramento de licitações públicas no Brasil', 'search', 'liticapro', 'no_ar'
 WHERE NOT EXISTS (SELECT 1 FROM products WHERE slug = 'liticapro');

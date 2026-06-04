@@ -32,7 +32,7 @@ export function LiticaProDeveloperCredentialsBlock({
       <div>
         <p className="text-xs font-semibold text-sky-100 uppercase tracking-wide">Dados do Desenvolvedor</p>
         <p className="text-[10px] text-zinc-400 mt-0.5">
-          Credenciais de login do cliente na plataforma LiticaPro — visível apenas para administradores.
+          Credenciais de login do cliente na plataforma LicitaPregão — visível apenas para administradores.
         </p>
       </div>
 

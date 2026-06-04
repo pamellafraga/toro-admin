@@ -68,7 +68,7 @@ function RegisterManualPurchaseButton({
         onClick(client)
       }}
       className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-emerald-600/40 bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold text-emerald-800 shadow-sm hover:bg-emerald-500/25 dark:text-emerald-300"
-      title="Registrar compra manual — LiticaPro"
+      title="Registrar compra manual — LicitaPregão"
     >
       <ShoppingCart className="h-3.5 w-3.5 shrink-0" aria-hidden />
       <span className="whitespace-nowrap">Compra manual</span>

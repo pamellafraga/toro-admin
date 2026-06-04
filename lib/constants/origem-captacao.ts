@@ -1,4 +1,4 @@
-/** Opções de origem da captação (LiticaPro, SEGURA, Clientes). */
+/** Opções de origem da captação (LicitaPregão, SEGURA, Clientes). */
 export const ORIGEM_CAPTACAO_OPCOES = [
   "Comercial Stefanie",
   "Xpress Solutions",

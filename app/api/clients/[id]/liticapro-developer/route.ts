@@ -7,7 +7,7 @@ import { parseDeveloperCredentials } from "@/lib/liticapro/developer-credentials
 
 export const dynamic = "force-dynamic"
 
-/** PATCH /api/clients/[id]/liticapro-developer — credenciais LiticaPro (somente admin) */
+/** PATCH /api/clients/[id]/liticapro-developer — credenciais LicitaPregão (somente admin) */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -29,7 +29,7 @@ export async function PATCH(
     })
 
     await logActivity(req, {
-      action: "Atualizou dados do desenvolvedor LiticaPro",
+      action: "Atualizou dados do desenvolvedor LicitaPregão",
       entity_type: "client",
       entity_id: id,
     })

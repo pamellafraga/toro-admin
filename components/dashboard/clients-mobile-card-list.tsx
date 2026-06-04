@@ -113,7 +113,7 @@ export function ClientsMobileCardList({
                     "text-[11px] font-semibold text-emerald-800 hover:bg-emerald-500/25 dark:text-emerald-300",
                   )}
                   aria-label="Registrar compra manual"
-                  title="Registrar compra manual — LiticaPro"
+                  title="Registrar compra manual — LicitaPregão"
                 >
                   <ShoppingCart className="h-3.5 w-3.5 shrink-0" />
                   Compra manual

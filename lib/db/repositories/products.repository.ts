@@ -40,6 +40,15 @@ export async function findProductBySlug(slug: string): Promise<ProductRow | null
     }
   }
 
+  if (row && catalog && row.name !== catalog.name) {
+    const synced = await queryOne<ProductRow>(
+      `UPDATE products SET name = $1 WHERE id = $2
+       RETURNING id, name, description, icon, slug, product_status, monthly_price`,
+      [catalog.name, row.id],
+    )
+    if (synced) row = synced
+  }
+
   return row
 }
 
