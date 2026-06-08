@@ -14,7 +14,7 @@ import { computeTrialEndsAt } from "@/lib/liticapro/trial"
 
 export const dynamic = "force-dynamic"
 
-const VALID_PRODUCT_STATUSES = new Set(["aguardando_produto", "ativa", "trial", "inativa"])
+const VALID_PRODUCT_STATUSES = new Set(["aguardando_produto", "ativa", "trial", "trial_encerrado", "inativa"])
 
 /** PATCH /api/contracts/[id]/quick-status — altera status de contato e/ou produto na listagem */
 export async function PATCH(
@@ -57,6 +57,8 @@ export async function PATCH(
         if (!existing.trial_ends_at) {
           contractUpdate.trial_ends_at = computeTrialEndsAt(existing.created_at ?? new Date()).toISOString()
         }
+      } else if (productStatus === "trial_encerrado" && existing.product_slug === "liticapro") {
+        contractUpdate.payment_status = "trial_expirado"
       } else if (productStatus === "ativa") {
         if (existing.payment_status === "trial" || existing.payment_status === "trial_expirado") {
           contractUpdate.payment_status = "pendente"

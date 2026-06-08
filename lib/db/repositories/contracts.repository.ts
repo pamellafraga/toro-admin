@@ -245,14 +245,16 @@ export async function findExpiredLiticaProTrials() {
      JOIN clients cl ON cl.id = c.client_id
      JOIN products p ON p.id = c.product_id
      WHERE lower(p.slug) = 'liticapro'
-       AND c.payment_status = 'trial'
-       AND COALESCE(c.trial_ends_at, c.created_at + interval '7 days') < now()`,
+       AND c.status = 'trial'
+       AND (COALESCE(c.trial_ends_at, c.created_at + interval '7 days'))::date < CURRENT_DATE`,
   )
 }
 
 export async function markTrialExpired(contractId: string): Promise<void> {
   await queryOne(
-    `UPDATE contracts SET payment_status = 'trial_expirado', status = 'inativa', updated_at = now() WHERE id = $1`,
+    `UPDATE contracts
+     SET payment_status = 'trial_expirado', status = 'trial_encerrado', updated_at = now()
+     WHERE id = $1`,
     [contractId],
   )
 }
