@@ -109,15 +109,10 @@ export async function PATCH(
         if (parsed) trialEndsAt = parsed
       }
 
-      if (trialEndsAt) {
-        const existingEnd = resolveTrialEndsAt(existing)?.toISOString().slice(0, 10)
-        const newEndDate = trialEndsAt.slice(0, 10)
-        const trialDateChanged = extendDays > 0 || newEndDate !== existingEnd
-        if (trialDateChanged && isTrialLifecycleContract(existing)) {
-          const resolved = resolveTrialStatusesFromEndsAt(trialEndsAt)
-          statusForUpdate = resolved.status
-          paymentStatusForUpdate = resolved.payment_status
-        }
+      if (trialEndsAt && isTrialLifecycleContract(existing)) {
+        const resolved = resolveTrialStatusesFromEndsAt(trialEndsAt)
+        statusForUpdate = resolved.status
+        paymentStatusForUpdate = resolved.payment_status
       }
     } else if (body.trial_ends_at) {
       trialEndsAt = String(body.trial_ends_at)

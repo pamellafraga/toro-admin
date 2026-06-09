@@ -81,6 +81,20 @@ export function resolveTrialStatusesFromEndsAt(trialEndsAt: Date | string): {
   return { status: "trial_encerrado", payment_status: "trial_expirado" }
 }
 
+/** Status exibido/sincronizado com base na data de fim (prioriza a data sobre o banco). */
+export function resolveEffectiveTrialStatuses(contract: {
+  payment_status?: string | null
+  status?: string | null
+  trial_ends_at?: string | null
+  created_at?: string | null
+  start_date?: string | null
+}): { status: "trial" | "trial_encerrado"; payment_status: "trial" | "trial_expirado" } | null {
+  if (!isTrialLifecycleContract(contract)) return null
+  const ends = resolveTrialEndsAt(contract)
+  if (!ends) return null
+  return resolveTrialStatusesFromEndsAt(ends)
+}
+
 export function parseTrialEndsAtInput(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null

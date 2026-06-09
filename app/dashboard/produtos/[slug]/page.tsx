@@ -27,18 +27,31 @@ import type { CnpjGovData } from "@/lib/liticapro/types"
 import {
   buildDashboardMonthOptions,
   extendTrialEndsAt,
+  resolveEffectiveTrialStatuses,
   resolveTrialEndsAt,
   resolveTrialStatusesFromEndsAt,
 } from "@/lib/liticapro/trial"
 
 type TrialContractRow = Contract & { trial_ends_at?: string | null }
 
+function getEffectivePaymentStatus(contract: Contract): string {
+  return resolveEffectiveTrialStatuses(contract as TrialContractRow)?.payment_status ?? contract.payment_status
+}
+
+function getEffectiveProductStatus(contract: Contract): string {
+  return resolveEffectiveTrialStatuses(contract as TrialContractRow)?.status ?? contract.status
+}
+
 function isActiveTrialContract(contract: Contract): boolean {
-  return contract.payment_status === "trial" || contract.status === "trial"
+  const payment = getEffectivePaymentStatus(contract)
+  const status = getEffectiveProductStatus(contract)
+  return payment === "trial" || status === "trial"
 }
 
 function isExpiredTrialContract(contract: Contract): boolean {
-  return contract.payment_status === "trial_expirado" || contract.status === "trial_encerrado"
+  const payment = getEffectivePaymentStatus(contract)
+  const status = getEffectiveProductStatus(contract)
+  return payment === "trial_expirado" || status === "trial_encerrado"
 }
 
 function formatTrialEndDate(contract: TrialContractRow): string {
@@ -1173,10 +1186,10 @@ export default function ProductDetailPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
-                        <DollarSign className={cn("h-3.5 w-3.5 shrink-0", PAYMENT_MAP[contract.payment_status]?.class)} />
+                        <DollarSign className={cn("h-3.5 w-3.5 shrink-0", PAYMENT_MAP[getEffectivePaymentStatus(contract)]?.class)} />
                         <div>
-                          <span className={cn("text-sm font-medium", PAYMENT_MAP[contract.payment_status]?.class)}>
-                            {PAYMENT_MAP[contract.payment_status]?.label}
+                          <span className={cn("text-sm font-medium", PAYMENT_MAP[getEffectivePaymentStatus(contract)]?.class)}>
+                            {PAYMENT_MAP[getEffectivePaymentStatus(contract)]?.label}
                           </span>
                           {isLiticaPro && (isActiveTrialContract(contract) || isExpiredTrialContract(contract)) && (
                             <div className="mt-0.5">
@@ -1210,8 +1223,9 @@ export default function ProductDetailPage() {
                     </td>
                     <td className="px-4 py-3">
                       {(() => {
-                        const pickerValue = getProductStatusPickerValue(contract.status)
-                        const status = normalizeProductStatus(contract.status)
+                        const effectiveProductStatus = getEffectiveProductStatus(contract)
+                        const pickerValue = getProductStatusPickerValue(effectiveProductStatus)
+                        const status = normalizeProductStatus(effectiveProductStatus)
                         const info = STATUS_MAP[status] ?? STATUS_MAP[pickerValue] ?? { label: contract.status, Icon: PauseCircle, class: "bg-secondary text-muted-foreground border-border" }
                         const Icon = info.Icon
                         return (

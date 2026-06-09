@@ -1,11 +1,29 @@
 import {
   backfillLiticaProTrialEndsAt,
   findExpiredLiticaProTrials,
+  findLiticaProTrialsNeedingReactivation,
   markTrialExpired,
+  markTrialReactivated,
 } from "@/lib/db/repositories/contracts.repository"
 import { insertNotification } from "@/lib/db/repositories/notifications.repository"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+
+export async function reactivateFutureLiticaProTrials(): Promise<number> {
+  await backfillLiticaProTrialEndsAt()
+  const rows = await findLiticaProTrialsNeedingReactivation()
+  for (const row of rows) {
+    await markTrialReactivated(row.id)
+  }
+  return rows.length
+}
+
+/** Expira testes vencidos e reativa os que ainda têm data futura. */
+export async function processLiticaProTrialStatuses(): Promise<{ expired: number; reactivated: number }> {
+  const reactivated = await reactivateFutureLiticaProTrials()
+  const expired = await processExpiredLiticaProTrials()
+  return { expired, reactivated }
+}
 
 export async function processExpiredLiticaProTrials(): Promise<number> {
   await backfillLiticaProTrialEndsAt()

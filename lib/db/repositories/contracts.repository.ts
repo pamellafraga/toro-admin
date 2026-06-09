@@ -259,6 +259,26 @@ export async function markTrialExpired(contractId: string): Promise<void> {
   )
 }
 
+export async function findLiticaProTrialsNeedingReactivation() {
+  return queryMany<{ id: string }>(
+    `SELECT c.id
+     FROM contracts c
+     JOIN products p ON p.id = c.product_id
+     WHERE lower(p.slug) = 'liticapro'
+       AND (c.status = 'trial_encerrado' OR c.payment_status = 'trial_expirado')
+       AND (COALESCE(c.trial_ends_at, c.created_at + interval '7 days'))::date >= CURRENT_DATE`,
+  )
+}
+
+export async function markTrialReactivated(contractId: string): Promise<void> {
+  await queryOne(
+    `UPDATE contracts
+     SET payment_status = 'trial', status = 'trial', updated_at = now()
+     WHERE id = $1`,
+    [contractId],
+  )
+}
+
 export async function activateContract(id: string): Promise<void> {
   await queryOne(`UPDATE contracts SET status = 'ativa' WHERE id = $1`, [id])
 }

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { isAuthenticated } from "@/lib/api/auth"
 import { jsonOk, jsonUnauthorized } from "@/lib/api/response"
-import { processExpiredLiticaProTrials } from "@/lib/liticapro/trial-notifications"
+import { processLiticaProTrialStatuses } from "@/lib/liticapro/trial-notifications"
 
 export const dynamic = "force-dynamic"
 
@@ -9,6 +9,6 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   if (!isAuthenticated(req)) return jsonUnauthorized()
 
-  const count = await processExpiredLiticaProTrials()
-  return jsonOk({ processed: count })
+  const result = await processLiticaProTrialStatuses()
+  return jsonOk({ processed: result.expired, reactivated: result.reactivated })
 }

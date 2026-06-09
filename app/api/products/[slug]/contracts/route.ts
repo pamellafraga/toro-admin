@@ -4,7 +4,7 @@ import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { backfillContratandoAguardandoProduto } from "@/lib/clients/apply-status-lead-to-contract"
 import { findOrCreateProductFromCatalog, listProductContracts } from "@/lib/db/repositories/products.repository"
 import { stripDeveloperCredentialsFromClient } from "@/lib/liticapro/developer-credentials"
-import { processExpiredLiticaProTrials } from "@/lib/liticapro/trial-notifications"
+import { processLiticaProTrialStatuses } from "@/lib/liticapro/trial-notifications"
 import { getProductBySlug } from "@/lib/products/catalog"
 
 export const dynamic = "force-dynamic"
@@ -24,7 +24,7 @@ export async function GET(
 
     const product = await findOrCreateProductFromCatalog(catalog)
     if (catalog.slug === "liticapro") {
-      await processExpiredLiticaProTrials()
+      await processLiticaProTrialStatuses()
     }
     if (isAdmin(req)) {
       await backfillContratandoAguardandoProduto()
