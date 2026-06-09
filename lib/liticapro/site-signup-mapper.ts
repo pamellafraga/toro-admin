@@ -20,6 +20,7 @@ type SiteSignupBody = {
   empresas?: Array<{
     cnpj?: string
     razaoSocial?: string
+    estados?: string[]
     cnaes?: Array<{ codigo?: string; descricao?: string; principal?: boolean }>
   }>
   razaoSocial?: string
@@ -107,18 +108,24 @@ export function mapSiteSignupToLiticaProTrial(
 
   const cpf = String(body.documento ?? "").replace(/\D/g, "")
   const fullName = String(body.nome ?? "").trim()
-  const linkedCnpjs = (body.empresas ?? []).map((empresa) => ({
-    cnpj: String(empresa.cnpj ?? "").replace(/\D/g, ""),
-    razao_social: String(empresa.razaoSocial ?? "").trim(),
-    ramo_atuacao: principalCnaeDescricao(empresa.cnaes) || "Licitações públicas",
-    cnaes: Array.isArray(empresa.cnaes)
-      ? empresa.cnaes.map((cnae) => ({
-          codigo: String(cnae.codigo ?? ""),
-          descricao: String(cnae.descricao ?? ""),
-          principal: Boolean(cnae.principal),
-        }))
-      : [],
-  }))
+  const linkedCnpjs = (body.empresas ?? []).map((empresa) => {
+    const estadosEmpresa = Array.isArray(empresa.estados)
+      ? empresa.estados.map((uf) => uf.trim().toUpperCase()).filter(Boolean)
+      : statesOfInterest
+    return {
+      cnpj: String(empresa.cnpj ?? "").replace(/\D/g, ""),
+      razao_social: String(empresa.razaoSocial ?? "").trim(),
+      ramo_atuacao: principalCnaeDescricao(empresa.cnaes) || "Licitações públicas",
+      states: estadosEmpresa,
+      cnaes: Array.isArray(empresa.cnaes)
+        ? empresa.cnaes.map((cnae) => ({
+            codigo: String(cnae.codigo ?? ""),
+            descricao: String(cnae.descricao ?? ""),
+            principal: Boolean(cnae.principal),
+          }))
+        : [],
+    }
+  })
 
   return {
     customer_type: "profissional_liberal",
