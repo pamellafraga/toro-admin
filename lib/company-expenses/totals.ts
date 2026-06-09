@@ -1,6 +1,6 @@
 import type { CompanyExpense } from "@/lib/company-expenses/map-expense"
 import { convertUsdToBrl } from "@/lib/exchange/usd-brl"
-import { DASHBOARD_START_MONTH, DASHBOARD_START_YEAR } from "@/lib/liticapro/trial"
+import { COMPANY_EXPENSES_START_MONTH, COMPANY_EXPENSES_START_YEAR } from "@/lib/company-expenses/month-options"
 
 export type FeeCurrency = "usd" | "brl"
 
@@ -23,7 +23,7 @@ function getExpenseStartYearMonth(fee: CompanyExpense): YearMonth {
       return { year: d.getFullYear(), month: d.getMonth() + 1 }
     }
   }
-  return { year: DASHBOARD_START_YEAR, month: DASHBOARD_START_MONTH }
+  return { year: COMPANY_EXPENSES_START_YEAR, month: COMPANY_EXPENSES_START_MONTH }
 }
 
 /** Gasto entra no total do mês selecionado (mensal todo mês; anual no mês de vencimento; vitalício só no cadastro). */

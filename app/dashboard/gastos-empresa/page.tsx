@@ -39,7 +39,7 @@ import {
   sumMonthlyTotals,
   sumOneTimeTotals,
 } from "@/lib/company-expenses/totals"
-import { buildDashboardMonthOptions } from "@/lib/liticapro/trial"
+import { buildExpenseMonthOptions } from "@/lib/company-expenses/month-options"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
 
 type FeeFormData = {
@@ -348,7 +348,7 @@ export default function GastoEmpresaPage() {
     [fees, usdRate],
   )
 
-  const monthOptions = useMemo(() => buildDashboardMonthOptions(), [])
+  const monthOptions = useMemo(() => buildExpenseMonthOptions(), [])
 
   const { totalUsd: recurringUsd, totalBrl: recurringBrl } = useMemo(
     () => sumMonthlyTotals(feesForDisplay, usdRate),
