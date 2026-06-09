@@ -24,7 +24,21 @@ import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-ba
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { formatCpfCnpj, formatPhone } from "@/lib/format/br"
 import type { CnpjGovData } from "@/lib/liticapro/types"
-import { buildDashboardMonthOptions, resolveTrialEndsAt } from "@/lib/liticapro/trial"
+import { buildDashboardMonthOptions, extendTrialEndsAt, resolveTrialEndsAt } from "@/lib/liticapro/trial"
+
+type TrialContractRow = Contract & { trial_ends_at?: string | null }
+
+function isActiveTrialContract(contract: Contract): boolean {
+  return contract.payment_status === "trial" || contract.status === "trial"
+}
+
+function isExpiredTrialContract(contract: Contract): boolean {
+  return contract.payment_status === "trial_expirado" || contract.status === "trial_encerrado"
+}
+
+function formatTrialEndDate(contract: TrialContractRow): string {
+  return formatContractDate(resolveTrialEndsAt(contract)?.toISOString())
+}
 
 function formatContractDate(value: string | null | undefined): string {
   if (!value) return "—"
@@ -212,6 +226,8 @@ export default function ProductDetailPage() {
     business_segment: "",
     states_of_interest: [] as string[],
     responsible_name: "",
+    trial_ends_at: "",
+    trial_extend_days: "",
   })
   const [editCompanyGov, setEditCompanyGov] = useState<CnpjGovData | null>(null)
   const [loadingEditCnpj, setLoadingEditCnpj] = useState(false)
@@ -591,6 +607,8 @@ export default function ProductDetailPage() {
       business_segment: dev?.business_segment ?? "",
       states_of_interest: Array.isArray(lpStates) ? lpStates.map(String) : [],
       responsible_name: dev?.responsible_name ?? "",
+      trial_ends_at: resolveTrialEndsAt(contract as TrialContractRow)?.toISOString().slice(0, 10) ?? "",
+      trial_extend_days: "",
     })
   }
 
@@ -690,6 +708,12 @@ export default function ProductDetailPage() {
               customer_type: editForm.customer_type,
               states_of_interest: editForm.states_of_interest,
             },
+            trial_ends_at: editForm.trial_extend_days.trim()
+              ? undefined
+              : editForm.trial_ends_at.trim() || undefined,
+            trial_extend_days: editForm.trial_extend_days.trim()
+              ? Number(editForm.trial_extend_days)
+              : undefined,
           } : {}),
         }),
       })
@@ -995,10 +1019,16 @@ export default function ProductDetailPage() {
                             <p className="text-[11px] text-muted-foreground mt-2">
                               Contato: {getEtapaLeadLabel(contract.clients)}
                             </p>
-                            {(contract.payment_status === "trial" || contract.status === "trial") && (
+                            {isActiveTrialContract(contract) && (
                               <p className="text-[11px] text-sky-400/90 mt-1 flex items-center gap-1">
                                 <Clock className="h-3 w-3 shrink-0" />
-                                Teste até {formatContractDate(resolveTrialEndsAt(contract as Contract & { trial_ends_at?: string | null })?.toISOString())}
+                                Expira {formatTrialEndDate(contract as TrialContractRow)}
+                              </p>
+                            )}
+                            {isExpiredTrialContract(contract) && (
+                              <p className="text-[11px] text-red-400/90 mt-1 flex items-center gap-1">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                Expirou {formatTrialEndDate(contract as TrialContractRow)}
                               </p>
                             )}
                           </>
@@ -1099,9 +1129,14 @@ export default function ProductDetailPage() {
                           <span className={cn("text-sm font-medium", PAYMENT_MAP[contract.payment_status]?.class)}>
                             {PAYMENT_MAP[contract.payment_status]?.label}
                           </span>
-                          {isLiticaPro && (contract.payment_status === "trial" || contract.status === "trial") && (
+                          {isLiticaPro && isActiveTrialContract(contract) && (
                             <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Expira {formatContractDate(resolveTrialEndsAt(contract as Contract & { trial_ends_at?: string | null })?.toISOString())}
+                              Expira {formatTrialEndDate(contract as TrialContractRow)}
+                            </p>
+                          )}
+                          {isLiticaPro && isExpiredTrialContract(contract) && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5">
+                              Expirou {formatTrialEndDate(contract as TrialContractRow)}
                             </p>
                           )}
                         </div>
@@ -1379,19 +1414,71 @@ export default function ProductDetailPage() {
               )}
 
               {isLiticaPro && editingContract && (
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-sky-500/30 bg-sky-500/5 p-3">
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Data de cadastro</p>
-                    <p className="text-sm font-semibold text-foreground">{formatContractDate(editingContract.created_at)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Teste grátis expira em (7 dias)</p>
-                    <p className="text-sm font-semibold text-sky-400">
-                      {formatContractDate(
-                        resolveTrialEndsAt(editingContract as Contract & { trial_ends_at?: string | null })?.toISOString(),
+                <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Data de cadastro</p>
+                      <p className="text-sm font-semibold text-foreground">{formatContractDate(editingContract.created_at)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Teste grátis expira em</p>
+                      {ro || !isAdmin ? (
+                        <p className="text-sm font-semibold text-sky-400">{formatTrialEndDate(editingContract as TrialContractRow)}</p>
+                      ) : (
+                        <input
+                          type="date"
+                          className={inputCls}
+                          value={editForm.trial_ends_at}
+                          onChange={(e) => setEditForm((p) => ({ ...p, trial_ends_at: e.target.value, trial_extend_days: "" }))}
+                        />
                       )}
-                    </p>
+                    </div>
                   </div>
+                  {!ro && isAdmin && (
+                    <div className="grid grid-cols-2 gap-2 items-end">
+                      <div>
+                        <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Estender teste (dias)</p>
+                        <input
+                          type="number"
+                          min={1}
+                          max={365}
+                          placeholder="Ex.: 7"
+                          className={inputCls}
+                          value={editForm.trial_extend_days}
+                          onChange={(e) => {
+                            const days = e.target.value.replace(/\D/g, "")
+                            setEditForm((p) => {
+                              if (!days) {
+                                return {
+                                  ...p,
+                                  trial_extend_days: "",
+                                  trial_ends_at:
+                                    resolveTrialEndsAt(editingContract as TrialContractRow)?.toISOString().slice(0, 10) ?? "",
+                                }
+                              }
+                              const extend = Math.min(365, Math.max(1, Number(days)))
+                              const nextEnd = extendTrialEndsAt(
+                                resolveTrialEndsAt(editingContract as TrialContractRow),
+                                extend,
+                              )
+                              return {
+                                ...p,
+                                trial_extend_days: days,
+                                trial_ends_at: nextEnd.toISOString().slice(0, 10),
+                              }
+                            })
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {editForm.trial_extend_days.trim()
+                            ? `Nova data: ${formatContractDate(editForm.trial_ends_at ? `${editForm.trial_ends_at}T12:00:00` : null)}`
+                            : "Adicione dias para prorrogar o período de teste."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

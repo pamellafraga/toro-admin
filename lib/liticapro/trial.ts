@@ -38,6 +38,34 @@ export function resolveTrialEndsAt(contract: {
   return registered ? computeTrialEndsAt(registered) : null
 }
 
+/** Adiciona dias à data de fim do teste (a partir do fim atual ou de hoje, se já expirou). */
+export function extendTrialEndsAt(currentEnd: Date | null, extraDays: number): Date {
+  const safeDays = Math.max(0, Math.floor(extraDays))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const base = currentEnd && currentEnd >= today ? new Date(currentEnd) : new Date(today)
+  return addDays(base, safeDays)
+}
+
+export function isTrialEndDateInFuture(trialEndsAt: Date | string): boolean {
+  const end = new Date(trialEndsAt)
+  if (Number.isNaN(end.getTime())) return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  end.setHours(0, 0, 0, 0)
+  return end >= today
+}
+
+export function parseTrialEndsAtInput(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return new Date(`${trimmed}T12:00:00`).toISOString()
+  }
+  const d = new Date(trimmed)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 export function buildDashboardMonthOptions(now = new Date()): { value: string; label: string }[] {
   const opts: { value: string; label: string }[] = []
   const start = new Date(DASHBOARD_START_YEAR, DASHBOARD_START_MONTH - 1, 1)

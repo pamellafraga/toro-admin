@@ -9,6 +9,12 @@ import {
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { updateClientForContract, updateClientLiticaProData } from "@/lib/db/repositories/clients.repository"
 import { deleteContract, findContractById, findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
+import {
+  extendTrialEndsAt,
+  isTrialEndDateInFuture,
+  parseTrialEndsAtInput,
+  resolveTrialEndsAt,
+} from "@/lib/liticapro/trial"
 
 export const dynamic = "force-dynamic"
 
@@ -84,16 +90,49 @@ export async function PATCH(
         ? { ...(existing.liticapro_meta ?? {}), ...(body.liticapro_meta as Record<string, unknown>) }
         : undefined
 
+    let trialEndsAt: string | undefined
+    let statusForUpdate = contractStatus
+    let paymentStatusForUpdate = paymentStatus
+
+    if (existing.product_slug === "liticapro") {
+      const extendRaw = body.trial_extend_days
+      const extendDays =
+        extendRaw != null && String(extendRaw).trim() !== ""
+          ? Math.max(0, Math.floor(Number(extendRaw)))
+          : 0
+
+      if (extendDays > 0) {
+        trialEndsAt = extendTrialEndsAt(resolveTrialEndsAt(existing), extendDays).toISOString()
+      } else if (body.trial_ends_at != null && String(body.trial_ends_at).trim() !== "") {
+        const parsed = parseTrialEndsAtInput(String(body.trial_ends_at))
+        if (parsed) trialEndsAt = parsed
+      }
+
+      if (trialEndsAt) {
+        const existingEnd = resolveTrialEndsAt(existing)?.toISOString().slice(0, 10)
+        const newEndDate = trialEndsAt.slice(0, 10)
+        const trialDateChanged = extendDays > 0 || newEndDate !== existingEnd
+        const wasExpired =
+          existing.status === "trial_encerrado" || existing.payment_status === "trial_expirado"
+        if (trialDateChanged && (wasExpired || extendDays > 0 || isTrialEndDateInFuture(trialEndsAt))) {
+          statusForUpdate = statusForUpdate ?? "trial"
+          paymentStatusForUpdate = paymentStatusForUpdate ?? "trial"
+        }
+      }
+    } else if (body.trial_ends_at) {
+      trialEndsAt = String(body.trial_ends_at)
+    }
+
     await updateContract(id, {
-      status: contractStatus,
-      payment_status: paymentStatus,
+      status: statusForUpdate,
+      payment_status: paymentStatusForUpdate,
       monthly_value: monthlyValue,
       start_date: String(body.start_date ?? "").trim() || undefined,
       end_date: body.end_date ? String(body.end_date).trim() : null,
       payment_day: paymentDay,
       notes: body.notes != null ? String(body.notes).trim() || null : undefined,
       plan: body.plan != null ? String(body.plan).trim() || null : undefined,
-      trial_ends_at: body.trial_ends_at ? String(body.trial_ends_at) : undefined,
+      trial_ends_at: trialEndsAt,
       liticapro_meta: mergedLiticaProMeta,
     })
 
