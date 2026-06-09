@@ -18,6 +18,8 @@ import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-registe
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection } from "@/components/dashboard/liticapro-cnae-section"
 import { LiticaProContractDetailView } from "@/components/dashboard/liticapro-contract-detail-view"
+import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
+import { getLiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
 import { STATUS_LEAD_OPTIONS, STATUS_LEAD_COLOR_MAP, normalizeStatusLead, getStatusLeadLabel } from "@/lib/clients/status-lead"
 import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
 import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-badge"
@@ -32,7 +34,15 @@ import {
   resolveTrialStatusesFromEndsAt,
 } from "@/lib/liticapro/trial"
 
-type TrialContractRow = Contract & { trial_ends_at?: string | null }
+type TrialContractRow = Contract & {
+  trial_ends_at?: string | null
+  liticapro_meta?: {
+    welcome_email_sent_at?: string | null
+    welcome_email_channel?: string | null
+    saas_provisioned_at?: string | null
+    saas_empresa_id?: string | null
+  } | null
+}
 
 function getEffectivePaymentStatus(contract: Contract): string {
   return resolveEffectiveTrialStatuses(contract as TrialContractRow)?.payment_status ?? contract.payment_status
@@ -1093,6 +1103,11 @@ export default function ProductDetailPage() {
                                 Expirou {formatTrialEndDate(contract as TrialContractRow)}
                               </p>
                             )}
+                            <LiticaProWelcomeEmailBadge
+                              info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
+                              compact
+                              className="mt-1"
+                            />
                           </>
                         ) : (
                           <p className="text-sm font-semibold text-primary mt-2">
@@ -1170,6 +1185,13 @@ export default function ProductDetailPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{contract.clients?.name || "---"}</p>
                           <p className="text-xs text-muted-foreground truncate">{getClientListSubtitle(contract.clients, isLiticaPro) || "—"}</p>
+                          {isLiticaPro ? (
+                            <LiticaProWelcomeEmailBadge
+                              info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
+                              compact
+                              className="mt-1"
+                            />
+                          ) : null}
                         </div>
                       </button>
                     </td>
@@ -1316,6 +1338,9 @@ export default function ProductDetailPage() {
           resolveTrialEndsAt(editingContract as Contract & { trial_ends_at?: string | null })?.toISOString(),
         )
         const cadastroLabel = formatContractDate(editingContract.created_at)
+        const welcomeEmail = getLiticaProWelcomeEmailInfo(
+          (editingContract as TrialContractRow).liticapro_meta,
+        )
 
         if (ro && isLiticaPro) {
           return (
@@ -1349,6 +1374,7 @@ export default function ProductDetailPage() {
                   devUsuario={editForm.dev_usuario}
                   devSenha={editForm.dev_senha}
                   showDev={isAdmin}
+                  welcomeEmail={welcomeEmail}
                   onEdit={() => setViewOnly(false)}
                   onClose={closeContractModal}
                 />

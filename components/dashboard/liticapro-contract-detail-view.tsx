@@ -1,9 +1,11 @@
 "use client"
 
-import { Building2, FileText, MapPin, Pencil } from "lucide-react"
+import { Building2, FileText, Mail, MapPin, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCnaeEntries } from "@/lib/liticapro/cnae"
 import type { CnpjGovData } from "@/lib/liticapro/types"
+import type { LiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
+import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
 
 function InfoRow({
   label,
@@ -92,6 +94,7 @@ export interface LiticaProContractDetailViewProps {
   devUsuario?: string
   devSenha?: string
   showDev?: boolean
+  welcomeEmail?: LiticaProWelcomeEmailInfo
   onEdit: () => void
   onClose: () => void
 }
@@ -123,6 +126,7 @@ export function LiticaProContractDetailView({
   devUsuario,
   devSenha,
   showDev,
+  welcomeEmail,
   onEdit,
   onClose,
 }: LiticaProContractDetailViewProps) {
@@ -148,6 +152,16 @@ export function LiticaProContractDetailView({
             <StatusBadge>{paymentLabel}</StatusBadge>
             {trialEndLabel !== "—" ? (
               <StatusBadge variant="default">Teste até {trialEndLabel}</StatusBadge>
+            ) : null}
+            {welcomeEmail?.sent && welcomeEmail.sentAtLabel ? (
+              <StatusBadge variant="emerald">
+                <span className="inline-flex items-center gap-1">
+                  <Mail className="h-3 w-3" />
+                  E-mail enviado
+                </span>
+              </StatusBadge>
+            ) : welcomeEmail?.provisioned ? (
+              <StatusBadge variant="default">E-mail pendente</StatusBadge>
             ) : null}
           </div>
         </div>
@@ -218,6 +232,26 @@ export function LiticaProContractDetailView({
               <InfoRow label="Pagamento" value={paymentLabel} />
               <InfoRow label="Origem" value={origemCaptacao} />
               <InfoRow label="Contato" value={<StatusBadge variant="emerald">{contatoLabel}</StatusBadge>} />
+              <InfoRow
+                label="E-mail de acesso"
+                value={
+                  welcomeEmail ? (
+                    <div className="space-y-1">
+                      <LiticaProWelcomeEmailBadge info={welcomeEmail} />
+                      {welcomeEmail.sent && welcomeEmail.channelLabel ? (
+                        <p className="text-[11px] text-muted-foreground">Canal: {welcomeEmail.channelLabel}</p>
+                      ) : null}
+                      {welcomeEmail.provisionedAtLabel ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          Ferramenta configurada em {welcomeEmail.provisionedAtLabel}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
             </Panel>
           </div>
         </div>
