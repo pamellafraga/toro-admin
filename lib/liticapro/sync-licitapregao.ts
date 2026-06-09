@@ -1,10 +1,12 @@
 import {
   findClientById,
   getClientLiticaProData,
+  updateClientLiticaProData,
 } from "@/lib/db/repositories/clients.repository"
 import { findContractWithProduct } from "@/lib/db/repositories/contracts.repository"
 import { readDeveloperCredentialsFromLiticaProData } from "@/lib/liticapro/developer-credentials"
 import { LITICAPRO_TRIAL_DAYS } from "@/lib/liticapro/constants"
+import { enrichLinkedCnpjs } from "@/lib/liticapro/enrich-linked-cnpjs"
 import { resolveTrialEndsAt } from "@/lib/liticapro/trial"
 import type { CnpjGovData } from "@/lib/liticapro/types"
 
@@ -63,6 +65,12 @@ export async function syncLiticaProTenantAfterAdminEdit(
     (meta.states_of_interest as string[] | undefined) ??
     []
 
+  const linkedRaw = Array.isArray(liticaproData.linked_cnpjs)
+    ? (liticaproData.linked_cnpjs as Array<Record<string, unknown>>)
+    : []
+  const linked_cnpjs =
+    linkedRaw.length > 0 ? await enrichLinkedCnpjs(linkedRaw) : undefined
+
   const trialEndsAt = resolveTrialEndsAt({
     trial_ends_at: contract.trial_ends_at,
     created_at: contract.created_at,
@@ -115,9 +123,7 @@ export async function syncLiticaProTenantAfterAdminEdit(
         },
         business_segment: String(liticaproData.business_segment ?? "").trim() || undefined,
         company_gov: (liticaproData.company_gov as CnpjGovData | null) ?? null,
-        linked_cnpjs: Array.isArray(liticaproData.linked_cnpjs)
-          ? liticaproData.linked_cnpjs
-          : undefined,
+        linked_cnpjs,
         admin_client_id: contract.client_id,
         admin_contract_id: contract.id,
       }),
@@ -134,6 +140,12 @@ export async function syncLiticaProTenantAfterAdminEdit(
         ok: false,
         error: data.error ?? `Falha ao sincronizar LicitaPregão (${res.status}).`,
       }
+    }
+
+    if (linked_cnpjs?.length) {
+      await updateClientLiticaProData(contract.client_id, { linked_cnpjs }).catch((err) => {
+        console.error("[sync-licitapregao] falha ao persistir CNAEs enriquecidos:", err)
+      })
     }
 
     return {
