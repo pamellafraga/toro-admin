@@ -18,6 +18,7 @@ import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-registe
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection } from "@/components/dashboard/liticapro-cnae-section"
 import { LiticaProLinkedCnpjsSection } from "@/components/dashboard/liticapro-linked-cnpjs-section"
+import { getLiticaProClientListSubtitle, getPrimaryLinkedCompany } from "@/lib/liticapro/linked-company-display"
 import { LiticaProContractDetailView } from "@/components/dashboard/liticapro-contract-detail-view"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
 import { getLiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
@@ -204,14 +205,14 @@ const getEtapaLead = (client: Client | null | undefined) =>
 const getEtapaLeadLabel = (client: Client | null | undefined) =>
   getStatusLeadLabel(getEtapaLead(client))
 
-/** Subtítulo na coluna Cliente: empresa LicitaPregão → responsável; demais → e-mail */
+/** Subtítulo na coluna Cliente: PF → empresa vinculada; PJ → responsável; demais → e-mail */
 const getClientListSubtitle = (client: Client | null | undefined, liticaproProduct: boolean) => {
   if (!client) return ""
   if (liticaproProduct) {
-    const lp = (client as Client & { liticapro_data?: { customer_type?: string; responsible_name?: string } }).liticapro_data
-    const isEmpresa = lp?.customer_type !== "profissional_liberal"
-    const responsible = String(lp?.responsible_name ?? "").trim()
-    if (isEmpresa && responsible) return responsible
+    const subtitle = getLiticaProClientListSubtitle(
+      client as Client & { liticapro_data?: Record<string, unknown> },
+    )
+    if (subtitle) return subtitle
   }
   return client.email || ""
 }
@@ -1249,7 +1250,7 @@ export default function ProductDetailPage() {
             <thead>
               <tr className="border-b border-border bg-secondary/30">
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">CPF/CNPJ</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">{isLiticaPro ? "CPF / Empresa vinculada" : "CPF/CNPJ"}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Origem</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">{isLiticaPro ? "Cadastro" : "Inicio"}</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wide">Valor</th>
@@ -1288,7 +1289,22 @@ export default function ProductDetailPage() {
                         </div>
                       </button>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{displayCpfCnpj(contract.clients?.cpf_cnpj)}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">
+                      <div className="font-mono">{displayCpfCnpj(contract.clients?.cpf_cnpj)}</div>
+                      {isLiticaPro ? (() => {
+                        const linked = getPrimaryLinkedCompany(
+                          (contract.clients as Client & { liticapro_data?: Record<string, unknown> })
+                            ?.liticapro_data as { customer_type?: string; linked_cnpjs?: Array<Record<string, unknown>> },
+                        )
+                        if (!linked) return null
+                        return (
+                          <p className="text-[11px] text-muted-foreground mt-0.5 max-w-[220px] truncate" title={`${linked.razaoSocial} · ${linked.cnpjFormatted}`}>
+                            {linked.razaoSocial}
+                            <span className="font-mono"> · {linked.cnpjFormatted}</span>
+                          </p>
+                        )
+                      })() : null}
+                    </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">{contract.clients?.origem_captacao || "—"}</td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1.5">
@@ -1434,6 +1450,13 @@ export default function ProductDetailPage() {
         const welcomeEmail = getLiticaProWelcomeEmailInfo(
           (editingContract as TrialContractRow).liticapro_meta,
         )
+        const primaryLinkedPf =
+          editForm.customer_type === "profissional_liberal"
+            ? getPrimaryLinkedCompany({
+                customer_type: editForm.customer_type,
+                linked_cnpjs: editLinkedCnpjs,
+              })
+            : null
 
         if (ro && isLiticaPro) {
           return (
@@ -1516,16 +1539,38 @@ export default function ProductDetailPage() {
                   <input readOnly={ro} className={inputCls} value={editForm.client_name} onChange={(e) => setEditForm((p) => ({ ...p, client_name: e.target.value }))} />
                 </div>
                 <div>
-                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">CPF/CNPJ</p>
+                  <p className="text-[11px] font-medium text-muted-foreground mb-0.5">
+                    {editForm.customer_type === "profissional_liberal" ? "CPF" : "CPF/CNPJ"}
+                  </p>
                   <div className="flex gap-1.5">
                     <input readOnly={ro} className={cn(inputCls, "font-mono")} value={editForm.client_cpf_cnpj} onChange={(e) => setEditForm((p) => ({ ...p, client_cpf_cnpj: formatCpfCnpj(e.target.value) }))} placeholder="CPF ou CNPJ" />
-                    {isLiticaPro && !ro && (
+                    {isLiticaPro && !ro && editForm.customer_type === "empresa" && (
                       <button type="button" onClick={handleEditCnpjConsult} disabled={loadingEditCnpj} className="shrink-0 rounded-lg border border-primary px-2 text-[11px] text-primary hover:bg-primary/10 disabled:opacity-50" title="Atualizar CNAEs">
                         {loadingEditCnpj ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "CNPJ"}
                       </button>
                     )}
                   </div>
                 </div>
+                {isLiticaPro && editForm.customer_type === "profissional_liberal" && (
+                  <>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Empresa vinculada</p>
+                      <input
+                        readOnly
+                        className={cn(inputCls, "font-semibold")}
+                        value={primaryLinkedPf?.razaoSocial ?? "—"}
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-muted-foreground mb-0.5">CNPJ vinculado</p>
+                      <input
+                        readOnly
+                        className={cn(inputCls, "font-mono")}
+                        value={primaryLinkedPf?.cnpjFormatted ?? "—"}
+                      />
+                    </div>
+                  </>
+                )}
                 {isLiticaPro && (
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Modalidade</p>

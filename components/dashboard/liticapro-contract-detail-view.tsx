@@ -4,6 +4,7 @@ import { Building2, FileText, Mail, MapPin, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCnaeEntries } from "@/lib/liticapro/cnae"
 import { LiticaProLinkedCnpjsSection } from "@/components/dashboard/liticapro-linked-cnpjs-section"
+import { getPrimaryLinkedCompany } from "@/lib/liticapro/linked-company-display"
 import type { CnpjGovData } from "@/lib/liticapro/types"
 import type { LiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
@@ -139,6 +140,10 @@ export function LiticaProContractDetailView({
 }: LiticaProContractDetailViewProps) {
   const cnaes = getCnaeEntries(gov)
   const modalidade = customerType === "profissional_liberal" ? "Profissional liberal" : "Empresa"
+  const primaryLinked = getPrimaryLinkedCompany({
+    customer_type: customerType,
+    linked_cnpjs: linkedCnpjs,
+  })
   const cidadeUf = [city, state].filter(Boolean).join(" / ") || "—"
   const logradouro =
     address && !address.includes(district) && district
@@ -196,7 +201,17 @@ export function LiticaProContractDetailView({
         <div className="grid grid-cols-1 lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
           <div className="p-4">
             <Panel title="Identificação" icon={Building2}>
-              <InfoRow label="CPF/CNPJ" value={cpfCnpj} mono />
+              <InfoRow
+                label={customerType === "profissional_liberal" ? "CPF" : "CNPJ"}
+                value={cpfCnpj}
+                mono
+              />
+              {customerType === "profissional_liberal" ? (
+                <>
+                  <InfoRow label="Empresa vinculada" value={primaryLinked?.razaoSocial} />
+                  <InfoRow label="CNPJ vinculado" value={primaryLinked?.cnpjFormatted} mono />
+                </>
+              ) : null}
               <InfoRow label="Modalidade" value={modalidade} />
               {customerType === "empresa" ? (
                 <InfoRow label="Responsável" value={responsibleName} />
