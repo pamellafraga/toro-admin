@@ -816,7 +816,16 @@ export default function ProductDetailPage() {
         }
       }
 
-      toast.success("Contrato e cliente atualizados.")
+      if (isLiticaPro && data.saas_sync && !data.saas_sync.ok && !data.saas_sync.skipped) {
+        toast.error(
+          data.saas_sync.error ||
+            "Contrato salvo no painel, mas não foi possível sincronizar com a ferramenta do cliente.",
+        )
+      } else if (isLiticaPro && data.saas_sync?.ok) {
+        toast.success("Contrato atualizado e sincronizado com a ferramenta do cliente.")
+      } else {
+        toast.success("Contrato e cliente atualizados.")
+      }
       closeContractModal()
       await mutateContracts()
       await mutateApiContracts()

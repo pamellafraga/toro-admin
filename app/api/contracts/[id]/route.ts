@@ -9,6 +9,7 @@ import {
 import { duplicateClientMessage, findDuplicateClient } from "@/lib/clients/duplicate-check"
 import { updateClientForContract, updateClientLiticaProData } from "@/lib/db/repositories/clients.repository"
 import { deleteContract, findContractById, findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
+import { syncLiticaProTenantAfterAdminEdit } from "@/lib/liticapro/sync-licitapregao"
 import {
   extendTrialEndsAt,
   isTrialLifecycleContract,
@@ -141,7 +142,23 @@ export async function PATCH(
       entity_id: id,
     })
 
-    return jsonOk({ success: true })
+    let saas_sync: { ok: boolean; error?: string; skipped?: boolean } | undefined
+    if (existing.product_slug === "liticapro") {
+      const syncResult = await syncLiticaProTenantAfterAdminEdit(id)
+      saas_sync = {
+        ok: syncResult.ok,
+        error: "error" in syncResult ? syncResult.error : undefined,
+        skipped: "skipped" in syncResult ? syncResult.skipped : undefined,
+      }
+      if (!syncResult.ok && !("skipped" in syncResult && syncResult.skipped)) {
+        console.error("[PATCH /api/contracts/[id]] Falha sync LicitaPregão:", syncResult.error)
+      }
+    }
+
+    return jsonOk({
+      success: true,
+      saas_sync,
+    })
   } catch (err) {
     console.error("PATCH /api/contracts/[id]:", err)
     return handleApiError(err, "Erro ao atualizar contrato.")

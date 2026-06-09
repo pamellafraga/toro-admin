@@ -4,6 +4,7 @@ import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
 import { logActivity } from "@/lib/activity-log"
 import { updateClientDeveloperCredentials } from "@/lib/db/repositories/clients.repository"
 import { parseDeveloperCredentials } from "@/lib/liticapro/developer-credentials"
+import { syncLiticaProTenantForClient } from "@/lib/liticapro/sync-licitapregao"
 
 export const dynamic = "force-dynamic"
 
@@ -34,7 +35,17 @@ export async function PATCH(
       entity_id: id,
     })
 
-    return jsonOk({ success: true })
+    const syncResult = await syncLiticaProTenantForClient(id)
+    const saas_sync = {
+      ok: syncResult.ok,
+      error: "error" in syncResult ? syncResult.error : undefined,
+      skipped: "skipped" in syncResult && syncResult.skipped ? true : undefined,
+    }
+    if (!syncResult.ok && !("skipped" in syncResult && syncResult.skipped)) {
+      console.error("[liticapro-developer] Falha sync LicitaPregão:", syncResult.error)
+    }
+
+    return jsonOk({ success: true, saas_sync })
   } catch (err) {
     console.error("liticapro-developer PATCH:", err)
     return handleApiError(err, "Erro ao salvar credenciais.")
