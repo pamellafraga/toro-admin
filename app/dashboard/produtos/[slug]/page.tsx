@@ -17,6 +17,7 @@ import { getProductBySlug } from "@/lib/products/catalog"
 import { LiticaProRegisterModal } from "@/components/dashboard/liticapro-register-modal"
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection } from "@/components/dashboard/liticapro-cnae-section"
+import { LiticaProLinkedCnpjsSection } from "@/components/dashboard/liticapro-linked-cnpjs-section"
 import { LiticaProContractDetailView } from "@/components/dashboard/liticapro-contract-detail-view"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
 import { getLiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
@@ -267,6 +268,7 @@ export default function ProductDetailPage() {
     trial_extend_days: "",
   })
   const [editCompanyGov, setEditCompanyGov] = useState<CnpjGovData | null>(null)
+  const [editLinkedCnpjs, setEditLinkedCnpjs] = useState<Array<Record<string, unknown>>>([])
   const [loadingEditCnpj, setLoadingEditCnpj] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -658,6 +660,7 @@ export default function ProductDetailPage() {
     }
 
     setEditCompanyGov(companyGov)
+    setEditLinkedCnpjs(Array.isArray(dev?.linked_cnpjs) ? dev.linked_cnpjs : [])
     setEditForm({
       client_name: c?.name ?? "",
       client_cpf_cnpj: formatCpfCnpj(c?.cpf_cnpj ?? ""),
@@ -1413,6 +1416,7 @@ export default function ProductDetailPage() {
                   businessSegment={editForm.business_segment}
                   statesOfInterest={editForm.states_of_interest}
                   gov={editCompanyGov}
+                  linkedCnpjs={editLinkedCnpjs}
                   cadastroLabel={cadastroLabel}
                   trialEndLabel={trialEndLabel}
                   productStatusLabel={productStatusLabel}
@@ -1530,14 +1534,18 @@ export default function ProductDetailPage() {
 
               {isLiticaPro && (
                 <>
-                  <LiticaProCnaeAndRamoSection
-                    gov={editCompanyGov}
-                    ramo={editForm.business_segment}
-                    setRamo={(v) => setEditForm((p) => ({ ...p, business_segment: v }))}
-                    ramoRequired={false}
-                    inline
-                    readOnly={ro}
-                  />
+                  {editForm.customer_type === "profissional_liberal" ? (
+                    <LiticaProLinkedCnpjsSection linkedCnpjs={editLinkedCnpjs} readOnly={ro} />
+                  ) : (
+                    <LiticaProCnaeAndRamoSection
+                      gov={editCompanyGov}
+                      ramo={editForm.business_segment}
+                      setRamo={(v) => setEditForm((p) => ({ ...p, business_segment: v }))}
+                      ramoRequired={false}
+                      inline
+                      readOnly={ro}
+                    />
+                  )}
                   {ro ? (
                     <div className="space-y-1">
                       <p className="text-[11px] font-semibold text-primary uppercase tracking-wide">Estados contratados / de interesse</p>

@@ -3,6 +3,7 @@
 import { Building2, FileText, Mail, MapPin, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCnaeEntries } from "@/lib/liticapro/cnae"
+import { LiticaProLinkedCnpjsSection } from "@/components/dashboard/liticapro-linked-cnpjs-section"
 import type { CnpjGovData } from "@/lib/liticapro/types"
 import type { LiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
@@ -83,6 +84,7 @@ export interface LiticaProContractDetailViewProps {
   businessSegment: string
   statesOfInterest: string[]
   gov: CnpjGovData | null
+  linkedCnpjs?: Array<Record<string, unknown>>
   cadastroLabel: string
   trialEndLabel: string
   productStatusLabel: string
@@ -115,6 +117,7 @@ export function LiticaProContractDetailView({
   businessSegment,
   statesOfInterest,
   gov,
+  linkedCnpjs = [],
   cadastroLabel,
   trialEndLabel,
   productStatusLabel,
@@ -257,47 +260,52 @@ export function LiticaProContractDetailView({
         </div>
       </div>
 
-      {/* CNAEs + Ramo */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(180px,240px)] gap-4 rounded-xl border border-border bg-muted/10 p-4">
-        <div>
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">CNAEs da Receita Federal</p>
-          {cnaes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">—</p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {cnaes.map((cnae) => (
-                <span
-                  key={`${cnae.tipo}-${cnae.codigo}-${cnae.descricao}`}
-                  className={cn(
-                    "inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] leading-tight border",
-                    cnae.tipo === "principal"
-                      ? "bg-primary/10 text-foreground border-primary/20"
-                      : "bg-background text-muted-foreground border-border",
-                  )}
-                  title={cnae.descricao}
-                >
+      {customerType === "profissional_liberal" ? (
+        <div className="rounded-xl border border-border bg-muted/10 p-4">
+          <LiticaProLinkedCnpjsSection linkedCnpjs={linkedCnpjs} readOnly />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(180px,240px)] gap-4 rounded-xl border border-border bg-muted/10 p-4">
+          <div>
+            <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">CNAEs da Receita Federal</p>
+            {cnaes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">—</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {cnaes.map((cnae) => (
                   <span
+                    key={`${cnae.tipo}-${cnae.codigo}-${cnae.descricao}`}
                     className={cn(
-                      "shrink-0 rounded px-1 text-[9px] font-bold uppercase",
-                      cnae.tipo === "principal" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground",
+                      "inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-[11px] leading-tight border",
+                      cnae.tipo === "principal"
+                        ? "bg-primary/10 text-foreground border-primary/20"
+                        : "bg-background text-muted-foreground border-border",
                     )}
+                    title={cnae.descricao}
                   >
-                    {cnae.tipo === "principal" ? "Principal" : "Sec."}
+                    <span
+                      className={cn(
+                        "shrink-0 rounded px-1 text-[9px] font-bold uppercase",
+                        cnae.tipo === "principal" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground",
+                      )}
+                    >
+                      {cnae.tipo === "principal" ? "Principal" : "Sec."}
+                    </span>
+                    <span>
+                      {cnae.codigo ? `${cnae.codigo} — ` : ""}
+                      {cnae.descricao || "—"}
+                    </span>
                   </span>
-                  <span>
-                    {cnae.codigo ? `${cnae.codigo} — ` : ""}
-                    {cnae.descricao || "—"}
-                  </span>
-                </span>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="xl:border-l xl:border-border xl:pl-4">
+            <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">Ramo de atuação</p>
+            <p className="text-sm font-medium text-foreground">{businessSegment || "—"}</p>
+          </div>
         </div>
-        <div className="xl:border-l xl:border-border xl:pl-4">
-          <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">Ramo de atuação</p>
-          <p className="text-sm font-medium text-foreground">{businessSegment || "—"}</p>
-        </div>
-      </div>
+      )}
 
       {notes.trim() ? (
         <div className="rounded-xl border border-border bg-muted/10 px-4 py-3">

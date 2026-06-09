@@ -52,6 +52,10 @@ export async function PATCH(req: NextRequest) {
             cnpj?: string
             razao_social?: string
             ramo_id?: string
+            ramo_atuacao?: string
+            ufs?: string[]
+            states?: string[]
+            cnaes?: Array<{ codigo?: string; descricao?: string; principal?: boolean }>
           }>)
         : undefined,
       admin_client_id: body.admin_client_id ? String(body.admin_client_id) : undefined,

@@ -10,7 +10,10 @@ import {
   readDeveloperCredentialsFromLiticaProData,
 } from "@/lib/liticapro/developer-credentials"
 import { queryOne } from "@/lib/db/pool"
+import { buildGovFromSiteLinkedCompany } from "@/lib/liticapro/build-gov-from-site"
+import { enrichLinkedCnpjs } from "@/lib/liticapro/enrich-linked-cnpjs"
 import { labelRamoNegocio } from "@/lib/liticapro/ramo-labels"
+import type { CnpjGovData } from "@/lib/liticapro/types"
 
 export type SyncFromSaaSInput = {
   empresa_id: string
@@ -37,6 +40,10 @@ export type SyncFromSaaSInput = {
     cnpj?: string
     razao_social?: string
     ramo_id?: string
+    ramo_atuacao?: string
+    ufs?: string[]
+    states?: string[]
+    cnaes?: Array<{ codigo?: string; descricao?: string; principal?: boolean }>
   }>
   admin_client_id?: string
   admin_contract_id?: string
@@ -78,15 +85,46 @@ function buildLinkedCnpjs(
 ) {
   if (!Array.isArray(empresas)) return undefined
   return empresas
-    .map((item) => ({
-      cnpj: String(item.cnpj ?? "").replace(/\D/g, ""),
-      razao_social: String(item.razao_social ?? "").trim(),
-      ramo_atuacao:
+    .map((item) => {
+      const cnpj = String(item.cnpj ?? "").replace(/\D/g, "")
+      const razao_social = String(item.razao_social ?? "").trim()
+      const ramo_atuacao =
+        String(item.ramo_atuacao ?? "").trim() ||
         (item.ramo_id ? labelRamoNegocio(item.ramo_id) : "") ||
         businessSegment ||
-        "Licitações públicas",
-    }))
-    .filter((item) => item.cnpj.length === 14 && item.razao_social)
+        "Licitações públicas"
+      const states = Array.isArray(item.ufs)
+        ? item.ufs.map((uf) => String(uf).trim().toUpperCase()).filter(Boolean)
+        : Array.isArray(item.states)
+          ? item.states.map((uf) => String(uf).trim().toUpperCase()).filter(Boolean)
+          : []
+      const cnaes = Array.isArray(item.cnaes) ? item.cnaes : []
+
+      const gov = buildGovFromSiteLinkedCompany({
+        cnpj,
+        razao_social,
+        ramo_atuacao,
+        cnaes,
+      })
+
+      if (gov) {
+        return {
+          ...gov,
+          ramo_atuacao,
+          ...(states.length > 0 ? { states } : {}),
+          ...(cnaes.length > 0 ? { cnaes } : {}),
+        }
+      }
+
+      return {
+        cnpj,
+        razao_social,
+        ramo_atuacao,
+        ...(states.length > 0 ? { states } : {}),
+        ...(cnaes.length > 0 ? { cnaes } : {}),
+      }
+    })
+    .filter((item) => String(item.cnpj ?? "").replace(/\D/g, "").length === 14 && item.razao_social)
 }
 
 function buildCompanyGov(cnpj?: string, cnaes?: string[], razaoSocial?: string) {
@@ -170,17 +208,30 @@ export async function syncLiticaProFromSaaS(
     status_lead: null,
   })
 
-  const linkedCnpjs = buildLinkedCnpjs(input.empresas_vinculadas, input.business_segment)
-  const companyGov =
+  let linkedCnpjs = buildLinkedCnpjs(input.empresas_vinculadas, input.business_segment)
+  if (linkedCnpjs?.length) {
+    linkedCnpjs = await enrichLinkedCnpjs(linkedCnpjs)
+  }
+
+  let companyGov: CnpjGovData | null =
     input.customer_type === "empresa"
       ? buildCompanyGov(input.cnpj, input.cnaes, input.credentials_empresa || clientName)
       : null
 
-  await updateClientLiticaProData(clientId, {
+  if (
+    input.customer_type === "profissional_liberal" &&
+    linkedCnpjs?.length
+  ) {
+    const first = linkedCnpjs[0]
+    if (first.cnae_fiscal || first.cnae_fiscal_descricao || first.cnaes_secundarios) {
+      companyGov = first as CnpjGovData
+    }
+  }
+
+  const liticaproPatch: Record<string, unknown> = {
     customer_type: input.customer_type,
     business_segment: input.business_segment?.trim() || undefined,
     states_of_interest: input.states_of_interest ?? undefined,
-    linked_cnpjs: linkedCnpjs,
     company_gov: companyGov ?? undefined,
     billing_address: input.address?.cep
       ? {
@@ -194,7 +245,13 @@ export async function syncLiticaProFromSaaS(
       : undefined,
     saas_last_sync_at: new Date().toISOString(),
     saas_last_sync_source: "ferramenta",
-  })
+  }
+
+  if (linkedCnpjs?.length) {
+    liticaproPatch.linked_cnpjs = linkedCnpjs
+  }
+
+  await updateClientLiticaProData(clientId, liticaproPatch)
 
   const mergedDev = mergeDeveloperCredentials(existingDev, {
     empresa: credEmpresa,
