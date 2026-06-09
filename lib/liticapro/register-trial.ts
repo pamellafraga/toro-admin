@@ -33,6 +33,7 @@ import {
   type ProvisionLiticaProResult,
 } from "@/lib/liticapro/provision-licitapregao"
 import { syncLiticaProTenantAfterAdminEdit } from "@/lib/liticapro/sync-licitapregao"
+import { assertLiticaProTrialEligible } from "@/lib/liticapro/trial-eligibility"
 import { computeTrialEndsAt } from "@/lib/liticapro/trial"
 import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
 import { getProductBySlug } from "@/lib/products/catalog"
@@ -264,6 +265,13 @@ export async function registerLiticaProTrial(
     liticaproData.billing_address = billing
   }
 
+  const linkedCnpjDigits =
+    customerType === "profissional_liberal"
+      ? (Array.isArray(input.linked_cnpjs) ? input.linked_cnpjs : [])
+          .map((item) => String(item.cnpj ?? "").replace(/\D/g, ""))
+          .filter((digits) => digits.length === 14)
+      : []
+
   const linkedClientId = String(input.client_id ?? "").trim() || null
   const existingByLink = linkedClientId ? await findClientById(linkedClientId) : null
   const existingByCpf = await findClientByCpfCnpj(cpfCnpjRaw)
@@ -293,6 +301,17 @@ export async function registerLiticaProTrial(
 
   if (existing?.liticapro_data) {
     liticaproData = { ...existing.liticapro_data, ...liticaproData }
+  }
+
+  const trialEligibility = await assertLiticaProTrialEligible({
+    customer_type: customerType,
+    cpf_cnpj: cpfCnpjRaw,
+    email,
+    linked_cnpjs: linkedCnpjDigits,
+    excludeClientId: existing?.id ?? null,
+  })
+  if (!trialEligibility.ok) {
+    return fail(trialEligibility.error, trialEligibility.status)
   }
 
   if (input.is_admin_user) {
@@ -391,37 +410,27 @@ export async function registerLiticaProTrial(
   }
 
   const existingContract = await findLiticaProContractByClientId(clientId, product.id)
-  let contract: { id: string }
-
   if (existingContract) {
-    await updateContract(existingContract.id, {
-      status: "trial",
-      payment_status: "trial",
-      start_date: startDate,
-      monthly_value: 0,
-      notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
-      trial_ends_at: trialEnds.toISOString(),
-      liticapro_meta: {
-        ...(existingContract.liticapro_meta ?? {}),
-        ...liticaproMeta,
-      },
-    })
-    contract = { id: existingContract.id }
-  } else {
-    contract = await insertContract({
-      client_id: clientId,
-      product_id: product.id,
-      status: "trial",
-      payment_status: "trial",
-      start_date: startDate,
-      monthly_value: 0,
-      notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
-      origem_comercial: origemComercial,
-      trial_ends_at: trialEnds.toISOString(),
-      plan: null,
-      liticapro_meta: liticaproMeta,
-    })
+    const label = customerType === "profissional_liberal" ? "CPF" : "CNPJ"
+    return fail(
+      `Este ${label} já possui teste grátis do LicitaPregão. Não é possível cadastrar novamente.`,
+      409,
+    )
   }
+
+  const contract = await insertContract({
+    client_id: clientId,
+    product_id: product.id,
+    status: "trial",
+    payment_status: "trial",
+    start_date: startDate,
+    monthly_value: 0,
+    notes: `Teste grátis ${LITICAPRO_TRIAL_DAYS} dias — aguardando escolha de plano`,
+    origem_comercial: origemComercial,
+    trial_ends_at: trialEnds.toISOString(),
+    plan: null,
+    liticapro_meta: liticaproMeta,
+  })
 
   let provision: ProvisionLiticaProResult | undefined
   let loginUrl =

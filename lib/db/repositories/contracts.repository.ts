@@ -91,6 +91,35 @@ export async function findLiticaProContractByClientId(clientId: string, productI
   )
 }
 
+/** CNPJ já usado em teste grátis (como empresa PJ ou vinculado a PF). */
+export async function findLiticaProTrialByLinkedCnpj(
+  cnpjDigits: string,
+  excludeClientId?: string | null,
+) {
+  const digits = String(cnpjDigits ?? "").replace(/\D/g, "")
+  if (digits.length !== 14) return null
+
+  return queryOne<{ client_id: string; client_name: string; contract_id: string }>(
+    `SELECT cl.id AS client_id, cl.name AS client_name, c.id AS contract_id
+     FROM contracts c
+     INNER JOIN clients cl ON cl.id = c.client_id
+     INNER JOIN products p ON p.id = c.product_id
+     WHERE lower(p.slug) = 'liticapro'
+       AND ($2::uuid IS NULL OR cl.id <> $2::uuid)
+       AND (
+         regexp_replace(COALESCE(cl.cpf_cnpj, ''), '\\D', '', 'g') = $1
+         OR EXISTS (
+           SELECT 1
+           FROM jsonb_array_elements(COALESCE(cl.liticapro_data->'linked_cnpjs', '[]'::jsonb)) elem
+           WHERE regexp_replace(COALESCE(elem->>'cnpj', ''), '\\D', '', 'g') = $1
+         )
+       )
+     ORDER BY c.created_at DESC
+     LIMIT 1`,
+    [digits, excludeClientId ?? null],
+  )
+}
+
 export async function findContractById(id: string) {
   return queryOne<{ id: string; client_id: string; product_id: string; status: string }>(
     `SELECT id, client_id, product_id, status FROM contracts WHERE id = $1`,
