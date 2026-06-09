@@ -97,6 +97,8 @@ export interface LiticaProContractDetailViewProps {
   devSenha?: string
   showDev?: boolean
   welcomeEmail?: LiticaProWelcomeEmailInfo
+  onResendWelcomeEmail?: () => void
+  resendingWelcomeEmail?: boolean
   onEdit: () => void
   onClose: () => void
 }
@@ -130,6 +132,8 @@ export function LiticaProContractDetailView({
   devSenha,
   showDev,
   welcomeEmail,
+  onResendWelcomeEmail,
+  resendingWelcomeEmail,
   onEdit,
   onClose,
 }: LiticaProContractDetailViewProps) {
@@ -240,7 +244,12 @@ export function LiticaProContractDetailView({
                 value={
                   welcomeEmail ? (
                     <div className="space-y-1">
-                      <LiticaProWelcomeEmailBadge info={welcomeEmail} />
+                      <LiticaProWelcomeEmailBadge
+                        info={welcomeEmail}
+                        showResendButton
+                        onResend={onResendWelcomeEmail}
+                        resending={resendingWelcomeEmail}
+                      />
                       {welcomeEmail.sent && welcomeEmail.channelLabel ? (
                         <p className="text-[11px] text-muted-foreground">Canal: {welcomeEmail.channelLabel}</p>
                       ) : null}

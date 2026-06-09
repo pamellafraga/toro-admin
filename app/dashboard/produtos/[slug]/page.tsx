@@ -272,6 +272,7 @@ export default function ProductDetailPage() {
   const [loadingEditCnpj, setLoadingEditCnpj] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [resendingWelcomeId, setResendingWelcomeId] = useState<string | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
   const [trialDateUpdatingId, setTrialDateUpdatingId] = useState<string | null>(null)
   const [newContract, setNewContract] = useState({
@@ -926,6 +927,41 @@ export default function ProductDetailPage() {
     }
   }
 
+  const handleResendWelcomeEmail = async (contract: Contract) => {
+    setResendingWelcomeId(contract.id)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}/resend-welcome-email`, {
+        method: "POST",
+        credentials: "include",
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao reenviar e-mail de acesso.")
+
+      toast.success(data.message || "E-mail de acesso reenviado com sucesso.")
+      await mutateContracts()
+      await mutateApiContracts()
+
+      if (editingContract?.id === contract.id) {
+        setEditingContract((prev) =>
+          prev
+            ? {
+                ...prev,
+                liticapro_meta: {
+                  ...((prev as TrialContractRow).liticapro_meta ?? {}),
+                  welcome_email_sent_at: data.sent_at ?? new Date().toISOString(),
+                  welcome_email_channel: data.channel ?? null,
+                },
+              }
+            : prev,
+        )
+      }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao reenviar e-mail de acesso.")
+    } finally {
+      setResendingWelcomeId(null)
+    }
+  }
+
   const getProductStatusPickerValue = (status: string | null | undefined) => {
     const t = (status ?? "").toLowerCase().trim()
     if (t === "trial_encerrado") return "trial_encerrado"
@@ -1160,6 +1196,9 @@ export default function ProductDetailPage() {
                               info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
                               compact
                               className="mt-1"
+                              showResendButton
+                              onResend={() => handleResendWelcomeEmail(contract)}
+                              resending={resendingWelcomeId === contract.id}
                             />
                           </>
                         ) : (
@@ -1243,6 +1282,9 @@ export default function ProductDetailPage() {
                               info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
                               compact
                               className="mt-1"
+                              showResendButton
+                              onResend={() => handleResendWelcomeEmail(contract)}
+                              resending={resendingWelcomeId === contract.id}
                             />
                           ) : null}
                         </div>
@@ -1429,6 +1471,12 @@ export default function ProductDetailPage() {
                   devSenha={editForm.dev_senha}
                   showDev={isAdmin}
                   welcomeEmail={welcomeEmail}
+                  onResendWelcomeEmail={
+                    editingContract ? () => handleResendWelcomeEmail(editingContract) : undefined
+                  }
+                  resendingWelcomeEmail={
+                    editingContract ? resendingWelcomeId === editingContract.id : false
+                  }
                   onEdit={() => setViewOnly(false)}
                   onClose={closeContractModal}
                 />

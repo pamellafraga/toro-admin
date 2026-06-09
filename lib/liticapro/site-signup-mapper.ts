@@ -101,7 +101,7 @@ export function mapSiteSignupToLiticaProTrial(
       company_name: String(body.razaoSocial ?? "").trim(),
       billing_address: billingAddress,
       auto_provision: true,
-      send_welcome_email: false,
+      send_welcome_email: true,
       activity_actor: { displayName: "Site Xpress Solutions" },
     }
   }
@@ -139,7 +139,7 @@ export function mapSiteSignupToLiticaProTrial(
     linked_cnpjs: linkedCnpjs,
     billing_address: billingAddress,
     auto_provision: true,
-    send_welcome_email: false,
+    send_welcome_email: true,
     activity_actor: { displayName: "Site Xpress Solutions" },
   }
 }

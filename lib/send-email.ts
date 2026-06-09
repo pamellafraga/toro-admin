@@ -14,7 +14,7 @@ export interface SendCodeEmailParams {
 
 export async function sendPasswordResetCode(params: SendCodeEmailParams): Promise<{ ok: boolean; error?: string }> {
   const { to, code, userName } = params
-  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@xpresssolutions.com.br"
+  const from = process.env.RESEND_FROM_EMAIL ?? "xpresssolutions@xpresssolutions.com.br"
   const subject = "Código para redefinir sua senha — Xpress Solutions"
   const html = `
 <!DOCTYPE html>

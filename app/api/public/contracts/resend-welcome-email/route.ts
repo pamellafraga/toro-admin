@@ -1,11 +1,11 @@
 import { NextRequest } from "next/server"
 import { handleApiError, jsonError, jsonOk } from "@/lib/api/response"
-import { getLiticaProAccessForResend } from "@/lib/liticapro/resend-welcome-from-site"
+import { resendLiticaProWelcomeEmailByEmail } from "@/lib/liticapro/resend-welcome-email"
 import { verifyPublicSiteApiKey } from "@/lib/public-api/auth"
 
 export const dynamic = "force-dynamic"
 
-/** POST /api/public/contracts/resend-welcome-email — dados de acesso para reenvio pelo site. */
+/** POST /api/public/contracts/resend-welcome-email — reenvia e-mail de acesso (site / integrações). */
 export async function POST(req: NextRequest) {
   try {
     if (!verifyPublicSiteApiKey(req)) {
@@ -18,22 +18,20 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { email?: string }
     const email = String(body.email ?? "").trim()
 
-    const result = await getLiticaProAccessForResend(email)
+    const result = await resendLiticaProWelcomeEmailByEmail(email)
     if (!result.ok) {
       return jsonError(result.error, result.status)
     }
 
     return jsonOk({
       success: true,
-      client_name: result.client_name,
-      customer_type: result.customer_type,
-      states_of_interest: result.states_of_interest,
-      credentials: result.credentials,
-      login_url: result.login_url,
-      provisioned: result.provisioned,
+      email_sent: true,
+      sent_at: result.sent_at,
+      channel: result.channel,
+      message: "E-mail de acesso reenviado com sucesso.",
     })
   } catch (err) {
     console.error("resend-welcome-email:", err)
-    return handleApiError(err, "Erro ao buscar dados para reenvio de e-mail.")
+    return handleApiError(err, "Erro ao reenviar e-mail de acesso.")
   }
 }

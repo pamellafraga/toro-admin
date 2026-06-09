@@ -3,6 +3,17 @@ import { sendSmtpEmail } from "@/lib/mail-smtp"
 import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
 
 const RESEND_API_URL = "https://api.resend.com/emails"
+const DEFAULT_FROM_EMAIL = "xpresssolutions@xpresssolutions.com.br"
+
+export function resolveWelcomeEmailFromAddress(): string {
+  const email =
+    process.env.RESEND_FROM_EMAIL?.trim() ||
+    process.env.SMTP_USER?.trim() ||
+    DEFAULT_FROM_EMAIL
+  if (email.includes("<")) return email
+  const name = process.env.SMTP_FROM_NAME?.trim() || "Xpress Solutions"
+  return `"${name}" <${email}>`
+}
 
 export function resolveLiticaProPortalUrl(loginUrl?: string): string {
   const configured =
@@ -24,7 +35,7 @@ export async function sendLiticaProWelcomeEmail(params: {
 }): Promise<{ ok: boolean; error?: string; channel?: "resend" | "smtp" | "dev" }> {
   const { to, clientName, credentials, loginUrl, customerType, statesOfInterest } = params
   const portalUrl = resolveLiticaProPortalUrl(loginUrl)
-  const from = process.env.RESEND_FROM_EMAIL ?? process.env.SMTP_USER ?? "noreply@xpresssolutions.com.br"
+  const from = resolveWelcomeEmailFromAddress()
   const subject = "🚀 Seu acesso à LicitaPro está liberado!"
   const html = buildLiticaProWelcomeEmailHtml({
     clientName,
