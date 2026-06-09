@@ -4,6 +4,7 @@ import {
 } from "@/lib/db/repositories/clients.repository"
 import { findContractWithProduct } from "@/lib/db/repositories/contracts.repository"
 import { readDeveloperCredentialsFromLiticaProData } from "@/lib/liticapro/developer-credentials"
+import { LITICAPRO_TRIAL_DAYS } from "@/lib/liticapro/constants"
 import { resolveTrialEndsAt } from "@/lib/liticapro/trial"
 import type { CnpjGovData } from "@/lib/liticapro/types"
 
@@ -67,6 +68,19 @@ export async function syncLiticaProTenantAfterAdminEdit(
     created_at: contract.created_at,
   })
 
+  const registeredAtRaw =
+    String(meta.registered_at ?? liticaproData.registered_at ?? "").trim() ||
+    contract.created_at
+  const trialStartsAt = registeredAtRaw ? new Date(registeredAtRaw) : null
+  if (trialStartsAt && trialEndsAt) {
+    const expectedEnd = new Date(trialStartsAt)
+    expectedEnd.setUTCDate(expectedEnd.getUTCDate() + LITICAPRO_TRIAL_DAYS)
+    if (Math.abs(expectedEnd.getTime() - trialEndsAt.getTime()) > 86_400_000) {
+      trialStartsAt.setTime(trialEndsAt.getTime())
+      trialStartsAt.setUTCDate(trialStartsAt.getUTCDate() - LITICAPRO_TRIAL_DAYS)
+    }
+  }
+
   try {
     const res = await fetch(`${baseUrl}/api/sync-tenant`, {
       method: "PATCH",
@@ -81,6 +95,7 @@ export async function syncLiticaProTenantAfterAdminEdit(
         email: String(client.email ?? "").trim(),
         phone: String(client.phone ?? "").trim() || undefined,
         client_name: String(client.name ?? "").trim(),
+        trial_starts_at: trialStartsAt?.toISOString(),
         trial_ends_at: trialEndsAt?.toISOString(),
         states_of_interest: statesRaw,
         credentials: credentials

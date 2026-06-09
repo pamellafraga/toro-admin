@@ -1,4 +1,4 @@
-import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
+import type { CnpjGovData, LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
 
 export type ProvisionLiticaProInput = {
   customer_type: "empresa" | "profissional_liberal"
@@ -11,6 +11,19 @@ export type ProvisionLiticaProInput = {
   external_contract_id: string
   cnpj?: string | null
   company_name?: string | null
+  phone?: string
+  client_name?: string
+  address?: {
+    zip_code?: string | null
+    address?: string | null
+    number?: string | null
+    district?: string | null
+    city?: string | null
+    state?: string | null
+  }
+  business_segment?: string
+  company_gov?: CnpjGovData | null
+  linked_cnpjs?: Array<Record<string, unknown>>
 }
 
 export type ProvisionLiticaProResult =
@@ -67,6 +80,12 @@ export async function provisionLiticaProTenant(
         external_contract_id: input.external_contract_id,
         cnpj: input.cnpj ?? null,
         company_name: input.company_name ?? null,
+        phone: input.phone ?? undefined,
+        client_name: input.client_name ?? undefined,
+        address: input.address,
+        business_segment: input.business_segment ?? undefined,
+        company_gov: input.company_gov ?? null,
+        linked_cnpjs: input.linked_cnpjs ?? undefined,
       }),
     })
 

@@ -32,6 +32,7 @@ import {
   provisionLiticaProTenant,
   type ProvisionLiticaProResult,
 } from "@/lib/liticapro/provision-licitapregao"
+import { syncLiticaProTenantAfterAdminEdit } from "@/lib/liticapro/sync-licitapregao"
 import { computeTrialEndsAt } from "@/lib/liticapro/trial"
 import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
 import { getProductBySlug } from "@/lib/products/catalog"
@@ -439,6 +440,25 @@ export async function registerLiticaProTrial(
       external_contract_id: contract.id,
       cnpj: customerType === "empresa" ? cpfCnpjRaw : null,
       company_name: clientName,
+      phone,
+      client_name: clientName,
+      address: {
+        zip_code: zipCode,
+        address,
+        number,
+        district,
+        city,
+        state,
+      },
+      business_segment: String(liticaproData.business_segment ?? "").trim() || undefined,
+      company_gov:
+        customerType === "empresa"
+          ? ((liticaproData.company_gov as import("@/lib/liticapro/types").CnpjGovData | null) ??
+            null)
+          : null,
+      linked_cnpjs: Array.isArray(liticaproData.linked_cnpjs)
+        ? (liticaproData.linked_cnpjs as Array<Record<string, unknown>>)
+        : undefined,
     })
 
     if (provision.ok) {
@@ -450,6 +470,9 @@ export async function registerLiticaProTrial(
           saas_usuario_id: provision.usuario_id,
           saas_provisioned_at: new Date().toISOString(),
         },
+      })
+      await syncLiticaProTenantAfterAdminEdit(contract.id).catch((err) => {
+        console.error("[register-trial] sync pós-provisionamento:", err)
       })
     } else if (!provision.skipped) {
       return fail(
