@@ -1,15 +1,31 @@
 import nodemailer from "nodemailer"
 
+function resolveTlsServername(host: string): string | undefined {
+  const explicit = process.env.SMTP_TLS_SERVERNAME?.trim()
+  if (explicit) return explicit
+
+  // Hospedagem Locaweb/email-ssl: mail.dominio.com.br usa certificado de email-ssl.com.br
+  if (/^mail\./i.test(host) && !host.includes("email-ssl.com.br")) {
+    return "email-ssl.com.br"
+  }
+
+  return undefined
+}
+
 export function getSmtpConfig() {
   const host = process.env.SMTP_HOST
   const user = process.env.SMTP_USER
   const pass = process.env.SMTP_PASS
   if (!host || !user || !pass) return null
+
+  const tlsServername = resolveTlsServername(host)
+
   return {
     host,
     port: Number(process.env.SMTP_PORT ?? 587),
     secure: process.env.SMTP_SECURE === "true",
     auth: { user, pass },
+    ...(tlsServername ? { tls: { servername: tlsServername } } : {}),
   }
 }
 
