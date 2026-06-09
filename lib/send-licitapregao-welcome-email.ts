@@ -36,7 +36,7 @@ export async function sendLiticaProWelcomeEmail(params: {
   const { to, clientName, credentials, loginUrl, customerType, statesOfInterest } = params
   const portalUrl = resolveLiticaProPortalUrl(loginUrl)
   const from = resolveWelcomeEmailFromAddress()
-  const subject = "🚀 Seu acesso à LicitaPro está liberado!"
+  const subject = "🚀 Seu acesso à LicitaPregão está liberado!"
   const html = buildLiticaProWelcomeEmailHtml({
     clientName,
     credentials,
@@ -81,7 +81,7 @@ export async function sendLiticaProWelcomeEmail(params: {
   }
 
   if (process.env.NODE_ENV === "development") {
-    console.log("[DEV] E-mail de boas-vindas LicitaPro para", to)
+    console.log("[DEV] E-mail de boas-vindas LicitaPregão para", to)
     console.log("[DEV] Portal:", portalUrl)
     console.log("[DEV] Credenciais:", credentials)
     return { ok: true, channel: "dev" }

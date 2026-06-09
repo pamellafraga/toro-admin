@@ -36,7 +36,7 @@ export function buildLiticaProWelcomeEmailHtml(params: {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Seu acesso à LicitaPro está liberado</title>
+  <title>Seu acesso à LicitaPregão está liberado</title>
 </head>
 <body style="margin:0;padding:0;background:#eef2f7;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1e293b;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f7;padding:32px 16px;">
@@ -47,14 +47,14 @@ export function buildLiticaProWelcomeEmailHtml(params: {
             <td style="background:linear-gradient(135deg,#0f172a 0%,#1d4ed8 55%,#0ea5e9 100%);padding:32px 36px;color:#ffffff;">
               <p style="margin:0 0 8px;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;opacity:0.85;">Xpress Solutions</p>
               <h1 style="margin:0;font-size:28px;line-height:1.25;font-weight:700;">🚀 Seu acesso já está liberado!</h1>
-              <p style="margin:14px 0 0;font-size:15px;line-height:1.6;opacity:0.92;">Olá, <strong>${nome}</strong>. A plataforma <strong>LicitaPro</strong> foi configurada com sucesso.</p>
+              <p style="margin:14px 0 0;font-size:15px;line-height:1.6;opacity:0.92;">Olá, <strong>${nome}</strong>. A plataforma <strong>LicitaPregão</strong> foi configurada com sucesso.</p>
             </td>
           </tr>
 
           <tr>
             <td style="padding:34px 36px 10px;">
               <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#334155;">
-                A plataforma LicitaPro foi configurada com sucesso e já está pronta para monitorar oportunidades de licitação em tempo real.
+                A plataforma LicitaPregão foi configurada com sucesso e já está pronta para monitorar oportunidades de licitação em tempo real.
               </p>
               <p style="margin:0 0 18px;font-size:16px;line-height:1.7;color:#334155;">
                 Acesse o portal como <strong>${accessLabel}</strong> com os seguintes dados:
@@ -74,7 +74,7 @@ export function buildLiticaProWelcomeEmailHtml(params: {
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:28px 0 8px;">
                 <tr>
                   <td style="border-radius:10px;background:#0ea5e9;">
-                    <a href="${url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">🌐 Acessar LicitaPro</a>
+                    <a href="${url}" style="display:inline-block;padding:14px 28px;color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;">🌐 Acessar LicitaPregão</a>
                   </td>
                 </tr>
               </table>
@@ -103,7 +103,7 @@ export function buildLiticaProWelcomeEmailHtml(params: {
           <tr>
             <td style="padding:0 36px 30px;">
               <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#334155;">
-                ⭐ Como este é o início da sua operação na LicitaPro, gostaríamos de contar com seu feedback. Explore a plataforma e, caso sinta falta de alguma funcionalidade, filtro, alerta ou recurso que possa agregar valor ao seu processo de licitações, nos informe por aqui mesmo.
+                ⭐ Como este é o início da sua operação na LicitaPregão, gostaríamos de contar com seu feedback. Explore a plataforma e, caso sinta falta de alguma funcionalidade, filtro, alerta ou recurso que possa agregar valor ao seu processo de licitações, nos informe por aqui mesmo.
               </p>
               <p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#334155;">
                 Somos uma empresa de tecnologia e acreditamos que uma ferramenta de alto desempenho está em constante evolução. Por isso, analisamos e implementamos melhorias com base nas necessidades reais dos nossos clientes, muitas vezes sem qualquer custo adicional.
