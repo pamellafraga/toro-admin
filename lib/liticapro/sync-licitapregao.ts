@@ -103,6 +103,8 @@ export async function syncLiticaProTenantAfterAdminEdit(
         linked_cnpjs: Array.isArray(liticaproData.linked_cnpjs)
           ? liticaproData.linked_cnpjs
           : undefined,
+        admin_client_id: contract.client_id,
+        admin_contract_id: contract.id,
       }),
     })
 
