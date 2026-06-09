@@ -14,6 +14,7 @@ export type CompanyExpense = {
   dueMonth?: number
   billingPeriod: BillingPeriod
   notes?: string
+  createdAt?: string
 }
 
 export function mapExpenseRow(row: CompanyExpenseRow): CompanyExpense {
@@ -28,6 +29,7 @@ export function mapExpenseRow(row: CompanyExpenseRow): CompanyExpense {
     dueMonth: row.due_month ?? undefined,
     billingPeriod: row.billing_period,
     notes: row.notes ?? undefined,
+    createdAt: row.created_at,
   }
 }
 
@@ -43,5 +45,6 @@ export function mapExpenseToRow(expense: CompanyExpense): CompanyExpenseRow {
     due_month: expense.billingPeriod === "anual" ? expense.dueMonth ?? null : null,
     billing_period: expense.billingPeriod,
     notes: expense.notes ?? null,
+    created_at: expense.createdAt,
   }
 }

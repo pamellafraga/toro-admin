@@ -29,13 +29,17 @@ import {
   isExpenseUuid,
 } from "@/lib/company-expenses/load-expenses"
 import {
+  expenseAppliesToMonth,
   getEffectiveBrl,
   monthlyEquivalentBrl,
   monthlyEquivalentUsd,
+  parseYearMonth,
   resolveFeeCurrency,
+  sumMonthSpend,
   sumMonthlyTotals,
   sumOneTimeTotals,
 } from "@/lib/company-expenses/totals"
+import { buildDashboardMonthOptions } from "@/lib/liticapro/trial"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
 
 type FeeFormData = {
@@ -125,8 +129,14 @@ async function fetchCompanyExpenses(): Promise<CompanyExpense[]> {
   return result.expenses
 }
 
+function currentYearMonth(): string {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`
+}
+
 export default function GastoEmpresaPage() {
   const { isAdmin } = useAuth()
+  const [filterMonth, setFilterMonth] = useState(currentYearMonth)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<FeeFormData>(EMPTY_FORM)
@@ -338,14 +348,32 @@ export default function GastoEmpresaPage() {
     [fees, usdRate],
   )
 
-  const { totalUsd, totalBrl } = useMemo(
+  const monthOptions = useMemo(() => buildDashboardMonthOptions(), [])
+
+  const { totalUsd: recurringUsd, totalBrl: recurringBrl } = useMemo(
     () => sumMonthlyTotals(feesForDisplay, usdRate),
     [feesForDisplay, usdRate],
   )
-  const { oneTimeUsd, oneTimeBrl } = useMemo(
-    () => sumOneTimeTotals(feesForDisplay, usdRate),
-    [feesForDisplay, usdRate],
+
+  const { totalUsd, totalBrl, items: monthItems } = useMemo(
+    () => sumMonthSpend(feesForDisplay, filterMonth, usdRate),
+    [feesForDisplay, filterMonth, usdRate],
   )
+
+  const monthSpendByOption = useMemo(
+    () =>
+      monthOptions.map((opt) => ({
+        ...opt,
+        ...sumMonthSpend(feesForDisplay, opt.value, usdRate),
+      })),
+    [feesForDisplay, monthOptions, usdRate],
+  )
+
+  const filterMonthLabel =
+    monthOptions.find((m) => m.value === filterMonth)?.label ??
+    filterMonth
+
+  const filterYearMonth = parseYearMonth(filterMonth)
 
   const groupedFees = categories.map((cat) => ({
     category: cat,
@@ -589,24 +617,75 @@ export default function GastoEmpresaPage() {
         </Dialog>
       </div>
 
-      {/* Resumo compacto */}
+      {/* Filtro e totais do mês */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <Label htmlFor="filterMonth" className="text-xs text-muted-foreground">
+            Mês de referência
+          </Label>
+          <select
+            id="filterMonth"
+            title="Filtrar gastos por mês"
+            aria-label="Filtrar gastos por mês"
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="mt-1 h-10 min-w-[200px] rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
+          >
+            {monthOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="text-xs text-muted-foreground sm:text-right">
+          {monthItems.length} gasto{monthItems.length === 1 ? "" : "s"} neste mês
+        </p>
+      </div>
+
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         <div className="rounded-lg border border-primary/20 bg-card px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total USD</p>
           <p className="text-lg font-bold leading-tight text-primary sm:text-xl">US ${totalUsd.toFixed(2)}</p>
-          <p className="text-[10px] text-muted-foreground">Equiv. mensal</p>
+          <p className="text-[10px] text-muted-foreground">Em {filterMonthLabel}</p>
         </div>
         <div className="rounded-lg border border-primary/20 bg-card px-3 py-2">
           <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Total BRL</p>
           <p className="text-lg font-bold leading-tight text-primary sm:text-xl">R$ {totalBrl.toFixed(2)}</p>
-          <p className="text-[10px] text-muted-foreground">Equiv. mensal</p>
+          <p className="text-[10px] text-muted-foreground">Em {filterMonthLabel}</p>
         </div>
       </div>
-      {(oneTimeUsd > 0 || oneTimeBrl > 0) && (
-        <p className="text-xs text-muted-foreground">
-          Pagamentos únicos (vitalício): US ${oneTimeUsd.toFixed(2)} · R$ {oneTimeBrl.toFixed(2)}
+
+      <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Gastos por mês
         </p>
-      )}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          {monthSpendByOption.map((row) => (
+            <button
+              key={row.value}
+              type="button"
+              onClick={() => setFilterMonth(row.value)}
+              className={cn(
+                "rounded-lg border px-3 py-2 text-left transition-colors hover:bg-secondary/60",
+                filterMonth === row.value
+                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                  : "border-border bg-background",
+              )}
+            >
+              <p className="text-[11px] font-medium text-foreground capitalize">{row.label}</p>
+              <p className="text-sm font-bold text-primary">R$ {row.totalBrl.toFixed(2)}</p>
+              <p className="text-[10px] text-muted-foreground">US ${row.totalUsd.toFixed(2)}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Recorrente (equiv. mensal): US ${recurringUsd.toFixed(2)} · R$ {recurringBrl.toFixed(2)}
+        {" · "}
+        Mensais contam todo mês; anuais só no mês de vencimento; vitalício só no mês do cadastro.
+      </p>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
           Cotação USD/BRL: <strong className="text-foreground">R$ {usdRate.toFixed(4)}</strong>
@@ -643,12 +722,26 @@ export default function GastoEmpresaPage() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 md:gap-4">
-                {group.items.map((fee) => (
-                  <Card key={fee.id} className="overflow-hidden transition-shadow hover:shadow-lg">
+                {group.items.map((fee) => {
+                  const appliesThisMonth =
+                    filterYearMonth != null && expenseAppliesToMonth(fee, filterYearMonth)
+                  return (
+                  <Card
+                    key={fee.id}
+                    className={cn(
+                      "overflow-hidden transition-shadow hover:shadow-lg",
+                      appliesThisMonth && "ring-1 ring-primary/40",
+                    )}
+                  >
                     <CardHeader className="pb-2 pt-4">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <CardTitle className="text-base leading-snug">{fee.name}</CardTitle>
+                          {appliesThisMonth && (
+                            <span className="mt-1 inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                              Conta em {filterMonthLabel}
+                            </span>
+                          )}
                           {fee.notes && <CardDescription className="mt-1 text-xs">{fee.notes}</CardDescription>}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
@@ -718,7 +811,8 @@ export default function GastoEmpresaPage() {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                  )
+                })}
               </div>
             )}
           </div>
