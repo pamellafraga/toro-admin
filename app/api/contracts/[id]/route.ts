@@ -11,9 +11,10 @@ import { updateClientForContract, updateClientLiticaProData } from "@/lib/db/rep
 import { deleteContract, findContractById, findContractWithProduct, updateContract } from "@/lib/db/repositories/contracts.repository"
 import {
   extendTrialEndsAt,
-  isTrialEndDateInFuture,
+  isTrialLifecycleContract,
   parseTrialEndsAtInput,
   resolveTrialEndsAt,
+  resolveTrialStatusesFromEndsAt,
 } from "@/lib/liticapro/trial"
 
 export const dynamic = "force-dynamic"
@@ -112,11 +113,10 @@ export async function PATCH(
         const existingEnd = resolveTrialEndsAt(existing)?.toISOString().slice(0, 10)
         const newEndDate = trialEndsAt.slice(0, 10)
         const trialDateChanged = extendDays > 0 || newEndDate !== existingEnd
-        const wasExpired =
-          existing.status === "trial_encerrado" || existing.payment_status === "trial_expirado"
-        if (trialDateChanged && (wasExpired || extendDays > 0 || isTrialEndDateInFuture(trialEndsAt))) {
-          statusForUpdate = statusForUpdate ?? "trial"
-          paymentStatusForUpdate = paymentStatusForUpdate ?? "trial"
+        if (trialDateChanged && isTrialLifecycleContract(existing)) {
+          const resolved = resolveTrialStatusesFromEndsAt(trialEndsAt)
+          statusForUpdate = resolved.status
+          paymentStatusForUpdate = resolved.payment_status
         }
       }
     } else if (body.trial_ends_at) {

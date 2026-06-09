@@ -24,7 +24,12 @@ import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-ba
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { formatCpfCnpj, formatPhone } from "@/lib/format/br"
 import type { CnpjGovData } from "@/lib/liticapro/types"
-import { buildDashboardMonthOptions, extendTrialEndsAt, resolveTrialEndsAt } from "@/lib/liticapro/trial"
+import {
+  buildDashboardMonthOptions,
+  extendTrialEndsAt,
+  resolveTrialEndsAt,
+  resolveTrialStatusesFromEndsAt,
+} from "@/lib/liticapro/trial"
 
 type TrialContractRow = Contract & { trial_ends_at?: string | null }
 
@@ -38,6 +43,15 @@ function isExpiredTrialContract(contract: Contract): boolean {
 
 function formatTrialEndDate(contract: TrialContractRow): string {
   return formatContractDate(resolveTrialEndsAt(contract)?.toISOString())
+}
+
+function getTrialEndDateInputValue(contract: TrialContractRow): string {
+  return resolveTrialEndsAt(contract)?.toISOString().slice(0, 10) ?? ""
+}
+
+function trialStatusesForDateInput(dateStr: string) {
+  if (!dateStr.trim()) return null
+  return resolveTrialStatusesFromEndsAt(`${dateStr.trim()}T12:00:00`)
 }
 
 function formatContractDate(value: string | null | undefined): string {
@@ -234,6 +248,7 @@ export default function ProductDetailPage() {
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null)
+  const [trialDateUpdatingId, setTrialDateUpdatingId] = useState<string | null>(null)
   const [newContract, setNewContract] = useState({
     // dados do cliente
     client_name: "",
@@ -750,6 +765,40 @@ export default function ProductDetailPage() {
     }
   }
 
+  const handleQuickTrialDateChange = async (contract: Contract, newDate: string) => {
+    const clientName = contract.clients?.name?.trim()
+    if (!newDate || !clientName) return
+    const previous = getTrialEndDateInputValue(contract as TrialContractRow)
+    if (newDate === previous) return
+
+    setTrialDateUpdatingId(contract.id)
+    try {
+      const res = await fetch(`/api/contracts/${contract.id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client_name: clientName,
+          trial_ends_at: newDate,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Erro ao atualizar data do teste.")
+      const resolved = trialStatusesForDateInput(newDate)
+      toast.success(
+        resolved?.status === "trial"
+          ? "Teste grátis reativado com a nova data."
+          : "Data atualizada — teste marcado como expirado.",
+      )
+      await mutateContracts()
+      await mutateApiContracts()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Erro ao atualizar data do teste.")
+    } finally {
+      setTrialDateUpdatingId(null)
+    }
+  }
+
   const handleDeleteContract = async (contract: Contract) => {
     if (!confirm("Tem certeza que deseja excluir este contrato? O cliente permanece cadastrado; apenas a assinatura será removida.")) return
     setDeletingId(contract.id)
@@ -1129,15 +1178,32 @@ export default function ProductDetailPage() {
                           <span className={cn("text-sm font-medium", PAYMENT_MAP[contract.payment_status]?.class)}>
                             {PAYMENT_MAP[contract.payment_status]?.label}
                           </span>
-                          {isLiticaPro && isActiveTrialContract(contract) && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Expira {formatTrialEndDate(contract as TrialContractRow)}
-                            </p>
-                          )}
-                          {isLiticaPro && isExpiredTrialContract(contract) && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5">
-                              Expirou {formatTrialEndDate(contract as TrialContractRow)}
-                            </p>
+                          {isLiticaPro && (isActiveTrialContract(contract) || isExpiredTrialContract(contract)) && (
+                            <div className="mt-0.5">
+                              {isAdmin ? (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground shrink-0">
+                                    {isActiveTrialContract(contract) ? "Expira" : "Expirou"}
+                                  </span>
+                                  <input
+                                    type="date"
+                                    className="h-6 max-w-[118px] rounded border border-border bg-background px-1 text-[10px] text-foreground"
+                                    value={getTrialEndDateInputValue(contract as TrialContractRow)}
+                                    disabled={trialDateUpdatingId === contract.id}
+                                    title="Altere a data — o status do teste atualiza automaticamente"
+                                    onChange={(e) => handleQuickTrialDateChange(contract, e.target.value)}
+                                  />
+                                  {trialDateUpdatingId === contract.id && (
+                                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-[10px] text-muted-foreground">
+                                  {isActiveTrialContract(contract) ? "Expira" : "Expirou"}{" "}
+                                  {formatTrialEndDate(contract as TrialContractRow)}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1429,7 +1495,18 @@ export default function ProductDetailPage() {
                           type="date"
                           className={inputCls}
                           value={editForm.trial_ends_at}
-                          onChange={(e) => setEditForm((p) => ({ ...p, trial_ends_at: e.target.value, trial_extend_days: "" }))}
+                          onChange={(e) => {
+                            const newDate = e.target.value
+                            const resolved = trialStatusesForDateInput(newDate)
+                            setEditForm((p) => ({
+                              ...p,
+                              trial_ends_at: newDate,
+                              trial_extend_days: "",
+                              ...(resolved
+                                ? { status: resolved.status, payment_status: resolved.payment_status }
+                                : {}),
+                            }))
+                          }}
                         />
                       )}
                     </div>
@@ -1449,11 +1526,16 @@ export default function ProductDetailPage() {
                             const days = e.target.value.replace(/\D/g, "")
                             setEditForm((p) => {
                               if (!days) {
+                                const restored =
+                                  resolveTrialEndsAt(editingContract as TrialContractRow)?.toISOString().slice(0, 10) ?? ""
+                                const resolved = trialStatusesForDateInput(restored)
                                 return {
                                   ...p,
                                   trial_extend_days: "",
-                                  trial_ends_at:
-                                    resolveTrialEndsAt(editingContract as TrialContractRow)?.toISOString().slice(0, 10) ?? "",
+                                  trial_ends_at: restored,
+                                  ...(resolved
+                                    ? { status: resolved.status, payment_status: resolved.payment_status }
+                                    : {}),
                                 }
                               }
                               const extend = Math.min(365, Math.max(1, Number(days)))
@@ -1461,10 +1543,15 @@ export default function ProductDetailPage() {
                                 resolveTrialEndsAt(editingContract as TrialContractRow),
                                 extend,
                               )
+                              const nextDate = nextEnd.toISOString().slice(0, 10)
+                              const resolved = trialStatusesForDateInput(nextDate)
                               return {
                                 ...p,
                                 trial_extend_days: days,
-                                trial_ends_at: nextEnd.toISOString().slice(0, 10),
+                                trial_ends_at: nextDate,
+                                ...(resolved
+                                  ? { status: resolved.status, payment_status: resolved.payment_status }
+                                  : {}),
                               }
                             })
                           }}

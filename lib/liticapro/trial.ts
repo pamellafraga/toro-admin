@@ -56,6 +56,31 @@ export function isTrialEndDateInFuture(trialEndsAt: Date | string): boolean {
   return end >= today
 }
 
+/** Contrato ainda em período de teste (data de fim hoje ou no futuro). */
+export function isTrialStillActiveByDate(trialEndsAt: Date | string): boolean {
+  return isTrialEndDateInFuture(trialEndsAt)
+}
+
+export function isTrialLifecycleContract(contract: {
+  status?: string | null
+  payment_status?: string | null
+}): boolean {
+  const s = String(contract.status ?? "").toLowerCase().trim()
+  const p = String(contract.payment_status ?? "").toLowerCase().trim()
+  return s === "trial" || s === "trial_encerrado" || p === "trial" || p === "trial_expirado"
+}
+
+/** Define produto e pagamento conforme a data de fim do teste. */
+export function resolveTrialStatusesFromEndsAt(trialEndsAt: Date | string): {
+  status: "trial" | "trial_encerrado"
+  payment_status: "trial" | "trial_expirado"
+} {
+  if (isTrialStillActiveByDate(trialEndsAt)) {
+    return { status: "trial", payment_status: "trial" }
+  }
+  return { status: "trial_encerrado", payment_status: "trial_expirado" }
+}
+
 export function parseTrialEndsAtInput(value: string): string | null {
   const trimmed = value.trim()
   if (!trimmed) return null
