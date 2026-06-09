@@ -1,6 +1,6 @@
-/** Gastos da empresa — histórico a partir de março/2026 */
+/** Gastos da empresa — histórico a partir de fevereiro/2026 */
 export const COMPANY_EXPENSES_START_YEAR = 2026
-export const COMPANY_EXPENSES_START_MONTH = 3 // março (1-based)
+export const COMPANY_EXPENSES_START_MONTH = 2 // fevereiro (1-based)
 
 export function buildExpenseMonthOptions(now = new Date()): { value: string; label: string }[] {
   const opts: { value: string; label: string }[] = []

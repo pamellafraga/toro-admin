@@ -16,20 +16,14 @@ function isMonthOnOrAfter(target: YearMonth, start: YearMonth): boolean {
   return target.year > start.year || (target.year === start.year && target.month >= start.month)
 }
 
-function getExpenseStartYearMonth(fee: CompanyExpense): YearMonth {
-  if (fee.createdAt) {
-    const d = new Date(fee.createdAt)
-    if (!Number.isNaN(d.getTime())) {
-      return { year: d.getFullYear(), month: d.getMonth() + 1 }
-    }
-  }
-  return { year: COMPANY_EXPENSES_START_YEAR, month: COMPANY_EXPENSES_START_MONTH }
+const COMPANY_EXPENSES_START: YearMonth = {
+  year: COMPANY_EXPENSES_START_YEAR,
+  month: COMPANY_EXPENSES_START_MONTH,
 }
 
 /** Gasto entra no total do mês selecionado (mensal todo mês; anual no mês de vencimento; vitalício só no cadastro). */
 export function expenseAppliesToMonth(fee: CompanyExpense, filter: YearMonth): boolean {
-  const start = getExpenseStartYearMonth(fee)
-  if (!isMonthOnOrAfter(filter, start)) return false
+  if (!isMonthOnOrAfter(filter, COMPANY_EXPENSES_START)) return false
 
   switch (fee.billingPeriod) {
     case "mensal":
@@ -37,7 +31,10 @@ export function expenseAppliesToMonth(fee: CompanyExpense, filter: YearMonth): b
     case "anual":
       return (fee.dueMonth ?? 1) === filter.month
     case "vitalicio":
-      return start.year === filter.year && start.month === filter.month
+      return (
+        filter.year === COMPANY_EXPENSES_START.year &&
+        filter.month === COMPANY_EXPENSES_START.month
+      )
     default:
       return false
   }

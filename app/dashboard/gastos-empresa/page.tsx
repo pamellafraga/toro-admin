@@ -684,7 +684,7 @@ export default function GastoEmpresaPage() {
       <p className="text-xs text-muted-foreground">
         Recorrente (equiv. mensal): US ${recurringUsd.toFixed(2)} · R$ {recurringBrl.toFixed(2)}
         {" · "}
-        Mensais contam todo mês; anuais só no mês de vencimento; vitalício só no mês do cadastro.
+        Mensais contam todo mês desde fevereiro/2026; anuais só no mês de vencimento; vitalício só em fevereiro/2026.
       </p>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
