@@ -613,10 +613,51 @@ export default function ProductDetailPage() {
     }
     const startStr = contract.start_date ? String(contract.start_date).slice(0, 10) : ""
     const endStr = contract.end_date ? String(contract.end_date).slice(0, 10) : startStr ? addOneMonthSameDay(startStr) : ""
-    const dev = (c as { liticapro_data?: { dados_desenvolvedor?: { empresa?: string; usuario?: string; senha?: string }; customer_type?: string; business_segment?: string; states_of_interest?: string[]; responsible_name?: string; company_gov?: CnpjGovData } })?.liticapro_data
+    const dev = (c as {
+      liticapro_data?: {
+        dados_desenvolvedor?: { empresa?: string; usuario?: string; senha?: string }
+        customer_type?: string
+        business_segment?: string
+        states_of_interest?: string[]
+        responsible_name?: string
+        company_gov?: CnpjGovData
+        linked_cnpjs?: Array<Record<string, unknown>>
+        billing_address?: {
+          cep?: string
+          logradouro?: string
+          numero?: string
+          bairro?: string
+          cidade?: string
+          uf?: string
+        }
+      }
+    })?.liticapro_data
     const meta = (contract as { liticapro_meta?: { states_of_interest?: string[]; customer_type?: string } }).liticapro_meta
     const lpStates = dev?.states_of_interest ?? meta?.states_of_interest ?? []
-    setEditCompanyGov(dev?.company_gov ?? null)
+
+    let companyGov = dev?.company_gov ?? null
+    let businessSegment = dev?.business_segment ?? ""
+
+    if (dev?.customer_type === "profissional_liberal" && Array.isArray(dev.linked_cnpjs) && dev.linked_cnpjs.length > 0) {
+      const firstLinked = dev.linked_cnpjs[0]
+      if (firstLinked.cnae_fiscal || firstLinked.cnae_fiscal_descricao || firstLinked.cnaes_secundarios) {
+        companyGov = firstLinked as CnpjGovData
+      }
+      if (!businessSegment && firstLinked.ramo_atuacao) {
+        businessSegment = String(firstLinked.ramo_atuacao)
+      }
+    }
+
+    if (!address && dev?.billing_address) {
+      zip_code = dev.billing_address.cep?.replace(/\D/g, "") ?? zip_code
+      address = dev.billing_address.logradouro ?? address
+      number = dev.billing_address.numero ?? number
+      district = dev.billing_address.bairro ?? district
+      city = dev.billing_address.cidade ?? city
+      state = dev.billing_address.uf ?? state
+    }
+
+    setEditCompanyGov(companyGov)
     setEditForm({
       client_name: c?.name ?? "",
       client_cpf_cnpj: formatCpfCnpj(c?.cpf_cnpj ?? ""),
@@ -642,7 +683,7 @@ export default function ProductDetailPage() {
       dev_usuario: dev?.dados_desenvolvedor?.usuario ?? "",
       dev_senha: dev?.dados_desenvolvedor?.senha ?? "",
       customer_type: (dev?.customer_type === "profissional_liberal" ? "profissional_liberal" : "empresa") as "empresa" | "profissional_liberal",
-      business_segment: dev?.business_segment ?? "",
+      business_segment: businessSegment,
       states_of_interest: Array.isArray(lpStates) ? lpStates.map(String) : [],
       responsible_name: dev?.responsible_name ?? "",
       trial_ends_at: resolveTrialEndsAt(contract as TrialContractRow)?.toISOString().slice(0, 10) ?? "",

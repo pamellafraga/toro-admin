@@ -1,5 +1,14 @@
 import type { RegisterLiticaProTrialInput } from "@/lib/liticapro/register-trial"
 
+type SiteEndereco = {
+  cep?: string
+  logradouro?: string
+  numero?: string
+  bairro?: string
+  cidade?: string
+  uf?: string
+}
+
 type SiteSignupBody = {
   tipoPessoa?: "pf" | "pj"
   nome?: string
@@ -7,6 +16,7 @@ type SiteSignupBody = {
   dataNascimento?: string
   email?: string
   telefone?: string
+  endereco?: SiteEndereco
   empresas?: Array<{
     cnpj?: string
     razaoSocial?: string
@@ -27,6 +37,18 @@ function principalCnaeDescricao(
   return String(principal?.descricao ?? "").trim()
 }
 
+function mapBillingAddress(endereco?: SiteEndereco) {
+  if (!endereco) return undefined
+  return {
+    cep: String(endereco.cep ?? "").replace(/\D/g, ""),
+    logradouro: String(endereco.logradouro ?? "").trim(),
+    numero: String(endereco.numero ?? "").trim(),
+    bairro: String(endereco.bairro ?? "").trim(),
+    cidade: String(endereco.cidade ?? "").trim(),
+    uf: String(endereco.uf ?? "").trim().toUpperCase(),
+  }
+}
+
 export function mapSiteSignupToLiticaProTrial(
   body: SiteSignupBody,
 ): RegisterLiticaProTrialInput | { error: string } {
@@ -41,18 +63,30 @@ export function mapSiteSignupToLiticaProTrial(
     .split(",")
     .map((uf) => uf.trim().toUpperCase())
     .filter(Boolean)
+  const billingAddress = mapBillingAddress(body.endereco)
 
   if (!email) return { error: "E-mail é obrigatório." }
   if (!phone) return { error: "Telefone é obrigatório." }
   if (statesOfInterest.length === 0) return { error: "Selecione ao menos um estado." }
 
+  if (!billingAddress?.cep || billingAddress.cep.length !== 8) {
+    return { error: "Informe o CEP do endereço de cobrança." }
+  }
+  if (!billingAddress.logradouro) return { error: "Informe o endereço de cobrança." }
+  if (!billingAddress.numero) return { error: "Informe o número do endereço de cobrança." }
+  if (!billingAddress.bairro) return { error: "Informe o bairro do endereço de cobrança." }
+  if (!billingAddress.cidade) return { error: "Informe a cidade do endereço de cobrança." }
+  if (!billingAddress.uf) return { error: "Informe a UF do endereço de cobrança." }
+
   if (tipoPessoa === "pj") {
     const cnpj = String(body.documento ?? "").replace(/\D/g, "")
     const responsibleName = String(body.responsavel ?? body.nome ?? "").trim()
     const businessSegment =
+      principalCnaeDescricao(body.empresas?.[0]?.cnaes) ||
       principalCnaeDescricao(
         body.cnaesAdicionais?.map((c) => ({ descricao: c.descricao, principal: false })),
-      ) || "Licitações públicas"
+      ) ||
+      "Licitações públicas"
 
     return {
       customer_type: "empresa",
@@ -64,6 +98,7 @@ export function mapSiteSignupToLiticaProTrial(
       responsible_name: responsibleName,
       business_segment: businessSegment,
       company_name: String(body.razaoSocial ?? "").trim(),
+      billing_address: billingAddress,
       auto_provision: true,
       send_welcome_email: false,
       activity_actor: { displayName: "Site Xpress Solutions" },
@@ -76,6 +111,13 @@ export function mapSiteSignupToLiticaProTrial(
     cnpj: String(empresa.cnpj ?? "").replace(/\D/g, ""),
     razao_social: String(empresa.razaoSocial ?? "").trim(),
     ramo_atuacao: principalCnaeDescricao(empresa.cnaes) || "Licitações públicas",
+    cnaes: Array.isArray(empresa.cnaes)
+      ? empresa.cnaes.map((cnae) => ({
+          codigo: String(cnae.codigo ?? ""),
+          descricao: String(cnae.descricao ?? ""),
+          principal: Boolean(cnae.principal),
+        }))
+      : [],
   }))
 
   return {
@@ -88,6 +130,7 @@ export function mapSiteSignupToLiticaProTrial(
     full_name: fullName,
     birth_date: String(body.dataNascimento ?? "").trim(),
     linked_cnpjs: linkedCnpjs,
+    billing_address: billingAddress,
     auto_provision: true,
     send_welcome_email: false,
     activity_actor: { displayName: "Site Xpress Solutions" },

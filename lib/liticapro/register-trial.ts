@@ -19,6 +19,7 @@ import {
 } from "@/lib/db/repositories/contracts.repository"
 import { insertNotification } from "@/lib/db/repositories/notifications.repository"
 import { findOrCreateProductFromCatalog } from "@/lib/db/repositories/products.repository"
+import { buildGovFromSiteLinkedCompany } from "@/lib/liticapro/build-gov-from-site"
 import { fetchCnpjFromGov } from "@/lib/liticapro/cnpj-lookup"
 import { LITICAPRO_TRIAL_DAYS } from "@/lib/liticapro/constants"
 import {
@@ -51,7 +52,20 @@ export type RegisterLiticaProTrialInput = {
   cpf?: string
   full_name?: string
   birth_date?: string
-  linked_cnpjs?: Array<{ cnpj?: string; razao_social?: string; ramo_atuacao?: string }>
+  linked_cnpjs?: Array<{
+    cnpj?: string
+    razao_social?: string
+    ramo_atuacao?: string
+    cnaes?: Array<{ codigo?: string; descricao?: string; principal?: boolean }>
+  }>
+  billing_address?: {
+    cep?: string
+    logradouro?: string
+    numero?: string
+    bairro?: string
+    cidade?: string
+    uf?: string
+  }
   client_id?: string | null
   dados_desenvolvedor?: LiticaProDeveloperCredentials | null
   comercial_display_name?: string | null
@@ -172,26 +186,81 @@ export async function registerLiticaProTrial(
     liticaproData.responsible_name = responsibleName
     liticaproData.business_segment = businessSegment
     liticaproData.company_gov = companyGov ?? null
+
+    const billing = input.billing_address
+    if (billing) {
+      address = billing.logradouro?.trim() || address
+      number = billing.numero?.trim() || number
+      district = billing.bairro?.trim() || district
+      city = billing.cidade?.trim() || city
+      state = billing.uf?.trim().toUpperCase() || state
+      zipCode = String(billing.cep ?? "").replace(/\D/g, "") || zipCode
+      liticaproData.billing_address = billing
+    }
   } else {
     const cpf = String(input.cpf ?? "").replace(/\D/g, "")
     const fullName = String(input.full_name ?? "").trim()
     const birthDate = String(input.birth_date ?? "").trim()
-    const linkedCnpjs = Array.isArray(input.linked_cnpjs) ? input.linked_cnpjs : []
+    const linkedCnpjsInput = Array.isArray(input.linked_cnpjs) ? input.linked_cnpjs : []
+    const billing = input.billing_address
 
     if (cpf.length !== 11) return fail("CPF inválido.", 400)
     if (!fullName) return fail("Nome completo é obrigatório.", 400)
     if (!birthDate) return fail("Data de nascimento é obrigatória.", 400)
-    if (linkedCnpjs.length === 0) return fail("Informe ao menos um CNPJ vinculado.", 400)
-    if (!linkedCnpjs.some((x) => x?.razao_social || x?.cnpj)) {
+    if (linkedCnpjsInput.length === 0) return fail("Informe ao menos um CNPJ vinculado.", 400)
+    if (!linkedCnpjsInput.some((x) => x?.razao_social || x?.cnpj)) {
       return fail("Consulte pelo menos um CNPJ válido na Receita Federal.", 400)
     }
-    const missingRamo = linkedCnpjs.some((x) => !(String(x.ramo_atuacao ?? "").trim()))
+    const missingRamo = linkedCnpjsInput.some((x) => !(String(x.ramo_atuacao ?? "").trim()))
     if (missingRamo) return fail("Informe o ramo de atuação para cada CNPJ vinculado.", 400)
+    if (!billing?.cep || String(billing.cep).replace(/\D/g, "").length !== 8) {
+      return fail("Informe o CEP do endereço de cobrança.", 400)
+    }
+    if (!billing.logradouro?.trim()) return fail("Informe o endereço de cobrança.", 400)
+    if (!billing.numero?.trim()) return fail("Informe o número do endereço de cobrança.", 400)
+    if (!billing.bairro?.trim()) return fail("Informe o bairro do endereço de cobrança.", 400)
+    if (!billing.cidade?.trim()) return fail("Informe a cidade do endereço de cobrança.", 400)
+    if (!billing.uf?.trim()) return fail("Informe a UF do endereço de cobrança.", 400)
+
+    const enrichedLinkedCnpjs = await Promise.all(
+      linkedCnpjsInput.map(async (item) => {
+        const cnpj = String(item.cnpj ?? "").replace(/\D/g, "")
+        if (cnpj.length === 14) {
+          const gov = await fetchCnpjFromGov(cnpj)
+          if (gov) {
+            return {
+              ...gov,
+              razao_social: item.razao_social || gov.razao_social,
+              ramo_atuacao: item.ramo_atuacao,
+            }
+          }
+        }
+
+        const fromSite = buildGovFromSiteLinkedCompany(item)
+        if (fromSite) {
+          return {
+            ...fromSite,
+            ramo_atuacao: item.ramo_atuacao,
+          }
+        }
+
+        return item
+      }),
+    )
 
     cpfCnpjRaw = cpf
     clientName = fullName
+    address = billing.logradouro?.trim() ?? null
+    number = billing.numero?.trim() ?? null
+    district = billing.bairro?.trim() ?? null
+    city = billing.cidade?.trim() ?? null
+    state = billing.uf?.trim().toUpperCase() ?? null
+    zipCode = String(billing.cep ?? "").replace(/\D/g, "") || null
+
     liticaproData.birth_date = birthDate
-    liticaproData.linked_cnpjs = linkedCnpjs
+    liticaproData.linked_cnpjs = enrichedLinkedCnpjs
+    liticaproData.business_segment = String(enrichedLinkedCnpjs[0]?.ramo_atuacao ?? "").trim()
+    liticaproData.billing_address = billing
   }
 
   const linkedClientId = String(input.client_id ?? "").trim() || null
