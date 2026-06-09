@@ -246,7 +246,6 @@ export function LiticaProContractDetailView({
                     <div className="space-y-1">
                       <LiticaProWelcomeEmailBadge
                         info={welcomeEmail}
-                        showResendButton
                         onResend={onResendWelcomeEmail}
                         resending={resendingWelcomeEmail}
                       />

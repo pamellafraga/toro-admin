@@ -1196,7 +1196,6 @@ export default function ProductDetailPage() {
                               info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
                               compact
                               className="mt-1"
-                              showResendButton
                               onResend={() => handleResendWelcomeEmail(contract)}
                               resending={resendingWelcomeId === contract.id}
                             />
@@ -1282,7 +1281,6 @@ export default function ProductDetailPage() {
                               info={getLiticaProWelcomeEmailInfo((contract as TrialContractRow).liticapro_meta)}
                               compact
                               className="mt-1"
-                              showResendButton
                               onResend={() => handleResendWelcomeEmail(contract)}
                               resending={resendingWelcomeId === contract.id}
                             />
@@ -1712,6 +1710,21 @@ export default function ProductDetailPage() {
                       </div>
                     </div>
                   )}
+                  <div className="rounded-lg border border-border/60 bg-background/80 p-3 space-y-2">
+                    <p className="text-[11px] font-semibold text-primary uppercase tracking-wide">
+                      E-mail de acesso à ferramenta
+                    </p>
+                    <LiticaProWelcomeEmailBadge
+                      info={getLiticaProWelcomeEmailInfo((editingContract as TrialContractRow).liticapro_meta)}
+                      onResend={() => handleResendWelcomeEmail(editingContract)}
+                      resending={resendingWelcomeId === editingContract.id}
+                    />
+                    {!getLiticaProWelcomeEmailInfo((editingContract as TrialContractRow).liticapro_meta).provisioned ? (
+                      <p className="text-[11px] text-muted-foreground">
+                        O reenvio ficará disponível após o provisionamento na LicitaPregão.
+                      </p>
+                    ) : null}
+                  </div>
                 </div>
               )}
 

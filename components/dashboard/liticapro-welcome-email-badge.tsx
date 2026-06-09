@@ -10,16 +10,17 @@ export function LiticaProWelcomeEmailBadge({
   className,
   onResend,
   resending = false,
-  showResendButton = false,
+  showResendButton = true,
 }: {
   info: LiticaProWelcomeEmailInfo
   compact?: boolean
   className?: string
   onResend?: () => void
   resending?: boolean
+  /** Exibe botão de reenvio quando há handler (padrão: sim). */
   showResendButton?: boolean
 }) {
-  const canResend = showResendButton && info.provisioned && Boolean(onResend)
+  const canResend = Boolean(onResend) && showResendButton && info.provisioned
 
   const resendButton = canResend ? (
     <button
