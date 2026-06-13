@@ -27,7 +27,7 @@ import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states
 import { ClickableStatusBadge } from "@/components/dashboard/clickable-status-badge"
 import { ORIGEM_CAPTACAO_OPCOES, origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { formatCpfCnpj, formatPhone } from "@/lib/format/br"
-import type { CnpjGovData } from "@/lib/liticapro/types"
+import type { CnpjGovData, LiticaProSaaSUser } from "@/lib/liticapro/types"
 import {
   buildDashboardMonthOptions,
   extendTrialEndsAt,
@@ -270,6 +270,7 @@ export default function ProductDetailPage() {
   })
   const [editCompanyGov, setEditCompanyGov] = useState<CnpjGovData | null>(null)
   const [editLinkedCnpjs, setEditLinkedCnpjs] = useState<Array<Record<string, unknown>>>([])
+  const [editSaasUsers, setEditSaasUsers] = useState<LiticaProSaaSUser[]>([])
   const [loadingEditCnpj, setLoadingEditCnpj] = useState(false)
   const [savingEdit, setSavingEdit] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -626,6 +627,7 @@ export default function ProductDetailPage() {
         responsible_name?: string
         company_gov?: CnpjGovData
         linked_cnpjs?: Array<Record<string, unknown>>
+        saas_users?: LiticaProSaaSUser[]
         billing_address?: {
           cep?: string
           logradouro?: string
@@ -663,6 +665,7 @@ export default function ProductDetailPage() {
 
     setEditCompanyGov(companyGov)
     setEditLinkedCnpjs(Array.isArray(dev?.linked_cnpjs) ? dev.linked_cnpjs : [])
+    setEditSaasUsers(Array.isArray(dev?.saas_users) ? dev.saas_users : [])
     setEditForm({
       client_name: c?.name ?? "",
       client_cpf_cnpj: formatCpfCnpj(c?.cpf_cnpj ?? ""),
@@ -1446,7 +1449,21 @@ export default function ProductDetailPage() {
         const trialEndLabel = formatContractDate(
           resolveTrialEndsAt(editingContract as Contract & { trial_ends_at?: string | null })?.toISOString(),
         )
-        const cadastroLabel = formatContractDate(editingContract.created_at)
+        const trialMeta = (editingContract as TrialContractRow).liticapro_meta as
+          | {
+              courtesy_extended_at?: string | null
+              courtesy_extension_days?: number | null
+              previous_trial_ends_at?: string | null
+            }
+          | null
+          | undefined
+        const courtesyExtensionLabel = trialMeta?.courtesy_extended_at
+          ? `+${trialMeta.courtesy_extension_days ?? 7} dias em ${formatContractDate(trialMeta.courtesy_extended_at)}${
+              trialMeta.previous_trial_ends_at
+                ? ` (antes: ${formatContractDate(trialMeta.previous_trial_ends_at)})`
+                : ""
+            }`
+          : undefined
         const welcomeEmail = getLiticaProWelcomeEmailInfo(
           (editingContract as TrialContractRow).liticapro_meta,
         )
@@ -1482,6 +1499,7 @@ export default function ProductDetailPage() {
                   linkedCnpjs={editLinkedCnpjs}
                   cadastroLabel={cadastroLabel}
                   trialEndLabel={trialEndLabel}
+                  courtesyExtensionLabel={courtesyExtensionLabel}
                   productStatusLabel={productStatusLabel}
                   paymentLabel={paymentLabel}
                   origemCaptacao={editForm.origem_captacao}
@@ -1490,6 +1508,7 @@ export default function ProductDetailPage() {
                   devEmpresa={editForm.dev_empresa}
                   devUsuario={editForm.dev_usuario}
                   devSenha={editForm.dev_senha}
+                  saasUsers={editSaasUsers}
                   showDev={isAdmin}
                   welcomeEmail={welcomeEmail}
                   onResendWelcomeEmail={

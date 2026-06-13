@@ -12,6 +12,63 @@
 
 Dashboard administrativa completa para gerenciamento de locações SaaS, construída com **Next.js 15**, **React 19**, **TypeScript**, **TailwindCSS**, **Supabase** e interface nas cores da Xpress Solutions (azul #005176, fundo claro #e5e9f0).
 
+---
+
+## 🔗 Ecossistema Xpress — 3 repositórios conectados
+
+Este painel é o **hub central** do ecossistema Xpress Solutions. Três projetos trabalham juntos:
+
+| Repositório | Pasta local (Desktop) | Papel | URL em produção |
+|---|---|---|---|
+| **Site institucional** | `site/xpresssolutions-main` | Landing pages, cadastro trial LicitaPregão | [xpresssolutions.com.br](https://xpresssolutions.com.br) |
+| **Dashboard admin** *(este projeto)* | `xpress-dashboard` | Clientes, contratos, financeiro, NF-e, comissões | [adm.xpresssolutions.com.br](https://adm.xpresssolutions.com.br) |
+| **LicitaPregão (SaaS)** | `LicitaPregão/licitapro-main` | App do cliente — monitoramento de licitações | [licitapregao.xpresssolutions.com.br](https://licitapregao.xpresssolutions.com.br) |
+
+### Fluxo integrado — cadastro trial LicitaPregão (7 dias)
+
+```mermaid
+sequenceDiagram
+  participant Site as Site institucional
+  participant Dash as Dashboard admin
+  participant SaaS as LicitaPregão
+  participant Email as E-mail (Resend/SMTP)
+
+  Site->>Dash: POST /api/public/contracts/register-from-site
+  Dash->>Dash: Cria cliente + contrato (Supabase)
+  Dash->>SaaS: POST /api/provision
+  SaaS->>SaaS: Cria empresa + usuário (PostgreSQL)
+  Dash->>Email: E-mail de boas-vindas (credenciais)
+  Site->>Email: E-mail de confirmação (opcional, via site)
+```
+
+1. Cliente preenche o wizard em `/licitapregao/cadastro` no site.
+2. O site chama `POST /api/public/contracts/register-from-site` neste dashboard (autenticado com `SITE_API_KEY`).
+3. O dashboard cria **cliente** e **contrato** no Supabase (produto `liticapro` / LicitaPregão, trial 7 dias).
+4. O dashboard provisiona o tenant no LicitaPregão via `POST /api/provision` (token `LICITAPREGAO_API_KEY`).
+5. E-mail de boas-vindas com login, senha e link do portal.
+
+### Sincronização bidirecional admin ↔ SaaS
+
+| Direção | Gatilho | Endpoint |
+|---|---|---|
+| **Admin → LicitaPregão** | Edição de cliente/contrato no painel | `PATCH {LICITAPREGAO_API_URL}/api/sync-tenant` |
+| **LicitaPregão → Admin** | Alterações nas Configurações do cliente | `PATCH /api/public/contracts/sync-from-saas` |
+
+Rotas auxiliares: `POST /api/public/contracts/resend-welcome-email`, `POST /api/public/contracts/resync-to-saas`, `POST /api/public/contracts/pull-from-saas`.
+
+### Tokens compartilhados (`.env`)
+
+| Este dashboard | Site (`xpresssolutions-main`) | LicitaPregão (`licitapro-main`) |
+|---|---|---|
+| `SITE_API_KEY` | `DASHBOARD_API_KEY` *(mesmo valor)* | `DASHBOARD_API_KEY` *(mesmo valor)* |
+| `LICITAPREGAO_API_KEY` | — | `PROVISION_API_KEY` *(mesmo valor)* |
+| `LICITAPREGAO_API_URL` | — | — |
+| `LICITAPREGAO_LOGIN_URL` | `LICITAPREGAO_LOGIN_URL` | `LICITAPREGAO_LOGIN_URL` |
+
+Consulte `.env.example` para a lista completa. O que ainda falta (Banco Inter, checkout Segura, etc.) está no **[ROADMAP.md](./ROADMAP.md)**.
+
+---
+
 ## ✨ Características Principais
 
 - 🎨 **Design** — Interface com paleta azul escuro (#005176), cards em destaque, sidebar e componentes com estados de hover e foco consistentes

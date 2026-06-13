@@ -4,3 +4,4 @@ export const BR_UFS = [
 ] as const
 
 export const LITICAPRO_TRIAL_DAYS = 7
+export const LITICAPRO_COURTESY_EXTENSION_DAYS = 7

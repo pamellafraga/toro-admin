@@ -27,7 +27,7 @@ import {
   parseDeveloperCredentials,
   readDeveloperCredentialsFromLiticaProData,
 } from "@/lib/liticapro/developer-credentials"
-import { buildLiticaProCredentials } from "@/lib/liticapro/generate-credentials"
+import { buildLiticaProCredentials, buildLiticaProUserCredentials } from "@/lib/liticapro/generate-credentials"
 import {
   provisionLiticaProTenant,
   type ProvisionLiticaProResult,
@@ -35,10 +35,11 @@ import {
 import { syncLiticaProTenantAfterAdminEdit } from "@/lib/liticapro/sync-licitapregao"
 import { assertLiticaProTrialEligible } from "@/lib/liticapro/trial-eligibility"
 import { computeTrialEndsAt } from "@/lib/liticapro/trial"
-import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
+import type { LiticaProDeveloperCredentials, LiticaProSaaSUser } from "@/lib/liticapro/types"
 import { getProductBySlug } from "@/lib/products/catalog"
 import { logActivity } from "@/lib/activity-log"
 import { sendLiticaProWelcomeEmail } from "@/lib/send-licitapregao-welcome-email"
+import { sendLiticaProCompanyWelcomeEmails } from "@/lib/liticapro/send-company-welcome-emails"
 
 export type RegisterLiticaProTrialInput = {
   customer_type: "empresa" | "profissional_liberal"
@@ -68,6 +69,13 @@ export type RegisterLiticaProTrialInput = {
     cidade?: string
     uf?: string
   }
+  company_users?: Array<{
+    cpf: string
+    full_name: string
+    birth_date: string
+    email: string
+    is_owner?: boolean
+  }>
   client_id?: string | null
   dados_desenvolvedor?: LiticaProDeveloperCredentials | null
   comercial_display_name?: string | null
@@ -157,7 +165,9 @@ export async function registerLiticaProTrial(
 
   if (customerType === "empresa") {
     const cnpj = String(input.cnpj ?? "").replace(/\D/g, "")
-    const responsibleName = String(input.responsible_name ?? "").trim()
+    const companyUsersInput = Array.isArray(input.company_users) ? input.company_users : []
+    const responsibleName =
+      companyUsersInput[0]?.full_name?.trim() || String(input.responsible_name ?? "").trim()
     const businessSegment = String(input.business_segment ?? "").trim()
     let companyGov = input.company_gov
 
@@ -174,6 +184,9 @@ export async function registerLiticaProTrial(
     }
     if (!responsibleName) return fail("Nome do responsável é obrigatório.", 400)
     if (!businessSegment) return fail("Ramo de atuação é obrigatório.", 400)
+    if (companyUsersInput.length === 0) {
+      return fail("Informe ao menos um usuário da plataforma.", 400)
+    }
 
     cpfCnpjRaw = cnpj
     clientName = String(companyGov.razao_social || input.company_name || "").trim() || cnpj
@@ -188,6 +201,7 @@ export async function registerLiticaProTrial(
     liticaproData.responsible_name = responsibleName
     liticaproData.business_segment = businessSegment
     liticaproData.company_gov = companyGov ?? null
+    liticaproData.company_users = companyUsersInput
 
     const billing = input.billing_address
     if (billing) {
@@ -309,6 +323,14 @@ export async function registerLiticaProTrial(
     email,
     linked_cnpjs: linkedCnpjDigits,
     excludeClientId: existing?.id ?? null,
+    user_emails:
+      customerType === "empresa" && Array.isArray(input.company_users)
+        ? input.company_users.map((u) => u.email)
+        : undefined,
+    user_cpfs:
+      customerType === "empresa" && Array.isArray(input.company_users)
+        ? input.company_users.map((u) => u.cpf)
+        : undefined,
   })
   if (!trialEligibility.ok) {
     return fail(trialEligibility.error, trialEligibility.status)
@@ -395,6 +417,39 @@ export async function registerLiticaProTrial(
     existing: readDeveloperCredentialsFromLiticaProData(liticaproData),
   })
 
+  let saasUsers: LiticaProSaaSUser[] | undefined
+  if (customerType === "empresa" && Array.isArray(input.company_users)) {
+    const existingSaasUsers = Array.isArray(liticaproData.saas_users)
+      ? (liticaproData.saas_users as LiticaProSaaSUser[])
+      : []
+    saasUsers = input.company_users.map((user, index) => {
+      const existingUser = existingSaasUsers.find(
+        (row) =>
+          row.email?.trim().toLowerCase() === user.email.trim().toLowerCase() ||
+          row.cpf.replace(/\D/g, "") === user.cpf.replace(/\D/g, ""),
+      )
+      const userCredentials =
+        index === 0
+          ? credentials
+          : buildLiticaProUserCredentials({
+              empresa_nome: clientName,
+              full_name: user.full_name,
+              existing: existingUser?.credentials ?? null,
+            })
+      return {
+        cpf: user.cpf.replace(/\D/g, ""),
+        full_name: user.full_name.trim(),
+        birth_date: user.birth_date.trim(),
+        email: user.email.trim().toLowerCase(),
+        is_owner: Boolean(user.is_owner),
+        credentials: userCredentials,
+        saas_usuario_id: existingUser?.saas_usuario_id,
+        welcome_email_sent_at: existingUser?.welcome_email_sent_at ?? null,
+      }
+    })
+    liticaproData.saas_users = saasUsers
+  }
+
   liticaproData.dados_desenvolvedor = credentials
 
   await updateClient(clientId, {
@@ -438,6 +493,17 @@ export async function registerLiticaProTrial(
     "https://licitapregao.xpresssolutions.com.br/login"
 
   if (input.auto_provision !== false) {
+    const additionalUsers =
+      customerType === "empresa" && saasUsers && saasUsers.length > 1
+        ? saasUsers.slice(1).map((user) => ({
+            email: user.email,
+            cpf: user.cpf,
+            full_name: user.full_name,
+            birth_date: user.birth_date,
+            credentials: user.credentials,
+          }))
+        : undefined
+
     provision = await provisionLiticaProTenant({
       customer_type: customerType,
       email,
@@ -445,6 +511,7 @@ export async function registerLiticaProTrial(
       trial_ends_at: trialEnds.toISOString(),
       states_of_interest: statesOfInterest,
       credentials,
+      additional_users: additionalUsers,
       external_client_id: clientId,
       external_contract_id: contract.id,
       cnpj: customerType === "empresa" ? cpfCnpjRaw : null,
@@ -468,15 +535,42 @@ export async function registerLiticaProTrial(
       linked_cnpjs: Array.isArray(liticaproData.linked_cnpjs)
         ? (liticaproData.linked_cnpjs as Array<Record<string, unknown>>)
         : undefined,
+      company_users:
+        customerType === "empresa" && saasUsers
+          ? saasUsers.map((user) => ({
+              cpf: user.cpf,
+              full_name: user.full_name,
+              birth_date: user.birth_date,
+              email: user.email,
+            }))
+          : undefined,
     })
 
     if (provision.ok) {
       loginUrl = provision.login_url
+      const saasUsuarioIds = [
+        provision.usuario_id,
+        ...(provision.provisioned_users?.map((row) => row.usuario_id).filter(Boolean) ?? []),
+      ].filter(Boolean)
+
+      if (saasUsers) {
+        const updatedSaasUsers = saasUsers.map((user, index) => ({
+          ...user,
+          saas_usuario_id: saasUsuarioIds[index] ?? user.saas_usuario_id,
+        }))
+        liticaproData.saas_users = updatedSaasUsers
+        await updateClient(clientId, {
+          ...clientPayload,
+          liticapro_data: liticaproData,
+        })
+      }
+
       await updateContract(contract.id, {
         liticapro_meta: {
           ...liticaproMeta,
           saas_empresa_id: provision.empresa_id,
           saas_usuario_id: provision.usuario_id,
+          saas_usuario_ids: saasUsuarioIds,
           saas_provisioned_at: new Date().toISOString(),
         },
       })
@@ -500,32 +594,68 @@ export async function registerLiticaProTrial(
       ? {
           saas_empresa_id: provision.empresa_id,
           saas_usuario_id: provision.usuario_id,
+          saas_usuario_ids: [
+            provision.usuario_id,
+            ...(provision.provisioned_users?.map((row) => row.usuario_id).filter(Boolean) ?? []),
+          ].filter(Boolean),
           saas_provisioned_at: new Date().toISOString(),
         }
       : {}),
   }
 
-  if (input.send_welcome_email !== false && email && provision?.ok) {
-    const emailResult = await sendLiticaProWelcomeEmail({
-      to: email,
-      clientName,
-      credentials,
-      loginUrl,
-      customerType,
-      statesOfInterest: statesOfInterest,
-    })
-    welcomeEmailSent = emailResult.ok
-    welcomeEmailError = emailResult.ok ? null : emailResult.error ?? "Falha ao enviar e-mail."
+  if (input.send_welcome_email !== false && provision?.ok) {
+    if (customerType === "empresa" && saasUsers && saasUsers.length > 0) {
+      const emailBatch = await sendLiticaProCompanyWelcomeEmails({
+        companyName: clientName,
+        users: saasUsers,
+        loginUrl,
+        statesOfInterest,
+      })
 
-    if (emailResult.ok) {
-      contractMeta = {
-        ...contractMeta,
-        welcome_email_sent_at: new Date().toISOString(),
-        welcome_email_channel: emailResult.channel ?? null,
+      welcomeEmailSent = emailBatch.sentCount > 0
+      welcomeEmailError = emailBatch.errors[0] ?? null
+
+      if (emailBatch.sentCount > 0) {
+        const sentAt = new Date().toISOString()
+        saasUsers = saasUsers.map((user) => {
+          const sent = emailBatch.sentEmails.has(user.email.trim().toLowerCase())
+          return sent ? { ...user, welcome_email_sent_at: sentAt } : user
+        })
+        liticaproData.saas_users = saasUsers
+        contractMeta = {
+          ...contractMeta,
+          welcome_email_sent_at: sentAt,
+          welcome_email_channel: emailBatch.channel ?? null,
+        }
+        await updateClient(clientId, {
+          ...clientPayload,
+          liticapro_data: liticaproData,
+        })
+        await updateContract(contract.id, { liticapro_meta: contractMeta })
+      } else if (welcomeEmailError) {
+        console.error("[register-trial] Falha no e-mail de boas-vindas:", welcomeEmailError)
       }
-      await updateContract(contract.id, { liticapro_meta: contractMeta })
     } else {
-      console.error("[register-trial] Falha no e-mail de boas-vindas:", welcomeEmailError)
+      const emailResult = await sendLiticaProWelcomeEmail({
+        to: email,
+        clientName,
+        credentials,
+        loginUrl,
+        customerType,
+        statesOfInterest,
+      })
+      welcomeEmailSent = emailResult.ok
+      welcomeEmailError = emailResult.ok ? null : emailResult.error ?? "Falha ao enviar e-mail."
+      if (emailResult.ok) {
+        contractMeta = {
+          ...contractMeta,
+          welcome_email_sent_at: new Date().toISOString(),
+          welcome_email_channel: emailResult.channel ?? null,
+        }
+        await updateContract(contract.id, { liticapro_meta: contractMeta })
+      } else {
+        console.error("[register-trial] Falha no e-mail de boas-vindas:", welcomeEmailError)
+      }
     }
   }
 

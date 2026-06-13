@@ -258,6 +258,36 @@ export async function backfillLiticaProTrialEndsAt(): Promise<number> {
   return rows.length
 }
 
+export async function findLiticaProTrialsForCourtesyExtension() {
+  return queryMany<{
+    id: string
+    client_id: string
+    trial_ends_at: string
+    client_name: string
+    client_email: string | null
+    status: string
+    payment_status: string
+    liticapro_meta: Record<string, unknown> | null
+    created_at: string
+  }>(
+    `SELECT c.id, c.client_id,
+            COALESCE(c.trial_ends_at, c.created_at + interval '7 days') AS trial_ends_at,
+            cl.name AS client_name, cl.email AS client_email,
+            c.status, c.payment_status, c.liticapro_meta, c.created_at
+     FROM contracts c
+     JOIN clients cl ON cl.id = c.client_id
+     JOIN products p ON p.id = c.product_id
+     WHERE lower(p.slug) = 'liticapro'
+       AND COALESCE(c.trial_ends_at, c.created_at + interval '7 days')::date < CURRENT_DATE
+       AND (
+         c.payment_status IN ('trial', 'trial_expirado')
+         OR c.status IN ('trial', 'trial_encerrado')
+       )
+       AND COALESCE(c.liticapro_meta->>'courtesy_extended_at', '') = ''
+     ORDER BY c.trial_ends_at ASC`,
+  )
+}
+
 export async function findExpiredLiticaProTrials() {
   return queryMany<{
     id: string

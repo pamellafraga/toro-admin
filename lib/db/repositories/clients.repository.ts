@@ -219,6 +219,22 @@ export async function findClientByPhoneDigits(
   )
 }
 
+export async function findClientByLiticaProUserEmail(
+  emailNormalized: string,
+): Promise<{ id: string; name: string; email: string | null } | null> {
+  return queryOne<{ id: string; name: string; email: string | null }>(
+    `SELECT id, name, email FROM clients
+     WHERE lower(trim(COALESCE(email, ''))) = $1
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(liticapro_data->'saas_users', '[]'::jsonb)) AS su
+          WHERE lower(trim(COALESCE(su->>'email', ''))) = $1
+        )
+     LIMIT 1`,
+    [emailNormalized],
+  )
+}
+
 export async function findClientByEmailNormalized(
   emailNormalized: string,
   excludeClientId?: string | null,

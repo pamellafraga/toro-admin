@@ -1,12 +1,13 @@
 import {
   findClientByEmailNormalized,
+  findClientByLiticaProUserEmail,
   getClientLiticaProData,
 } from "@/lib/db/repositories/clients.repository"
 import { findLiticaProContractByClientId } from "@/lib/db/repositories/contracts.repository"
 import { findOrCreateProductFromCatalog } from "@/lib/db/repositories/products.repository"
 import { readDeveloperCredentialsFromLiticaProData } from "@/lib/liticapro/developer-credentials"
 import { getProductBySlug } from "@/lib/products/catalog"
-import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
+import type { LiticaProDeveloperCredentials, LiticaProSaaSUser } from "@/lib/liticapro/types"
 
 export type ResendWelcomeFromSiteSuccess = {
   ok: true
@@ -41,7 +42,9 @@ export async function getLiticaProAccessForResend(
     return { ok: false, error: "E-mail inválido.", status: 400 }
   }
 
-  const client = await findClientByEmailNormalized(normalized)
+  const client =
+    (await findClientByLiticaProUserEmail(normalized)) ??
+    (await findClientByEmailNormalized(normalized))
   if (!client) {
     return {
       ok: false,
@@ -67,7 +70,13 @@ export async function getLiticaProAccessForResend(
 
   const clientData = await getClientLiticaProData(client.id)
   const liticaproData = clientData?.liticapro_data ?? null
-  const credentials = readDeveloperCredentialsFromLiticaProData(liticaproData)
+  const saasUsers = Array.isArray(liticaproData?.saas_users)
+    ? (liticaproData.saas_users as LiticaProSaaSUser[])
+    : []
+  const saasUser = saasUsers.find((row) => row.email.trim().toLowerCase() === normalized)
+  const credentials =
+    saasUser?.credentials ??
+    readDeveloperCredentialsFromLiticaProData(liticaproData)
 
   if (!credentials?.empresa || !credentials?.usuario || !credentials?.senha) {
     return {
@@ -86,7 +95,7 @@ export async function getLiticaProAccessForResend(
 
   return {
     ok: true,
-    client_name: client.name,
+    client_name: saasUser?.full_name ?? client.name,
     customer_type: parseCustomerType(liticaproData?.customer_type),
     states_of_interest: parseStatesOfInterest(liticaproData?.states_of_interest),
     credentials,

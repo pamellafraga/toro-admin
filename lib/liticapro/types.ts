@@ -4,6 +4,17 @@ export interface LiticaProDeveloperCredentials {
   senha: string
 }
 
+export interface LiticaProSaaSUser {
+  cpf: string
+  full_name: string
+  birth_date: string
+  email: string
+  is_owner?: boolean
+  credentials: LiticaProDeveloperCredentials
+  saas_usuario_id?: string
+  welcome_email_sent_at?: string | null
+}
+
 export interface CnpjGovData {
   cnpj: string
   razao_social: string

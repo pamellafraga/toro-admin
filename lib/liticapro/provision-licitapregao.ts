@@ -7,6 +7,13 @@ export type ProvisionLiticaProInput = {
   trial_ends_at: string
   states_of_interest: string[]
   credentials: LiticaProDeveloperCredentials
+  additional_users?: Array<{
+    email: string
+    cpf?: string
+    full_name?: string
+    birth_date?: string
+    credentials: LiticaProDeveloperCredentials
+  }>
   external_client_id: string
   external_contract_id: string
   cnpj?: string | null
@@ -24,6 +31,12 @@ export type ProvisionLiticaProInput = {
   business_segment?: string
   company_gov?: CnpjGovData | null
   linked_cnpjs?: Array<Record<string, unknown>>
+  company_users?: Array<{
+    cpf: string
+    full_name: string
+    birth_date: string
+    email: string
+  }>
 }
 
 export type ProvisionLiticaProResult =
@@ -32,6 +45,7 @@ export type ProvisionLiticaProResult =
       empresa_id: string
       usuario_id: string
       login_url: string
+      provisioned_users?: Array<{ email: string; usuario_id: string }>
     }
   | {
       ok: false
@@ -76,6 +90,13 @@ export async function provisionLiticaProTenant(
         trial_ends_at: input.trial_ends_at,
         states_of_interest: input.states_of_interest,
         credentials: input.credentials,
+        additional_users: input.additional_users?.map((user) => ({
+          email: user.email,
+          cpf: user.cpf,
+          full_name: user.full_name,
+          birth_date: user.birth_date,
+          credentials: user.credentials,
+        })),
         external_client_id: input.external_client_id,
         external_contract_id: input.external_contract_id,
         cnpj: input.cnpj ?? null,
@@ -86,6 +107,7 @@ export async function provisionLiticaProTenant(
         business_segment: input.business_segment ?? undefined,
         company_gov: input.company_gov ?? null,
         linked_cnpjs: input.linked_cnpjs ?? undefined,
+        company_users: input.company_users ?? undefined,
       }),
     })
 
@@ -95,6 +117,7 @@ export async function provisionLiticaProTenant(
       empresa_id?: string
       usuario_id?: string
       login_url?: string
+      provisioned_users?: Array<{ email?: string; usuario_id?: string }>
     }
 
     if (!res.ok) {
@@ -109,6 +132,12 @@ export async function provisionLiticaProTenant(
       empresa_id: String(data.empresa_id ?? ""),
       usuario_id: String(data.usuario_id ?? ""),
       login_url: data.login_url?.trim() || loginUrl,
+      provisioned_users: Array.isArray(data.provisioned_users)
+        ? data.provisioned_users.map((row) => ({
+            email: String(row.email ?? ""),
+            usuario_id: String(row.usuario_id ?? ""),
+          }))
+        : undefined,
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erro de rede ao provisionar LicitaPregão."

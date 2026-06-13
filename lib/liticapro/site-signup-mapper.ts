@@ -28,6 +28,13 @@ type SiteSignupBody = {
   responsavel?: string
   estado?: string
   cnaesAdicionais?: Array<{ codigo?: string; descricao?: string }>
+  usuarios?: Array<{
+    cpf?: string
+    nomeCompleto?: string
+    dataNascimento?: string
+    email?: string
+    is_owner?: boolean
+  }>
 }
 
 function principalCnaeDescricao(
@@ -66,7 +73,7 @@ export function mapSiteSignupToLiticaProTrial(
     .filter(Boolean)
   const billingAddress = mapBillingAddress(body.endereco)
 
-  if (!email) return { error: "E-mail é obrigatório." }
+  if (tipoPessoa === "pf" && !email) return { error: "E-mail é obrigatório." }
   if (!phone) return { error: "Telefone é obrigatório." }
   if (statesOfInterest.length === 0) return { error: "Selecione ao menos um estado." }
 
@@ -81,7 +88,42 @@ export function mapSiteSignupToLiticaProTrial(
 
   if (tipoPessoa === "pj") {
     const cnpj = String(body.documento ?? "").replace(/\D/g, "")
-    const responsibleName = String(body.responsavel ?? body.nome ?? "").trim()
+    const usuariosInput = Array.isArray(body.usuarios) ? body.usuarios : []
+    if (usuariosInput.length === 0) {
+      return { error: "Informe ao menos um usuário da plataforma." }
+    }
+
+    const cpfSet = new Set<string>()
+    const emailSet = new Set<string>()
+    const companyUsers = []
+    for (const usuario of usuariosInput) {
+      const cpf = String(usuario.cpf ?? "").replace(/\D/g, "")
+      const fullName = String(usuario.nomeCompleto ?? "").trim()
+      const birthDate = String(usuario.dataNascimento ?? "").trim()
+      const userEmail = String(usuario.email ?? "").trim().toLowerCase()
+      if (cpf.length !== 11) return { error: "Todos os usuários devem ter CPF válido." }
+      if (!fullName) return { error: "Informe o nome completo de cada usuário." }
+      if (!birthDate) return { error: "Informe a data de nascimento de cada usuário." }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
+        return { error: "Informe e-mail válido para cada usuário." }
+      }
+      if (cpfSet.has(cpf)) return { error: "Não repita o mesmo CPF entre os usuários." }
+      if (emailSet.has(userEmail)) return { error: "Não repita o mesmo e-mail entre os usuários." }
+      cpfSet.add(cpf)
+      emailSet.add(userEmail)
+      companyUsers.push({
+        cpf,
+        full_name: fullName,
+        birth_date: birthDate,
+        email: userEmail,
+        is_owner:
+          Boolean(usuario.is_owner) ||
+          fullName.toLowerCase() === String(body.responsavel ?? "").trim().toLowerCase() ||
+          userEmail === String(body.email ?? "").trim().toLowerCase(),
+      })
+    }
+
+    const primaryUser = companyUsers[0]
     const businessSegment =
       principalCnaeDescricao(body.empresas?.[0]?.cnaes) ||
       principalCnaeDescricao(
@@ -91,15 +133,16 @@ export function mapSiteSignupToLiticaProTrial(
 
     return {
       customer_type: "empresa",
-      email,
+      email: primaryUser.email,
       phone,
       origem_captacao: "Website",
       states_of_interest: statesOfInterest,
       cnpj,
-      responsible_name: responsibleName,
+      responsible_name: primaryUser.full_name,
       business_segment: businessSegment,
       company_name: String(body.razaoSocial ?? "").trim(),
       billing_address: billingAddress,
+      company_users: companyUsers,
       auto_provision: true,
       send_welcome_email: true,
       activity_actor: { displayName: "Site Xpress Solutions" },

@@ -2,9 +2,9 @@
 
 **Este documento descreve o que FALTA implementar.** O que o projeto já tem está no [README.md](./README.md).
 
-> **Contexto (resumo):** O dashboard já tem login (dashboard_users), esqueci minha senha (Resend), usuários com e-mail de redefinição, NF-e (emissão/cancelar/excluir), módulo Senhas/Sistemas (admin_credentials), **Comissões** (vendas por comercial no mês, % bônus e prêmio total — só Admin), histórico de atividades (clientes, contratos, NF-e, usuários) com atualização da Home e da página Atividades, confirmação em exclusões, deploy (Vercel, DEPLOY.md) e noindex/robots para não indexar o painel. Site e SaaS ainda não estão conectados ao Supabase.
+> **Contexto (resumo):** O dashboard já tem login (dashboard_users), esqueci minha senha (Resend), usuários com e-mail de redefinição, NF-e (emissão/cancelar/excluir), módulo Senhas/Sistemas (admin_credentials), **Comissões** (vendas por comercial no mês, % bônus e prêmio total — só Admin), histórico de atividades (clientes, contratos, NF-e, usuários) com atualização da Home e da página Atividades, confirmação em exclusões, deploy (Vercel, DEPLOY.md) e noindex/robots para não indexar o painel. **LicitaPregão:** site ↔ dashboard ↔ SaaS integrados (cadastro trial, provisionamento, sync bidirecional). **Segura / pagamentos:** ainda pendentes.
 
-> **Banco de dados:** Apenas o **Dashboard** está ligado ao Supabase. Site e SaaS serão integrados via APIs / futura conexão multi-tenant.
+> **Banco de dados:** O **Dashboard** usa Supabase. O **LicitaPregão** usa PostgreSQL próprio (Prisma). A integração entre eles é via APIs REST (tokens compartilhados), não banco compartilhado.
 
 > **Automações:** Hoje no código (Resend, webhooks). Se ficar complexo, reavaliar n8n.
 
@@ -12,30 +12,32 @@
 
 | Projeto                      | O que já existe                                                                                 | O que ainda falta principal                                                                                   | Progresso |
 |------------------------------|-------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------|----------:|
-| 🌐 **Website institucional** | Landing pages, produtos, planos, contato, layout pronto e publicado em produção               | Fluxo de checkout/assinatura, chamada para API pública do dashboard, exibição de QR Pix/links de pagamento   | **70%**   |
-| 📊 **Dashboard admin**       | Gestão de clientes/contratos, NF-e pendente/emitida, financeiro básico, atividades, permissões (Admin/Comercial), **Comissões** (vendas por comercial, % bônus, prêmio), Gastos da Empresa, Usuários e Sistemas (senhas), deploy Vercel + noindex | Integração Banco Inter (Pix/BolePix), webhooks, e-mails automáticos, relatórios fiscais Simples Nacional     | **65%**   |
-| 🧩 **SaaS (app do cliente)** | Base técnica do app e estrutura inicial                                                         | Módulos da ferramenta (gestão de apólices), onboarding, criação automática de tenant/usuário após pagamento  | **20%**   |
+| 🌐 **Website institucional** | Landing pages, produtos, planos, contato, **cadastro trial LicitaPregão integrado** | Checkout Segura, pagamento Pix/BolePix via dashboard | **80%**   |
+| 📊 **Dashboard admin**       | Gestão de clientes/contratos, NF-e pendente/emitida, financeiro básico, atividades, permissões (Admin/Comercial), **Comissões**, **integração LicitaPregão (trial + sync)** | Integração Banco Inter (Pix/BolePix), webhooks, e-mails automáticos NF-e, relatórios fiscais Simples Nacional | **70%**   |
+| 🧩 **SaaS LicitaPregão**     | App completo, provisionamento automático via painel, sync bidirecional admin ↔ app | Pagamento Banco Inter, onboarding pós-pagamento automático | **75%**   |
 
 ---
 
 ### 1. Integração Site ↔ Dashboard (contratação/assinatura)
 
-**Objetivo:** quando o cliente contratar no site, o contrato aparecer automaticamente no dashboard.
+> **LicitaPregão (trial 7 dias):** integração **concluída** — site → `POST /api/public/contracts/register-from-site` → provisionamento automático no SaaS. Detalhes no [README.md](./README.md#-ecossistema-xpress--3-repositórios-conectados).
+
+**Objetivo (demais produtos):** quando o cliente contratar no site, o contrato aparecer automaticamente no dashboard.
 
 - **Checkout no site institucional (`xpresssolutions`)**
-  - [ ] Criar endpoint `POST /api/checkout/gestao-apolice`
+  - [x] Cadastro trial LicitaPregão (`POST /api/licitapregao/cadastro` → dashboard)
+  - [ ] Criar endpoint `POST /api/checkout/gestao-apolice` (Segura)
   - [ ] Receber dados do cliente (nome, e-mail, telefone, CPF/CNPJ, endereço básico) e plano escolhido (Básico / Confort / Premium)
   - [ ] Chamar endpoint público do dashboard e devolver dados de pagamento (Pix / boleto) para o front do site
 
 - **Endpoint público no dashboard**
-  - [ ] Criar `POST /api/public/contracts/register-from-site`
-  - [ ] Validar payload vindo do site com **Zod** (sanitização, required fields, mensagens amigáveis)
-  - [ ] Criar ou atualizar `clients` no Supabase
-  - [ ] Criar `contracts` com:
-    - [ ] Plano correto (mapa site → planos internos)
-    - [ ] `status` inicial (ex.: `aguardando_produto`)
-    - [ ] `payment_status = "pendente"` (ou equivalente já usado no sistema)
-  - [ ] Registrar `activity_log` com origem `"site-xpresssolutions"` (ex.: "Novo contrato criado via site")
+  - [x] Criar `POST /api/public/contracts/register-from-site` (LicitaPregão trial)
+  - [x] Validar payload vindo do site com **Zod** (sanitização, required fields, mensagens amigáveis)
+  - [x] Criar ou atualizar `clients` no Supabase
+  - [x] Criar `contracts` com plano correto, status inicial e trial
+  - [x] Registrar `activity_log` com origem `"site-xpresssolutions"`
+  - [x] Provisionar tenant no LicitaPregão (`POST /api/provision`) e e-mail de boas-vindas
+  - [x] Sincronização bidirecional admin ↔ SaaS (`sync-tenant`, `sync-from-saas`)
 
 ---
 

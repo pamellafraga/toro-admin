@@ -4,8 +4,9 @@ import { Building2, FileText, Mail, MapPin, Pencil } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getCnaeEntries } from "@/lib/liticapro/cnae"
 import { LiticaProLinkedCnpjsSection } from "@/components/dashboard/liticapro-linked-cnpjs-section"
+import { LiticaProSaasUsersSection } from "@/components/dashboard/liticapro-saas-users-section"
 import { getPrimaryLinkedCompany } from "@/lib/liticapro/linked-company-display"
-import type { CnpjGovData } from "@/lib/liticapro/types"
+import type { CnpjGovData, LiticaProSaaSUser } from "@/lib/liticapro/types"
 import type { LiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
 
@@ -88,6 +89,7 @@ export interface LiticaProContractDetailViewProps {
   linkedCnpjs?: Array<Record<string, unknown>>
   cadastroLabel: string
   trialEndLabel: string
+  courtesyExtensionLabel?: string
   productStatusLabel: string
   paymentLabel: string
   origemCaptacao: string
@@ -96,6 +98,7 @@ export interface LiticaProContractDetailViewProps {
   devEmpresa?: string
   devUsuario?: string
   devSenha?: string
+  saasUsers?: LiticaProSaaSUser[]
   showDev?: boolean
   welcomeEmail?: LiticaProWelcomeEmailInfo
   onResendWelcomeEmail?: () => void
@@ -123,6 +126,7 @@ export function LiticaProContractDetailView({
   linkedCnpjs = [],
   cadastroLabel,
   trialEndLabel,
+  courtesyExtensionLabel,
   productStatusLabel,
   paymentLabel,
   origemCaptacao,
@@ -131,6 +135,7 @@ export function LiticaProContractDetailView({
   devEmpresa,
   devUsuario,
   devSenha,
+  saasUsers = [],
   showDev,
   welcomeEmail,
   onResendWelcomeEmail,
@@ -164,6 +169,9 @@ export function LiticaProContractDetailView({
             <StatusBadge>{paymentLabel}</StatusBadge>
             {trialEndLabel !== "—" ? (
               <StatusBadge variant="default">Teste até {trialEndLabel}</StatusBadge>
+            ) : null}
+            {courtesyExtensionLabel ? (
+              <StatusBadge variant="emerald">Cortesia: {courtesyExtensionLabel}</StatusBadge>
             ) : null}
             {welcomeEmail?.sent && welcomeEmail.sentAtLabel ? (
               <StatusBadge variant="emerald">
@@ -250,6 +258,9 @@ export function LiticaProContractDetailView({
             <Panel title="Contrato" icon={FileText}>
               <InfoRow label="Cadastro" value={cadastroLabel} />
               <InfoRow label="Fim do teste" value={trialEndLabel} />
+              {courtesyExtensionLabel ? (
+                <InfoRow label="Cortesia aplicada" value={courtesyExtensionLabel} />
+              ) : null}
               <InfoRow label="Produto" value={productStatusLabel} />
               <InfoRow label="Pagamento" value={paymentLabel} />
               <InfoRow label="Origem" value={origemCaptacao} />
@@ -288,7 +299,11 @@ export function LiticaProContractDetailView({
           <LiticaProLinkedCnpjsSection linkedCnpjs={linkedCnpjs} readOnly />
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(180px,240px)] gap-4 rounded-xl border border-border bg-muted/10 p-4">
+        <>
+          {customerType === "empresa" && saasUsers.length > 0 ? (
+            <LiticaProSaasUsersSection users={saasUsers} showCredentials={showDev} />
+          ) : null}
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_minmax(180px,240px)] gap-4 rounded-xl border border-border bg-muted/10 p-4">
           <div>
             <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">CNAEs da Receita Federal</p>
             {cnaes.length === 0 ? (
@@ -327,7 +342,8 @@ export function LiticaProContractDetailView({
             <p className="text-[11px] font-semibold text-primary uppercase tracking-wide mb-2">Ramo de atuação</p>
             <p className="text-sm font-medium text-foreground">{businessSegment || "—"}</p>
           </div>
-        </div>
+          </div>
+        </>
       )}
 
       {notes.trim() ? (
@@ -337,7 +353,7 @@ export function LiticaProContractDetailView({
         </div>
       ) : null}
 
-      {showDev && (devEmpresa || devUsuario || devSenha) ? (
+      {showDev && (devEmpresa || devUsuario || devSenha) && saasUsers.length === 0 ? (
         <div className="rounded-xl bg-zinc-950 border border-zinc-800 px-4 py-3">
           <p className="text-[11px] uppercase tracking-wide text-sky-100 mb-3 font-light">Dados do desenvolvedor</p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

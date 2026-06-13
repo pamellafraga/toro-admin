@@ -29,6 +29,8 @@ export async function assertLiticaProTrialEligible(input: {
   email?: string | null
   linked_cnpjs?: string[]
   excludeClientId?: string | null
+  user_emails?: string[]
+  user_cpfs?: string[]
 }): Promise<TrialEligibilityResult> {
   const catalog = getProductBySlug("liticapro")
   if (!catalog) {
@@ -59,6 +61,30 @@ export async function assertLiticaProTrialEligible(input: {
         ok: false,
         error:
           "Este e-mail já está vinculado a um teste grátis do LicitaPregão. Não é possível cadastrar novamente.",
+        status: 409,
+      }
+    }
+  }
+
+  const extraEmails = [...new Set((input.user_emails ?? []).map((e) => e.trim().toLowerCase()).filter(Boolean))]
+  for (const userEmail of extraEmails) {
+    const byEmail = await findClientByEmailNormalized(userEmail, excludeClientId)
+    if (byEmail && (await hasLiticaProTrial(byEmail.id, product.id))) {
+      return {
+        ok: false,
+        error: `O e-mail ${userEmail} já está vinculado a um teste grátis do LicitaPregão.`,
+        status: 409,
+      }
+    }
+  }
+
+  const extraCpfs = [...new Set((input.user_cpfs ?? []).map((c) => c.replace(/\D/g, "")).filter((c) => c.length === 11))]
+  for (const cpf of extraCpfs) {
+    const byDoc = await findClientByCpfCnpjDigits(cpf, excludeClientId)
+    if (byDoc && (await hasLiticaProTrial(byDoc.id, product.id))) {
+      return {
+        ok: false,
+        error: `O CPF ${formatDocumentLabel(cpf)} já utilizou o teste grátis do LicitaPregão.`,
         status: 409,
       }
     }

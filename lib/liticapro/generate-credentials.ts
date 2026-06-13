@@ -36,3 +36,19 @@ export function buildLiticaProCredentials(input: {
 
   return { empresa, usuario, senha }
 }
+
+export function buildLiticaProUserCredentials(input: {
+  empresa_nome: string
+  full_name: string
+  existing?: LiticaProDeveloperCredentials | null
+}): LiticaProDeveloperCredentials {
+  const existing = input.existing
+  const senha = existing?.senha?.trim() || generateTemporaryPassword()
+  const empresa = existing?.empresa?.trim() || input.empresa_nome.trim().toUpperCase()
+  const usuario =
+    existing?.usuario?.trim() ||
+    suggestDeveloperUsername(input.full_name) ||
+    input.full_name.trim().toUpperCase()
+
+  return { empresa, usuario, senha }
+}
