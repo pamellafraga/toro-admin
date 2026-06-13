@@ -184,12 +184,12 @@ export async function resendLiticaProWelcomeEmailByEmail(
   )
   const { getProductBySlug } = await import("@/lib/products/catalog")
 
-  const client = await findClientByEmailNormalized(email)
-  if (client) {
+  const clientByEmail = await findClientByEmailNormalized(email)
+  if (clientByEmail) {
     const catalog = getProductBySlug("liticapro")
     if (catalog) {
       const product = await findOrCreateProductFromCatalog(catalog)
-      const contract = await findLiticaProContractByClientId(client.id, product.id)
+      const contract = await findLiticaProContractByClientId(clientByEmail.id, product.id)
       if (contract?.id) {
         const sentAt = new Date().toISOString()
         await updateContract(contract.id, {
