@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { Search, ArrowLeft, DollarSign, Calendar, User, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle, CheckCircle, XCircle, Clock, PauseCircle, LayoutGrid, List } from "lucide-react"
+import { Search, ArrowLeft, DollarSign, Calendar, User, Building2, Plus, Loader2, Pencil, CalendarDays, Trash2, AlertCircle, CheckCircle, XCircle, Clock, PauseCircle, LayoutGrid, List } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Link from "next/link"
 import useSWR, { useSWRConfig } from "swr"
@@ -204,6 +204,18 @@ const getEtapaLead = (client: Client | null | undefined) =>
   normalizeStatusLead(client?.status_lead as string | null)
 const getEtapaLeadLabel = (client: Client | null | undefined) =>
   getStatusLeadLabel(getEtapaLead(client))
+
+/** Ícone na lista: PJ → prédio; PF → pessoa; demais → inferido pelo documento */
+const getClientListIcon = (client: Client | null | undefined, liticaproProduct: boolean) => {
+  if (liticaproProduct) {
+    const customerType = (client as Client & { liticapro_data?: { customer_type?: string } })?.liticapro_data
+      ?.customer_type
+    if (customerType === "empresa") return Building2
+    if (customerType === "profissional_liberal") return User
+  }
+  const digits = String(client?.cpf_cnpj ?? "").replace(/\D/g, "")
+  return digits.length === 14 ? Building2 : User
+}
 
 /** Subtítulo na coluna Cliente: PF → empresa vinculada; PJ → responsável; demais → e-mail */
 const getClientListSubtitle = (client: Client | null | undefined, liticaproProduct: boolean) => {
@@ -1265,7 +1277,9 @@ export default function ProductDetailPage() {
             </thead>
             <tbody>
               {filtered && filtered.length > 0 ? (
-                filtered.map((contract) => (
+                filtered.map((contract) => {
+                  const ClientIcon = getClientListIcon(contract.clients, isLiticaPro)
+                  return (
                   <tr key={contract.id} className="border-b border-border/50 hover:bg-secondary/20 transition-colors">
                     <td className="px-4 py-3">
                       <button
@@ -1275,7 +1289,7 @@ export default function ProductDetailPage() {
                         title="Ver detalhes do cliente"
                       >
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                          <User className="h-4 w-4 text-primary" />
+                          <ClientIcon className="h-4 w-4 text-primary" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">{contract.clients?.name || "---"}</p>
@@ -1418,7 +1432,7 @@ export default function ProductDetailPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                )})
               ) : (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">
@@ -1466,6 +1480,11 @@ export default function ProductDetailPage() {
           : undefined
         const welcomeEmail = getLiticaProWelcomeEmailInfo(
           (editingContract as TrialContractRow).liticapro_meta,
+        )
+        const cadastroLabel = formatContractDate(
+          isLiticaPro
+            ? (editingContract.created_at ?? editingContract.start_date)
+            : editingContract.start_date,
         )
         const primaryLinkedPf =
           editForm.customer_type === "profissional_liberal"
