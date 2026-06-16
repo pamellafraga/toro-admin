@@ -78,6 +78,12 @@ export async function PATCH(req: NextRequest) {
               full_name: (body.saas_user_append as { full_name?: string }).full_name
                 ? String((body.saas_user_append as { full_name?: string }).full_name)
                 : undefined,
+              cpf: (body.saas_user_append as { cpf?: string }).cpf
+                ? String((body.saas_user_append as { cpf?: string }).cpf)
+                : undefined,
+              birth_date: (body.saas_user_append as { birth_date?: string }).birth_date
+                ? String((body.saas_user_append as { birth_date?: string }).birth_date)
+                : undefined,
               empresa_login: (body.saas_user_append as { empresa_login?: string })
                 .empresa_login
                 ? String(

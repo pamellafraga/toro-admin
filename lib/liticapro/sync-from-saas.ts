@@ -53,6 +53,8 @@ export type SyncFromSaaSInput = {
     usuario: string
     senha?: string
     full_name?: string
+    cpf?: string
+    birth_date?: string
     empresa_login?: string
   }
 }
@@ -172,10 +174,11 @@ async function appendSaasUserToClient(
     : []
 
   const email = user.email.trim().toLowerCase()
+  const cpf = String(user.cpf ?? "").replace(/\D/g, "")
   const newUser: LiticaProSaaSUser = {
-    cpf: "",
+    cpf,
     full_name: user.full_name?.trim() || user.usuario.trim(),
-    birth_date: "",
+    birth_date: user.birth_date?.trim() || "",
     email,
     is_owner: false,
     credentials: {
