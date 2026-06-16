@@ -13,7 +13,7 @@ import { queryOne } from "@/lib/db/pool"
 import { buildGovFromSiteLinkedCompany } from "@/lib/liticapro/build-gov-from-site"
 import { enrichLinkedCnpjs } from "@/lib/liticapro/enrich-linked-cnpjs"
 import { labelRamoNegocio } from "@/lib/liticapro/ramo-labels"
-import type { CnpjGovData } from "@/lib/liticapro/types"
+import type { CnpjGovData, LiticaProSaaSUser } from "@/lib/liticapro/types"
 
 export type SyncFromSaaSInput = {
   empresa_id: string
@@ -47,6 +47,14 @@ export type SyncFromSaaSInput = {
   }>
   admin_client_id?: string
   admin_contract_id?: string
+  saas_user_append?: {
+    saas_usuario_id: string
+    email: string
+    usuario: string
+    senha?: string
+    full_name?: string
+    empresa_login?: string
+  }
 }
 
 export type SyncFromSaaSResult =
@@ -149,6 +157,76 @@ function buildCompanyGov(cnpj?: string, cnaes?: string[], razaoSocial?: string) 
     })),
     descricao_situacao_cadastral: null,
   }
+}
+
+async function appendSaasUserToClient(
+  clientId: string,
+  contractId: string,
+  user: NonNullable<SyncFromSaaSInput["saas_user_append"]>,
+  empresaNome: string,
+): Promise<void> {
+  const liticaproRow = await getClientLiticaProData(clientId)
+  const existingData = liticaproRow?.liticapro_data ?? {}
+  const existingUsers = Array.isArray(existingData.saas_users)
+    ? ([...existingData.saas_users] as LiticaProSaaSUser[])
+    : []
+
+  const email = user.email.trim().toLowerCase()
+  const newUser: LiticaProSaaSUser = {
+    cpf: "",
+    full_name: user.full_name?.trim() || user.usuario.trim(),
+    birth_date: "",
+    email,
+    is_owner: false,
+    credentials: {
+      empresa: user.empresa_login?.trim() || empresaNome,
+      usuario: user.usuario.trim(),
+      senha: user.senha?.trim() || "",
+    },
+    saas_usuario_id: user.saas_usuario_id,
+    welcome_email_sent_at: null,
+  }
+
+  const idx = existingUsers.findIndex(
+    (row) =>
+      row.saas_usuario_id === user.saas_usuario_id ||
+      row.email?.trim().toLowerCase() === email,
+  )
+
+  if (idx >= 0) {
+    const prev = existingUsers[idx]
+    existingUsers[idx] = {
+      ...prev,
+      ...newUser,
+      credentials: {
+        ...prev.credentials,
+        ...newUser.credentials,
+        senha: newUser.credentials.senha || prev.credentials?.senha || "",
+      },
+    }
+  } else {
+    existingUsers.push(newUser)
+  }
+
+  await updateClientLiticaProData(clientId, { saas_users: existingUsers })
+
+  const contract = await findContractWithProduct(contractId)
+  const meta = { ...(contract?.liticapro_meta ?? {}) }
+  const ids = [
+    ...new Set(
+      existingUsers
+        .map((row) => row.saas_usuario_id)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ]
+
+  await updateContract(contractId, {
+    liticapro_meta: {
+      ...meta,
+      saas_usuario_ids: ids,
+      saas_last_sync_at: new Date().toISOString(),
+    },
+  })
 }
 
 export async function syncLiticaProFromSaaS(
@@ -276,6 +354,15 @@ export async function syncLiticaProFromSaaS(
     trial_ends_at: input.trial_ends_at?.trim() || undefined,
     liticapro_meta: meta,
   })
+
+  if (input.saas_user_append && input.customer_type === "empresa") {
+    await appendSaasUserToClient(
+      clientId,
+      contractId,
+      input.saas_user_append,
+      credEmpresa || clientName,
+    )
+  }
 
   return { ok: true, client_id: clientId, contract_id: contractId }
 }

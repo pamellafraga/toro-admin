@@ -60,6 +60,32 @@ export async function PATCH(req: NextRequest) {
         : undefined,
       admin_client_id: body.admin_client_id ? String(body.admin_client_id) : undefined,
       admin_contract_id: body.admin_contract_id ? String(body.admin_contract_id) : undefined,
+      saas_user_append:
+        body.saas_user_append && typeof body.saas_user_append === "object"
+          ? {
+              saas_usuario_id: String(
+                (body.saas_user_append as { saas_usuario_id?: string }).saas_usuario_id ?? "",
+              ),
+              email: String(
+                (body.saas_user_append as { email?: string }).email ?? "",
+              ),
+              usuario: String(
+                (body.saas_user_append as { usuario?: string }).usuario ?? "",
+              ),
+              senha: (body.saas_user_append as { senha?: string }).senha
+                ? String((body.saas_user_append as { senha?: string }).senha)
+                : undefined,
+              full_name: (body.saas_user_append as { full_name?: string }).full_name
+                ? String((body.saas_user_append as { full_name?: string }).full_name)
+                : undefined,
+              empresa_login: (body.saas_user_append as { empresa_login?: string })
+                .empresa_login
+                ? String(
+                    (body.saas_user_append as { empresa_login?: string }).empresa_login,
+                  )
+                : undefined,
+            }
+          : undefined,
     })
 
     if (!result.ok) {
