@@ -1,5 +1,7 @@
 import type { LiticaProDeveloperCredentials } from "@/lib/liticapro/types"
 
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -18,8 +20,10 @@ export function buildLiticaProWelcomeEmailHtml(params: {
 }): string {
   const { clientName, credentials, portalUrl, customerType, statesOfInterest = [] } = params
   const isEmpresa = customerType === "empresa"
-  const accessLabel = isEmpresa ? "EMPRESA" : "PROFISSIONAL LIBERAL"
-  const identificadorLabel = isEmpresa ? "Empresa" : "CPF"
+  const accessLabel = isEmpresa
+    ? LITICAPRO_CUSTOMER_TYPE_LABEL.empresa
+    : LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal
+  const identificadorLabel = isEmpresa ? "CNPJ (login)" : "CPF"
   const estados =
     statesOfInterest.length > 0
       ? statesOfInterest.join(", ")

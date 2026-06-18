@@ -127,7 +127,7 @@ export async function registerLiticaProTrial(
     .filter(Boolean)
 
   if (customerType !== "empresa" && customerType !== "profissional_liberal") {
-    return fail("Selecione Empresa ou Profissional Liberal.", 400)
+    return fail("Selecione EMPRESAS ou ASSESSORIA DE LICITAÇÃO.", 400)
   }
   if (customerType === "empresa" && !email) return fail("E-mail principal é obrigatório.", 400)
   if (!phone) return fail("Telefone/WhatsApp é obrigatório.", 400)

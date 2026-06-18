@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
     const customerType = body.customer_type as "empresa" | "profissional_liberal"
     if (customerType !== "empresa" && customerType !== "profissional_liberal") {
-      return jsonError("Selecione Empresa ou Profissional Liberal.", 400)
+      return jsonError("Selecione EMPRESAS ou ASSESSORIA DE LICITAÇÃO.", 400)
     }
 
     const linkedClientId = String(body.client_id ?? "").trim() || null

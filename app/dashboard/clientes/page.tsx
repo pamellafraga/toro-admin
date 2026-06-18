@@ -23,6 +23,7 @@ import {
 } from "@/components/dashboard/clients-status-filter-sheet"
 import { ClientStatusBadge } from "@/components/dashboard/client-status-badge"
 import { STATUS_LEAD_FILTER_TABS, normalizeStatusLead } from "@/lib/clients/status-lead"
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
 import { origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import {
   canComercialMutateClient,
@@ -282,7 +283,7 @@ export default function ClientesPage() {
 
   const handleAdd = async () => {
     if (!newClient.customer_type) {
-      toast.error("Selecione Empresa ou Profissional Liberal")
+      toast.error(`Selecione ${LITICAPRO_CUSTOMER_TYPE_LABEL.empresa} ou ${LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}`)
       return
     }
     if (!newClient.name.trim()) {
@@ -510,7 +511,7 @@ export default function ClientesPage() {
 
   const saveEdit = async () => {
     if (!editForm.customer_type) {
-      toast.error("Selecione Empresa ou Profissional Liberal")
+      toast.error(`Selecione ${LITICAPRO_CUSTOMER_TYPE_LABEL.empresa} ou ${LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}`)
       return
     }
     const isEmpresa = editForm.customer_type === "empresa"
@@ -967,7 +968,7 @@ export default function ClientesPage() {
                               )}
                             >
                               <Building2 className="h-3.5 w-3.5" />
-                              Empresa
+                              {LITICAPRO_CUSTOMER_TYPE_LABEL.empresa}
                             </button>
                             <button
                               type="button"
@@ -980,7 +981,7 @@ export default function ClientesPage() {
                               )}
                             >
                               <User className="h-3.5 w-3.5" />
-                              Profissional Liberal
+                              {LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}
                             </button>
                           </div>
                           <div className="grid grid-cols-2 min-[500px]:grid-cols-3 sm:grid-cols-5 gap-x-2 gap-y-1.5">

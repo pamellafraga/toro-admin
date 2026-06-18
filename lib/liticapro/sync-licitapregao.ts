@@ -71,6 +71,22 @@ export async function syncLiticaProTenantAfterAdminEdit(
   const linked_cnpjs =
     linkedRaw.length > 0 ? await enrichLinkedCnpjs(linkedRaw) : undefined
 
+  const companyUsers = Array.isArray(liticaproData.company_users)
+    ? (liticaproData.company_users as Array<Record<string, unknown>>)
+    : undefined
+  const saasUsers = Array.isArray(liticaproData.saas_users)
+    ? (liticaproData.saas_users as Array<Record<string, unknown>>).map((row) => ({
+        cpf: row.cpf ? String(row.cpf) : undefined,
+        full_name: row.full_name ? String(row.full_name) : undefined,
+        birth_date: row.birth_date ? String(row.birth_date) : undefined,
+        email: row.email ? String(row.email) : undefined,
+        is_owner: row.is_owner === true,
+        saas_usuario_id: row.saas_usuario_id
+          ? String(row.saas_usuario_id)
+          : undefined,
+      }))
+    : undefined
+
   const trialEndsAt = resolveTrialEndsAt({
     trial_ends_at: contract.trial_ends_at,
     created_at: contract.created_at,
@@ -126,6 +142,8 @@ export async function syncLiticaProTenantAfterAdminEdit(
         linked_cnpjs,
         admin_client_id: contract.client_id,
         admin_contract_id: contract.id,
+        company_users: companyUsers,
+        saas_users: saasUsers,
       }),
     })
 

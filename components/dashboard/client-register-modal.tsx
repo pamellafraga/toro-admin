@@ -6,6 +6,7 @@ import { formatCep } from "@/lib/format/br"
 import { origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-guard"
 import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
 
 const inputClass =
   "w-full h-8 rounded-lg border-2 border-primary/50 bg-background px-2.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
@@ -155,7 +156,7 @@ export function ClientRegisterModal({
             >
               <Building2 className="h-10 w-10 text-primary" />
               <div className="text-center">
-                <p className="font-semibold text-foreground">Empresa</p>
+                <p className="font-semibold text-foreground">{LITICAPRO_CUSTOMER_TYPE_LABEL.empresa}</p>
                 <p className="text-xs text-muted-foreground mt-1">CNPJ, razão social e endereço</p>
               </div>
             </button>
@@ -166,7 +167,7 @@ export function ClientRegisterModal({
             >
               <User className="h-10 w-10 text-primary" />
               <div className="text-center">
-                <p className="font-semibold text-foreground">Profissional Liberal</p>
+                <p className="font-semibold text-foreground">{LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}</p>
                 <p className="text-xs text-muted-foreground mt-1">Nome completo — CPF e e-mail opcionais</p>
               </div>
             </button>

@@ -14,7 +14,7 @@ import {
   listClientsForDashboard,
   type ClientesListView,
 } from "@/lib/db/repositories/clients.repository"
-import { listPrimaryContractByClient } from "@/lib/db/repositories/contracts.repository"
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
 
 export const dynamic = "force-dynamic"
 
@@ -80,7 +80,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const customerType = body.customer_type as string | undefined
     if (customerType !== "empresa" && customerType !== "profissional_liberal") {
-      return jsonError("Selecione Empresa ou Profissional Liberal.", 400)
+      return jsonError(
+        `Selecione ${LITICAPRO_CUSTOMER_TYPE_LABEL.empresa} ou ${LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}.`,
+        400,
+      )
     }
 
     const name = String(body.name ?? "").trim()

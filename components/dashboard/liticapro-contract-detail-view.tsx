@@ -9,6 +9,7 @@ import { getPrimaryLinkedCompany } from "@/lib/liticapro/linked-company-display"
 import type { CnpjGovData, LiticaProSaaSUser } from "@/lib/liticapro/types"
 import type { LiticaProWelcomeEmailInfo } from "@/lib/liticapro/welcome-email-display"
 import { LiticaProWelcomeEmailBadge } from "@/components/dashboard/liticapro-welcome-email-badge"
+import { liticaproCustomerTypeLabel } from "@/lib/liticapro/customer-type-labels"
 
 function InfoRow({
   label,
@@ -144,7 +145,7 @@ export function LiticaProContractDetailView({
   onClose,
 }: LiticaProContractDetailViewProps) {
   const cnaes = getCnaeEntries(gov)
-  const modalidade = customerType === "profissional_liberal" ? "Profissional liberal" : "Empresa"
+  const modalidade = liticaproCustomerTypeLabel(customerType)
   const primaryLinked = getPrimaryLinkedCompany({
     customer_type: customerType,
     linked_cnpjs: linkedCnpjs,

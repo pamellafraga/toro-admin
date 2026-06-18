@@ -13,6 +13,7 @@ import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-gua
 import { LiticaProDeveloperCredentialsBlock } from "@/components/dashboard/liticapro-developer-credentials-block"
 import { LiticaProCnaeAndRamoSection, LiticaProCnaeAndRamoCompact } from "@/components/dashboard/liticapro-cnae-section"
 import { LiticaProStatesSelector } from "@/components/dashboard/liticapro-states-selector"
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
 import type { CnpjGovData } from "@/lib/liticapro/types"
 
 type CustomerType = "empresa" | "profissional_liberal" | null
@@ -603,7 +604,7 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
             >
               <Building2 className="h-10 w-10 text-primary" />
               <div className="text-center">
-                <p className="font-semibold text-foreground">Empresa</p>
+                <p className="font-semibold text-foreground">{LITICAPRO_CUSTOMER_TYPE_LABEL.empresa}</p>
                 <p className="text-xs text-muted-foreground mt-1">CNPJ único, responsável pelo cadastro</p>
               </div>
             </button>
@@ -617,7 +618,7 @@ export function LiticaProRegisterModal({ open, onClose, onSuccess, initialClient
             >
               <User className="h-10 w-10 text-primary" />
               <div className="text-center">
-                <p className="font-semibold text-foreground">Profissional Liberal</p>
+                <p className="font-semibold text-foreground">{LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}</p>
                 <p className="text-xs text-muted-foreground mt-1">CPF + um ou mais CNPJs vinculados</p>
               </div>
             </button>

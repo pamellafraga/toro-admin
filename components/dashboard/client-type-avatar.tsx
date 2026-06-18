@@ -2,6 +2,7 @@
 
 import { Building2, User } from "lucide-react"
 import { resolveClientCustomerType } from "@/lib/clients/customer-type"
+import { liticaproCustomerTypeLabel } from "@/lib/liticapro/customer-type-labels"
 import { cn } from "@/lib/utils"
 
 type Props = {
@@ -31,7 +32,7 @@ export function ClientTypeAvatar({
         size === "md" ? "h-10 w-10" : "h-8 w-8",
         className,
       )}
-      title={isProfissional ? "Profissional liberal" : "Empresa"}
+      title={liticaproCustomerTypeLabel(type)}
     >
       <Icon className={cn("text-primary", size === "md" ? "h-5 w-5" : "h-4 w-4")} />
     </div>

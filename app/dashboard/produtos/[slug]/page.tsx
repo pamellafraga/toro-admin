@@ -35,6 +35,7 @@ import {
   resolveTrialEndsAt,
   resolveTrialStatusesFromEndsAt,
 } from "@/lib/liticapro/trial"
+import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
 
 type TrialContractRow = Contract & {
   trial_ends_at?: string | null
@@ -1613,11 +1614,11 @@ export default function ProductDetailPage() {
                   <div>
                     <p className="text-[11px] font-medium text-muted-foreground mb-0.5">Modalidade</p>
                     {ro ? (
-                      <input readOnly className={inputCls} value={editForm.customer_type === "profissional_liberal" ? "Profissional Liberal" : "Empresa"} />
+                      <input readOnly className={inputCls} value={editForm.customer_type === "profissional_liberal" ? LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal : LITICAPRO_CUSTOMER_TYPE_LABEL.empresa} />
                     ) : (
                       <select className={selectCls} value={editForm.customer_type} onChange={(e) => setEditForm((p) => ({ ...p, customer_type: e.target.value as "empresa" | "profissional_liberal" }))}>
-                        <option value="empresa">Empresa</option>
-                        <option value="profissional_liberal">Profissional Liberal</option>
+                        <option value="empresa">{LITICAPRO_CUSTOMER_TYPE_LABEL.empresa}</option>
+                        <option value="profissional_liberal">{LITICAPRO_CUSTOMER_TYPE_LABEL.profissional_liberal}</option>
                       </select>
                     )}
                   </div>
