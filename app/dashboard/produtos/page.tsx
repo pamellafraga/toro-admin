@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import Image from "next/image"
-import { ExternalLink, Loader2, Plus, Save } from "lucide-react"
+import { ExternalLink, ImagePlus, Loader2, Plus, Save, X } from "lucide-react"
 import useSWR from "swr"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
@@ -24,19 +24,23 @@ type ToroProduct = {
   slug?: string
 }
 
-async function fetchProducts(): Promise<ToroProduct[]> {
+async function fetchProducts(): Promise<{ products: ToroProduct[]; warning?: string }> {
   const res = await fetch("/api/products", { credentials: "include", cache: "no-store" })
-  if (!res.ok) throw new Error("Erro ao carregar produtos")
   const json = await res.json()
-  return (json.products ?? []) as ToroProduct[]
+  if (!res.ok) throw new Error(json.error || "Erro ao carregar produtos")
+  return {
+    products: (json.products ?? []) as ToroProduct[],
+    warning: json.warning as string | undefined,
+  }
 }
 
 export default function ProdutosPage() {
   const { isAdmin } = useAuth()
-  const { data, isLoading, mutate } = useSWR("toro-products-admin", fetchProducts)
+  const { data, error, isLoading, mutate } = useSWR("toro-products-admin", fetchProducts)
   const [showAdd, setShowAdd] = useState(false)
 
-  const products = useMemo(() => data ?? [], [data])
+  const products = useMemo(() => data?.products ?? [], [data])
+  const warning = data?.warning
 
   return (
     <div className="flex flex-col gap-6">
@@ -76,6 +80,25 @@ export default function ProdutosPage() {
         <div className="flex items-center gap-2 text-muted-foreground text-sm">
           <Loader2 className="h-4 w-4 animate-spin" /> Carregando catálogo…
         </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          Não foi possível carregar o catálogo.{" "}
+          <button type="button" className="underline font-medium" onClick={() => void mutate()}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
+      {warning && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {warning}
+        </div>
+      )}
+
+      {!isLoading && !error && products.length === 0 && (
+        <p className="text-sm text-muted-foreground">Nenhum produto encontrado.</p>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -256,8 +279,60 @@ function AddProductModal({
   const [gender, setGender] = useState<"feminino" | "masculino">("feminino")
   const [category, setCategory] = useState("Produto")
   const [image, setImage] = useState("")
+  const [imagePreview, setImagePreview] = useState("")
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [description, setDescription] = useState("")
   const [saving, setSaving] = useState(false)
+
+  const uploadImage = async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      toast.error("Selecione um arquivo de imagem (JPG, PNG, WebP ou GIF).")
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Imagem muito grande. Máximo 5 MB.")
+      return
+    }
+
+    setUploadingImage(true)
+    const preview = URL.createObjectURL(file)
+    setImagePreview(preview)
+
+    try {
+      const form = new FormData()
+      form.append("file", file)
+      form.append("name", name.trim() || file.name.replace(/\.[^.]+$/, ""))
+
+      const res = await fetch("/api/products/upload-image", {
+        method: "POST",
+        credentials: "include",
+        body: form,
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Erro ao enviar imagem")
+
+      setImage(json.path as string)
+      setImagePreview(json.url as string)
+      toast.success("Imagem anexada.")
+    } catch (err) {
+      setImagePreview("")
+      setImage("")
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar imagem")
+    } finally {
+      setUploadingImage(false)
+    }
+  }
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) void uploadImage(file)
+    e.target.value = ""
+  }
+
+  const clearImage = () => {
+    setImage("")
+    setImagePreview("")
+  }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -339,12 +414,55 @@ function AddProductModal({
             onChange={(e) => setCategory(e.target.value)}
             className="w-full rounded-lg border border-[#E3DBCC] px-3 py-2 text-sm"
           />
-          <input
-            placeholder="URL da foto (ex.: /products/nome.webp no site)"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            className="w-full rounded-lg border border-[#E3DBCC] px-3 py-2 text-sm"
-          />
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Foto do produto
+            </label>
+            {imagePreview ? (
+              <div className="relative overflow-hidden rounded-lg border border-[#E3DBCC] bg-[#F3F0E9]">
+                <div className="relative aspect-[3/4] max-h-48 w-full">
+                  <Image
+                    src={imagePreview}
+                    alt="Prévia"
+                    fill
+                    className="object-cover object-top"
+                    unoptimized
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={clearImage}
+                  className="absolute right-2 top-2 rounded-full bg-[#101010]/80 p-1 text-[#FDFCF8] hover:bg-[#101010]"
+                  aria-label="Remover imagem"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ) : (
+              <label
+                className={`flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-[#E3DBCC] bg-[#F3F0E9]/50 px-4 py-8 transition-colors hover:border-[#101010]/30 hover:bg-[#F3F0E9] ${uploadingImage ? "pointer-events-none opacity-60" : ""}`}
+              >
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="sr-only"
+                  onChange={onFileChange}
+                  disabled={uploadingImage}
+                />
+                {uploadingImage ? (
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                ) : (
+                  <ImagePlus className="h-8 w-8 text-muted-foreground" />
+                )}
+                <span className="text-center text-xs text-muted-foreground">
+                  {uploadingImage ? "Enviando imagem…" : "Clique ou arraste para anexar"}
+                </span>
+                <span className="text-[10px] text-muted-foreground/70">JPG, PNG, WebP ou GIF · até 5 MB</span>
+              </label>
+            )}
+          </div>
+
           <textarea
             placeholder="Descrição"
             value={description}
@@ -364,10 +482,10 @@ function AddProductModal({
           </button>
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || uploadingImage}
             className="flex-1 rounded-lg bg-[#101010] py-2 text-sm font-semibold text-[#FDFCF8] disabled:opacity-50"
           >
-            {saving ? "Salvando…" : "Adicionar"}
+            {saving ? "Salvando…" : uploadingImage ? "Aguardando imagem…" : "Adicionar"}
           </button>
         </div>
       </form>

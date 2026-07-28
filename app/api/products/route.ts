@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server"
-import { isAdmin, parseAuthCookie } from "@/lib/api/auth"
+import { isAdmin } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonForbidden, jsonOk } from "@/lib/api/response"
+import { isDatabaseConfigured } from "@/lib/db/config"
 import { getProductsAlphabetically } from "@/lib/products/catalog"
 import { findOrCreateProductFromCatalog } from "@/lib/db/repositories/products.repository"
 import {
@@ -8,26 +9,48 @@ import {
   listToroProducts,
 } from "@/lib/db/repositories/toro-products.repository"
 import { mapRowToPublicProduct } from "@/lib/toro/product-utils"
+import { getStaticToroPublicProducts } from "@/lib/toro/static-catalog"
 
 export const dynamic = "force-dynamic"
 
+async function loadProductsFromDb() {
+  for (const entry of getProductsAlphabetically()) {
+    try {
+      await findOrCreateProductFromCatalog(entry)
+    } catch {
+      // seed best-effort
+    }
+  }
+  const products = await listToroProducts()
+  return products.map((p) => mapRowToPublicProduct(p))
+}
+
 /** GET /api/products — catálogo Toro */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    for (const entry of getProductsAlphabetically()) {
-      try {
-        await findOrCreateProductFromCatalog(entry)
-      } catch {
-        // seed best-effort
-      }
+    if (!isDatabaseConfigured()) {
+      return jsonOk({
+        products: getStaticToroPublicProducts(),
+        source: "static",
+      })
     }
 
-    const products = await listToroProducts()
-    return jsonOk({
-      products: products.map((p) => mapRowToPublicProduct(p)),
-    })
+    const products = await loadProductsFromDb()
+    if (products.length === 0) {
+      return jsonOk({
+        products: getStaticToroPublicProducts(),
+        source: "static",
+      })
+    }
+
+    return jsonOk({ products, source: "database" })
   } catch (e) {
-    return handleApiError(e, "Erro ao listar produtos.")
+    console.error("[api/products] fallback estático:", e)
+    return jsonOk({
+      products: getStaticToroPublicProducts(),
+      source: "static",
+      warning: "Banco indisponível — exibindo catálogo local. Execute scripts/036_toro_ecommerce.sql.",
+    })
   }
 }
 
