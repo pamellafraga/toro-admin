@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect } from "react"
 import Image from "next/image"
-import { ExternalLink, ImagePlus, Loader2, Plus, Save, X } from "lucide-react"
+import { ExternalLink, ImagePlus, Loader2, Pencil, Plus, Save, X } from "lucide-react"
 import useSWR from "swr"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
@@ -134,13 +134,31 @@ function ProductCard({
   isAdmin: boolean
   onSaved: () => void
 }) {
+  const [editing, setEditing] = useState(false)
   const [name, setName] = useState(product.name)
   const [price, setPrice] = useState(String(product.price))
   const [stock, setStock] = useState(String(product.stockTotal))
   const [status, setStatus] = useState<StoreStatus>(product.status)
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    if (!editing) {
+      setName(product.name)
+      setPrice(String(product.price))
+      setStock(String(product.stockTotal))
+      setStatus(product.status)
+    }
+  }, [product, editing])
+
   const imageSrc = product.image || `${SITE_URL}/logo.png`
+
+  const cancelEdit = () => {
+    setName(product.name)
+    setPrice(String(product.price))
+    setStock(String(product.stockTotal))
+    setStatus(product.status)
+    setEditing(false)
+  }
 
   const save = async () => {
     setSaving(true)
@@ -163,6 +181,7 @@ function ProductCard({
         setStock(String(json.product.stockTotal ?? stock))
       }
       toast.success("Produto atualizado — loja sincronizada.")
+      setEditing(false)
       onSaved()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar")
@@ -170,6 +189,8 @@ function ProductCard({
       setSaving(false)
     }
   }
+
+  const displayStatus = editing ? status : product.status
 
   return (
     <div className="glass flex flex-col overflow-hidden rounded-xl border border-[#E3DBCC]/80">
@@ -184,12 +205,12 @@ function ProductCard({
         />
         <span
           className={`absolute left-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-            status === "disponivel"
+            displayStatus === "disponivel"
               ? "bg-[#101010] text-[#FDFCF8]"
               : "bg-[#E3DBCC] text-[#101010]"
           }`}
         >
-          {status === "disponivel" ? "Disponível" : "Esgotado"}
+          {displayStatus === "disponivel" ? "Disponível" : "Esgotado"}
         </span>
       </div>
 
@@ -198,7 +219,7 @@ function ProductCard({
           {product.category} · {product.gender === "feminino" ? "Feminino" : "Masculino"}
         </p>
 
-        {isAdmin ? (
+        {isAdmin && editing ? (
           <>
             <input
               value={name}
@@ -235,21 +256,44 @@ function ProductCard({
               <option value="disponivel">Disponível</option>
               <option value="esgotado">Esgotado</option>
             </select>
-            <button
-              type="button"
-              disabled={saving}
-              onClick={() => void save()}
-              className="mt-auto inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#101010] px-3 py-2 text-xs font-semibold text-[#FDFCF8] hover:bg-[#2a2a2a] disabled:opacity-50"
-            >
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Salvar
-            </button>
+            <div className="mt-auto flex gap-2">
+              <button
+                type="button"
+                onClick={cancelEdit}
+                disabled={saving}
+                className="flex-1 rounded-lg border border-[#E3DBCC] px-3 py-2 text-xs font-medium hover:bg-[#F3F0E9] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void save()}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#101010] px-3 py-2 text-xs font-semibold text-[#FDFCF8] hover:bg-[#2a2a2a] disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Salvar
+              </button>
+            </div>
           </>
         ) : (
           <>
             <h3 className="text-sm font-semibold leading-tight">{product.name}</h3>
             <p className="text-sm font-medium">{formatToroPrice(product.price)}</p>
-            <p className="text-xs text-muted-foreground">{product.stockTotal} peças</p>
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Estoque total</span>
+              <span className="font-medium text-foreground">{product.stockTotal} un.</span>
+            </div>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-lg border border-[#E3DBCC] bg-[#FDFCF8] px-3 py-2 text-xs font-medium text-foreground hover:bg-[#F3F0E9]"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Editar
+              </button>
+            )}
           </>
         )}
 
