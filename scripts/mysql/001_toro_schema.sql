@@ -92,6 +92,23 @@ CREATE TABLE IF NOT EXISTS internal_support_tickets (
   KEY idx_tickets_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Gastos da empresa
+CREATE TABLE IF NOT EXISTS company_expenses (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  category VARCHAR(255) NOT NULL,
+  currency ENUM('usd', 'brl') NOT NULL DEFAULT 'usd',
+  value_usd DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  value_brl DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  due_date INT NOT NULL DEFAULT 1,
+  due_month INT NULL,
+  billing_period ENUM('mensal', 'anual', 'vitalicio') NOT NULL DEFAULT 'mensal',
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_company_expenses_category (category)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Esqueci minha senha
 CREATE TABLE IF NOT EXISTS password_reset_codes (
   id CHAR(36) NOT NULL PRIMARY KEY,

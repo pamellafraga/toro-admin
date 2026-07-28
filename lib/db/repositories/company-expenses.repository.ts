@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { query, queryMany, queryOne } from "@/lib/db/pool"
 import { DEFAULT_COMPANY_EXPENSES } from "@/lib/company-expenses/default-expenses"
 
@@ -23,6 +24,14 @@ export type CompanyExpenseInput = Omit<CompanyExpenseRow, "created_at" | "update
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+const EXPENSE_SELECT = `
+  SELECT id, name, category, currency,
+         CAST(value_usd AS DECIMAL(12,2)) AS value_usd,
+         CAST(value_brl AS DECIMAL(12,2)) AS value_brl,
+         due_date, due_month, billing_period, notes,
+         created_at, updated_at
+  FROM company_expenses`
+
 let schemaReady: Promise<void> | null = null
 
 async function ensureCompanyExpensesSchema(): Promise<void> {
@@ -30,23 +39,20 @@ async function ensureCompanyExpensesSchema(): Promise<void> {
     schemaReady = (async () => {
       await query(`
         CREATE TABLE IF NOT EXISTS company_expenses (
-          id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          name           TEXT NOT NULL,
-          category       TEXT NOT NULL,
-          currency       TEXT NOT NULL DEFAULT 'usd' CHECK (currency IN ('usd', 'brl')),
-          value_usd      NUMERIC(12, 2) NOT NULL DEFAULT 0,
-          value_brl      NUMERIC(12, 2) NOT NULL DEFAULT 0,
-          due_date       INTEGER NOT NULL DEFAULT 1,
-          due_month      INTEGER CHECK (due_month IS NULL OR (due_month >= 1 AND due_month <= 12)),
-          billing_period TEXT NOT NULL DEFAULT 'mensal'
-            CHECK (billing_period IN ('mensal', 'anual', 'vitalicio')),
-          notes          TEXT,
-          created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-          updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
-        )
-      `)
-      await query(`
-        CREATE INDEX IF NOT EXISTS idx_company_expenses_category ON company_expenses (category)
+          id CHAR(36) NOT NULL PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          category VARCHAR(255) NOT NULL,
+          currency ENUM('usd', 'brl') NOT NULL DEFAULT 'usd',
+          value_usd DECIMAL(12, 2) NOT NULL DEFAULT 0,
+          value_brl DECIMAL(12, 2) NOT NULL DEFAULT 0,
+          due_date INT NOT NULL DEFAULT 1,
+          due_month INT NULL,
+          billing_period ENUM('mensal', 'anual', 'vitalicio') NOT NULL DEFAULT 'mensal',
+          notes TEXT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          KEY idx_company_expenses_category (category)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
       `)
     })().catch((err) => {
       schemaReady = null
@@ -56,13 +62,16 @@ async function ensureCompanyExpensesSchema(): Promise<void> {
   await schemaReady
 }
 
+async function findExpenseById(id: string): Promise<CompanyExpenseRow | null> {
+  return queryOne<CompanyExpenseRow>(`${EXPENSE_SELECT} WHERE id = ? LIMIT 1`, [id])
+}
+
 async function ensureDefaultExpensesPresent(): Promise<void> {
   for (const item of DEFAULT_COMPANY_EXPENSES) {
     await queryOne(
-      `INSERT INTO company_expenses
+      `INSERT IGNORE INTO company_expenses
          (id, name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
-       SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10
-       WHERE NOT EXISTS (SELECT 1 FROM company_expenses WHERE id = $1)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         item.id,
         item.name,
@@ -82,15 +91,7 @@ async function ensureDefaultExpensesPresent(): Promise<void> {
 export async function listCompanyExpenses(): Promise<CompanyExpenseRow[]> {
   await ensureCompanyExpensesSchema()
   await ensureDefaultExpensesPresent()
-  return queryMany<CompanyExpenseRow>(
-    `SELECT id, name, category, currency,
-            value_usd::float8 AS value_usd,
-            value_brl::float8 AS value_brl,
-            due_date, due_month, billing_period, notes,
-            created_at, updated_at
-     FROM company_expenses
-     ORDER BY category, name`,
-  )
+  return queryMany<CompanyExpenseRow>(`${EXPENSE_SELECT} ORDER BY category, name`)
 }
 
 export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promise<CompanyExpenseRow> {
@@ -99,19 +100,38 @@ export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promis
   const hasValidId = payload.id && UUID_RE.test(payload.id)
 
   if (hasValidId) {
-    const row = await queryOne<CompanyExpenseRow>(
-      `UPDATE company_expenses
-       SET name = $1, category = $2, currency = $3,
-           value_usd = $4, value_brl = $5,
-           due_date = $6, due_month = $7, billing_period = $8, notes = $9,
-           updated_at = now()
-       WHERE id = $10
-       RETURNING id, name, category, currency,
-                 value_usd::float8 AS value_usd,
-                 value_brl::float8 AS value_brl,
-                 due_date, due_month, billing_period, notes,
-                 created_at, updated_at`,
+    const existing = await findExpenseById(payload.id!)
+    if (existing) {
+      await queryOne(
+        `UPDATE company_expenses
+         SET name = ?, category = ?, currency = ?,
+             value_usd = ?, value_brl = ?,
+             due_date = ?, due_month = ?, billing_period = ?, notes = ?
+         WHERE id = ?`,
+        [
+          payload.name,
+          payload.category,
+          payload.currency,
+          payload.value_usd,
+          payload.value_brl,
+          payload.due_date,
+          payload.due_month,
+          payload.billing_period,
+          payload.notes,
+          payload.id,
+        ],
+      )
+      const row = await findExpenseById(payload.id!)
+      if (!row) throw new Error("Gasto não encontrado.")
+      return row
+    }
+
+    await queryOne(
+      `INSERT INTO company_expenses
+         (id, name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        payload.id,
         payload.name,
         payload.category,
         payload.currency,
@@ -121,23 +141,20 @@ export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promis
         payload.due_month,
         payload.billing_period,
         payload.notes,
-        payload.id,
       ],
     )
-    if (!row) throw new Error("Gasto não encontrado.")
+    const row = await findExpenseById(payload.id!)
+    if (!row) throw new Error("Erro ao criar gasto.")
     return row
   }
 
-  const row = await queryOne<CompanyExpenseRow>(
+  const id = randomUUID()
+  await queryOne(
     `INSERT INTO company_expenses
-       (name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     RETURNING id, name, category, currency,
-               value_usd::float8 AS value_usd,
-               value_brl::float8 AS value_brl,
-               due_date, due_month, billing_period, notes,
-               created_at, updated_at`,
+       (id, name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
+      id,
       payload.name,
       payload.category,
       payload.currency,
@@ -149,11 +166,12 @@ export async function upsertCompanyExpense(payload: CompanyExpenseInput): Promis
       payload.notes,
     ],
   )
+  const row = await findExpenseById(id)
   if (!row) throw new Error("Erro ao criar gasto.")
   return row
 }
 
 export async function deleteCompanyExpense(id: string): Promise<void> {
   await ensureCompanyExpensesSchema()
-  await queryOne(`DELETE FROM company_expenses WHERE id = $1`, [id])
+  await queryOne(`DELETE FROM company_expenses WHERE id = ?`, [id])
 }
