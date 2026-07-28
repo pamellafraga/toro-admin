@@ -72,8 +72,8 @@ async function connect(cfg, label) {
     password: cfg.password,
     multipleStatements: true,
   }
-  if (cfg.ssl) {
-    opts.ssl = { rejectUnauthorized: false }
+  if (cfg.ssl || /tidbcloud|railway|psdb\.cloud/i.test(cfg.host)) {
+    opts.ssl = { rejectUnauthorized: true }
   }
   try {
     const conn = await mysql.createConnection(opts)
@@ -110,11 +110,11 @@ async function cloneTable(source, target, table) {
 }
 
 async function main() {
-  const sourceEnv = { ...loadEnvFile(".env.local"), ...process.env }
-  const targetEnv = { ...loadEnvFile(".env.cloud"), ...process.env }
+  const sourceEnv = loadEnvFile(".env.local")
+  const targetEnv = loadEnvFile(".env.cloud")
 
   const sourceCfg = configFromEnv(sourceEnv)
-  const targetCfg = configFromEnv(targetEnv, "TARGET_")
+  const targetCfg = configFromEnv(targetEnv)
 
   if (!sourceCfg.host) throw new Error("SOURCE: configure .env.local com Locaweb")
   if (!targetCfg.host) {

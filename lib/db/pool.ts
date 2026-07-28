@@ -28,7 +28,9 @@ export function getPool(): Pool {
       enableKeepAlive: true,
     }
     if (cfg.ssl) {
-      options.ssl = { rejectUnauthorized: false }
+      options.ssl = {
+        rejectUnauthorized: /tidbcloud|psdb\.cloud|railway/i.test(cfg.host),
+      }
     }
     pool = mysql.createPool(options)
   }

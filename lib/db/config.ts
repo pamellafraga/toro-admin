@@ -23,6 +23,8 @@ function parseDatabaseUrl(url: string): DatabaseConfig {
               parsed.hostname.includes("tidb") ||
               parsed.hostname.includes("psdb.cloud") ||
               parsed.hostname.includes("aiven")
+            ? true
+            : false
 
   return {
     host: parsed.hostname,

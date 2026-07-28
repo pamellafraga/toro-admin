@@ -12,3 +12,4 @@ storage/nfe-pdfs/
 .vercel
 .env*
 .env.cloud
+scripts/tidb-zero.json
