@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth-context"
 import type { InternalSupportTicket, SupportTicketStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { FormSelect } from "@/components/ui/form-select"
 
 const STATUS_OPTIONS: { value: SupportTicketStatus | ""; label: string }[] = [
   { value: "", label: "Todos" },
@@ -102,17 +103,15 @@ export default function ChamadosPage() {
 
       <div className="flex flex-wrap items-center gap-3">
         <label className="text-sm text-muted-foreground">Filtrar por status</label>
-        <select
-          value={filter}
-          onChange={(e) => setFilter((e.target.value || "") as SupportTicketStatus | "")}
-          className="h-9 rounded-lg border border-border bg-background px-3 text-sm"
-        >
-          {STATUS_OPTIONS.map((o) => (
-            <option key={o.value || "all"} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <FormSelect
+          value={filter || "all"}
+          onValueChange={(value) => setFilter(value === "all" ? "" : (value as SupportTicketStatus))}
+          triggerClassName="h-9"
+          options={STATUS_OPTIONS.map((o) => ({
+            value: o.value || "all",
+            label: o.label,
+          }))}
+        />
       </div>
 
       <div className="glass rounded-xl border border-border/60 p-6">
@@ -187,18 +186,16 @@ export default function ChamadosPage() {
                     {updatingId === t.id ? (
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                     ) : (
-                      <select
+                      <FormSelect
                         aria-label="Alterar status do chamado"
                         value={t.status}
-                        onChange={(e) => onStatusChange(t.id, e.target.value as SupportTicketStatus)}
-                        className="h-9 rounded-lg border border-border bg-background px-2 text-sm min-w-[9.5rem]"
-                      >
-                        {STATUS_OPTIONS.filter((o) => o.value !== "").map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) => onStatusChange(t.id, value as SupportTicketStatus)}
+                        triggerClassName="h-9 min-w-[9.5rem] px-2"
+                        options={STATUS_OPTIONS.filter((o) => o.value !== "").map((o) => ({
+                          value: o.value,
+                          label: o.label,
+                        }))}
+                      />
                     )}
                   </div>
                 </div>

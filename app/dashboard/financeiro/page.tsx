@@ -27,6 +27,7 @@ import type { LucideIcon } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { formatToroPrice } from "@/lib/products/catalog"
 import { cn } from "@/lib/utils"
+import { FormSelect } from "@/components/ui/form-select"
 
 const SITE_URL = "https://toro-green.vercel.app"
 
@@ -327,17 +328,18 @@ export default function FinanceiroPage() {
           />
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
+          <FormSelect
             value={filterPayment}
-            onChange={(e) => setFilterPayment(e.target.value)}
-            className="h-10 rounded-lg border border-[#E3DBCC] bg-[#FDFCF8] px-3 text-sm"
-          >
-            <option value="all">Todos pagamentos</option>
-            <option value="approved">Pago</option>
-            <option value="pending">Pendente</option>
-            <option value="expired">Expirado</option>
-            <option value="rejected">Recusado</option>
-          </select>
+            onValueChange={setFilterPayment}
+            triggerClassName="h-10 border-[#E3DBCC] bg-[#FDFCF8]"
+            options={[
+              { value: "all", label: "Todos pagamentos" },
+              { value: "approved", label: "Pago" },
+              { value: "pending", label: "Pendente" },
+              { value: "expired", label: "Expirado" },
+              { value: "rejected", label: "Recusado" },
+            ]}
+          />
           <div className="flex rounded-lg border border-[#E3DBCC] overflow-hidden shrink-0">
             <button
               type="button"

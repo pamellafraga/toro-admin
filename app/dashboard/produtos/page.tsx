@@ -7,6 +7,7 @@ import useSWR from "swr"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
 import { formatToroPrice } from "@/lib/products/catalog"
+import { FormSelect } from "@/components/ui/form-select"
 
 const SITE_URL = "https://toro-green.vercel.app"
 
@@ -248,14 +249,15 @@ function ProductCard({
                 />
               </label>
             </div>
-            <select
+            <FormSelect
               value={status}
-              onChange={(e) => setStatus(e.target.value as StoreStatus)}
-              className="rounded-lg border border-[#E3DBCC] bg-[#F3F0E9] px-2 py-1.5 text-xs font-medium"
-            >
-              <option value="disponivel">Disponível</option>
-              <option value="esgotado">Esgotado</option>
-            </select>
+              onValueChange={(value) => setStatus(value as StoreStatus)}
+              triggerClassName="h-8 rounded-lg border border-[#E3DBCC] bg-[#F3F0E9] px-2 text-xs font-medium"
+              options={[
+                { value: "disponivel", label: "Disponível" },
+                { value: "esgotado", label: "Esgotado" },
+              ]}
+            />
             <div className="mt-auto flex gap-2">
               <button
                 type="button"
@@ -444,14 +446,14 @@ function AddProductModal({
               className="rounded-lg border border-[#E3DBCC] px-3 py-2 text-sm"
             />
           </div>
-          <select
+          <FormSelect
             value={gender}
-            onChange={(e) => setGender(e.target.value as "feminino" | "masculino")}
-            className="w-full rounded-lg border border-[#E3DBCC] px-3 py-2 text-sm"
-          >
-            <option value="feminino">Feminino</option>
-            <option value="masculino">Masculino</option>
-          </select>
+            onValueChange={(value) => setGender(value as "feminino" | "masculino")}
+            options={[
+              { value: "feminino", label: "Feminino" },
+              { value: "masculino", label: "Masculino" },
+            ]}
+          />
           <input
             placeholder="Categoria (ex.: Shorts, Tops)"
             value={category}

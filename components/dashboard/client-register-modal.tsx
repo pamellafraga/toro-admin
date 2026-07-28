@@ -7,6 +7,7 @@ import { origemCaptacaoForComercial } from "@/lib/constants/origem-captacao"
 import { getOrigemCaptacaoFormOptions } from "@/lib/clients/comercial-client-guard"
 import { STATUS_LEAD_OPTIONS } from "@/lib/clients/status-lead"
 import { LITICAPRO_CUSTOMER_TYPE_LABEL } from "@/lib/liticapro/customer-type-labels"
+import { FormSelect } from "@/components/ui/form-select"
 
 const inputClass =
   "w-full h-8 rounded-lg border-2 border-primary/50 bg-background px-2.5 text-sm text-foreground focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
@@ -313,31 +314,31 @@ export function ClientRegisterModal({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Origem de captação</label>
-                  <select
-                    className={inputClass}
-                    value={form.origem_captacao}
-                    onChange={(e) => setForm((p) => ({ ...p, origem_captacao: e.target.value }))}
-                  >
-                    {origemOpcoes.map((opt) => (
-                      <option key={opt.value || "blank"} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <FormSelect
+                    value={form.origem_captacao || "blank"}
+                    onValueChange={(value) =>
+                      setForm((p) => ({ ...p, origem_captacao: value === "blank" ? "" : value }))
+                    }
+                    triggerClassName={inputClass}
+                    options={origemOpcoes.map((opt) => ({
+                      value: opt.value || "blank",
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
                 <div>
                   <label className={labelClass}>Status de contato</label>
-                  <select
-                    className={inputClass}
-                    value={form.status_lead}
-                    onChange={(e) => setForm((p) => ({ ...p, status_lead: e.target.value }))}
-                  >
-                    {STATUS_COMERCIAL_FORM.map((opt) => (
-                      <option key={opt.id || "blank"} value={opt.id}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
+                  <FormSelect
+                    value={form.status_lead || "blank"}
+                    onValueChange={(value) =>
+                      setForm((p) => ({ ...p, status_lead: value === "blank" ? "" : value }))
+                    }
+                    triggerClassName={inputClass}
+                    options={STATUS_COMERCIAL_FORM.map((opt) => ({
+                      value: opt.id || "blank",
+                      label: opt.label,
+                    }))}
+                  />
                 </div>
               </div>
             </FormSection>

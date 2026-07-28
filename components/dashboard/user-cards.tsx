@@ -6,6 +6,7 @@ import { ROLE_LABELS, type UserRole } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import useSWR, { useSWRConfig } from "swr"
+import { FormSelect } from "@/components/ui/form-select"
 
 export interface DashboardUser {
   id: string
@@ -191,16 +192,16 @@ export function UserCards() {
               onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
               className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             />
-            <select
+            <FormSelect
               title="Perfil"
               value={newUser.role}
-              onChange={(e) => setNewUser({ ...newUser, role: e.target.value as UserRole })}
-              className="h-10 rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-            >
-              {DASHBOARD_ROLES.map((r) => (
-                <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-              ))}
-            </select>
+              onValueChange={(role) => setNewUser({ ...newUser, role: role as UserRole })}
+              triggerClassName="h-10"
+              options={DASHBOARD_ROLES.map((r) => ({
+                value: r,
+                label: ROLE_LABELS[r] ?? r,
+              }))}
+            />
           </div>
           <button
             onClick={handleAddUser}
@@ -254,15 +255,15 @@ export function UserCards() {
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>
-                        <select
+                        <FormSelect
                           value={editForm.role}
-                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                        >
-                          {DASHBOARD_ROLES.map((r) => (
-                            <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                          ))}
-                        </select>
+                          onValueChange={(role) => setEditForm({ ...editForm, role: role as UserRole })}
+                          triggerClassName="h-9"
+                          options={DASHBOARD_ROLES.map((r) => ({
+                            value: r,
+                            label: ROLE_LABELS[r] ?? r,
+                          }))}
+                        />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Nova senha (deixe em branco para não alterar)</label>
@@ -370,15 +371,15 @@ export function UserCards() {
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Perfil</label>
-                        <select
+                        <FormSelect
                           value={editForm.role}
-                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as UserRole })}
-                          className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground focus:border-primary focus:outline-none"
-                        >
-                          {DASHBOARD_ROLES.map((r) => (
-                            <option key={r} value={r}>{ROLE_LABELS[r] ?? r}</option>
-                          ))}
-                        </select>
+                          onValueChange={(role) => setEditForm({ ...editForm, role: role as UserRole })}
+                          triggerClassName="h-9"
+                          options={DASHBOARD_ROLES.map((r) => ({
+                            value: r,
+                            label: ROLE_LABELS[r] ?? r,
+                          }))}
+                        />
                       </div>
                       <div>
                         <label className="mb-1 block text-xs font-medium text-muted-foreground">Nova senha (deixe em branco para não alterar)</label>

@@ -39,6 +39,7 @@ import {
 } from "@/lib/company-expenses/totals"
 import { buildExpenseMonthOptions } from "@/lib/company-expenses/month-options"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
+import { FormSelect } from "@/components/ui/form-select"
 
 type FeeFormData = {
   name: string
@@ -407,64 +408,52 @@ export default function GastoEmpresaPage() {
               </div>
               <div>
                 <Label htmlFor="category">Categoria</Label>
-                <select
+                <FormSelect
                   id="category"
                   title="Categoria do gasto"
                   aria-label="Categoria do gasto"
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(category) => setFormData({ ...formData, category })}
+                  options={categories.map((cat) => ({ value: cat, label: cat }))}
+                />
               </div>
               <div>
                 <Label htmlFor="billingPeriod">Periodicidade do pagamento</Label>
-                <select
+                <FormSelect
                   id="billingPeriod"
                   title="Periodicidade do pagamento"
                   aria-label="Periodicidade do pagamento"
                   value={formData.billingPeriod}
-                  onChange={(e) =>
-                    setFormData({ ...formData, billingPeriod: e.target.value as BillingPeriod })
+                  onValueChange={(billingPeriod) =>
+                    setFormData({ ...formData, billingPeriod: billingPeriod as BillingPeriod })
                   }
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
-                >
-                  {(Object.keys(BILLING_LABELS) as BillingPeriod[]).map((key) => (
-                    <option key={key} value={key}>
-                      {BILLING_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
+                  options={(Object.keys(BILLING_LABELS) as BillingPeriod[]).map((key) => ({
+                    value: key,
+                    label: BILLING_LABELS[key],
+                  }))}
+                />
               </div>
               <div>
                 <Label htmlFor="currency">Moeda do valor</Label>
-                <select
+                <FormSelect
                   id="currency"
                   title="Moeda do valor"
                   aria-label="Moeda do valor"
                   value={formData.currency}
-                  onChange={(e) => {
-                    const currency = e.target.value as FeeCurrency
+                  onValueChange={(currency) => {
+                    const next = currency as FeeCurrency
                     setFormData({
                       ...formData,
-                      currency,
-                      valueUsd: currency === "usd" ? formData.valueUsd : 0,
-                      valueBrl: currency === "brl" ? formData.valueBrl : 0,
+                      currency: next,
+                      valueUsd: next === "usd" ? formData.valueUsd : 0,
+                      valueBrl: next === "brl" ? formData.valueBrl : 0,
                     })
                   }}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
-                >
-                  {(Object.keys(CURRENCY_LABELS) as FeeCurrency[]).map((key) => (
-                    <option key={key} value={key}>
-                      {CURRENCY_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
+                  options={(Object.keys(CURRENCY_LABELS) as FeeCurrency[]).map((key) => ({
+                    value: key,
+                    label: CURRENCY_LABELS[key],
+                  }))}
+                />
               </div>
               {formData.currency === "usd" ? (
                 <div className="grid grid-cols-2 gap-4">
@@ -526,22 +515,19 @@ export default function GastoEmpresaPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label htmlFor="dueMonth">Mês do vencimento</Label>
-                      <select
+                      <FormSelect
                         id="dueMonth"
                         title="Mês do vencimento"
                         aria-label="Mês do vencimento"
-                        value={formData.dueMonth}
-                        onChange={(e) =>
-                          setFormData({ ...formData, dueMonth: parseInt(e.target.value, 10) || 1 })
+                        value={String(formData.dueMonth)}
+                        onValueChange={(dueMonth) =>
+                          setFormData({ ...formData, dueMonth: parseInt(dueMonth, 10) || 1 })
                         }
-                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-foreground"
-                      >
-                        {MONTH_OPTIONS.map((month) => (
-                          <option key={month.value} value={month.value}>
-                            {month.label}
-                          </option>
-                        ))}
-                      </select>
+                        options={MONTH_OPTIONS.map((month) => ({
+                          value: String(month.value),
+                          label: month.label,
+                        }))}
+                      />
                     </div>
                     <div>
                       <Label htmlFor="dueDate">Dia do vencimento</Label>
@@ -607,20 +593,15 @@ export default function GastoEmpresaPage() {
           <Label htmlFor="filterMonth" className="text-xs text-muted-foreground">
             Mês de referência
           </Label>
-          <select
+          <FormSelect
             id="filterMonth"
             title="Filtrar gastos por mês"
             aria-label="Filtrar gastos por mês"
             value={filterMonth}
-            onChange={(e) => setFilterMonth(e.target.value)}
-            className="mt-1 h-10 min-w-[200px] rounded-lg border border-border bg-card px-3 text-sm font-medium text-foreground focus:border-primary focus:outline-none"
-          >
-            {monthOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onValueChange={setFilterMonth}
+            triggerClassName="mt-1 min-w-[200px]"
+            options={monthOptions.map((opt) => ({ value: opt.value, label: opt.label }))}
+          />
         </div>
         <p className="text-xs text-muted-foreground sm:text-right">
           {monthItems.length} gasto{monthItems.length === 1 ? "" : "s"} neste mês

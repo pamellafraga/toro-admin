@@ -9,6 +9,7 @@ import type { Seguradora, Profile } from "@/lib/types"
 import { KANBAN_COLUMNS } from "@/lib/types"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { FormSelect } from "@/components/ui/form-select"
 
 export default function SeguradorasPage() {
   const supabase = createClient()
@@ -136,15 +137,16 @@ export default function SeguradorasPage() {
                       {item.phone && <p className="text-xs text-muted-foreground mt-0.5">{item.phone}</p>}
 
                       <div className="mt-2 flex items-center gap-1">
-                        <select
+                        <FormSelect
                           title="Atribuir responsável"
-                          value={item.assigned_to || ""}
-                          onChange={(e) => handleAssign(item.id, e.target.value || null)}
-                          className="h-7 flex-1 rounded border border-border bg-background px-1.5 text-[11px] text-foreground focus:border-primary focus:outline-none"
-                        >
-                          <option value="">Ninguem</option>
-                          {users?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
+                          value={item.assigned_to || "none"}
+                          onValueChange={(value) => handleAssign(item.id, value === "none" ? null : value)}
+                          triggerClassName="h-7 flex-1 px-1.5 text-[11px]"
+                          options={[
+                            { value: "none", label: "Ninguem" },
+                            ...(users?.map((u) => ({ value: u.id, label: u.name })) ?? []),
+                          ]}
+                        />
                       </div>
 
                       <div className="mt-2 flex gap-1 flex-wrap">
@@ -187,19 +189,25 @@ export default function SeguradorasPage() {
                       <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{item.cnpj || "---"}</td>
                       <td className="px-4 py-3 text-sm text-muted-foreground">{item.phone || "---"}</td>
                       <td className="px-4 py-3">
-                        <select title="Atribuir responsável" value={item.assigned_to || ""} onChange={(e) => handleAssign(item.id, e.target.value || null)}
-                          className="h-8 rounded border border-border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none"
-                        >
-                          <option value="">Ninguem</option>
-                          {users?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                        </select>
+                        <FormSelect
+                          title="Atribuir responsável"
+                          value={item.assigned_to || "none"}
+                          onValueChange={(value) => handleAssign(item.id, value === "none" ? null : value)}
+                          triggerClassName="h-8 px-2 text-xs"
+                          options={[
+                            { value: "none", label: "Ninguem" },
+                            ...(users?.map((u) => ({ value: u.id, label: u.name })) ?? []),
+                          ]}
+                        />
                       </td>
                       <td className="px-4 py-3">
-                        <select title="Mover etapa" value={item.kanban_column} onChange={(e) => handleMoveKanban(item.id, e.target.value)}
-                          className="h-8 rounded border border-border bg-background px-2 text-xs text-foreground focus:border-primary focus:outline-none"
-                        >
-                          {KANBAN_COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                        </select>
+                        <FormSelect
+                          title="Mover etapa"
+                          value={item.kanban_column}
+                          onValueChange={(value) => handleMoveKanban(item.id, value)}
+                          triggerClassName="h-8 px-2 text-xs"
+                          options={KANBAN_COLUMNS.map((c) => ({ value: c.id, label: c.label }))}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <span className={cn("rounded-full border px-2 py-0.5 text-xs font-medium", col?.color)}>{col?.label}</span>

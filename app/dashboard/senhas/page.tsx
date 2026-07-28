@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Plus, Trash2, Eye, EyeOff, Copy, Check, Pencil, Loader2, ExternalLink } from "lucide-react"
 import useSWR from "swr"
 import { toast } from "sonner"
+import { FormSelect } from "@/components/ui/form-select"
 
 interface Password {
   id: string
@@ -218,20 +219,14 @@ export default function SenhasPage() {
               </div>
               <div>
                 <Label htmlFor="category">Categoria</Label>
-                <select
+                <FormSelect
                   id="category"
                   title="Categoria do acesso"
                   aria-label="Categoria do acesso"
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-input rounded-md bg-background text-foreground"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(category) => setFormData({ ...formData, category })}
+                  options={categories.map((cat) => ({ value: cat, label: cat }))}
+                />
               </div>
               <div>
                 <Label htmlFor="login">Login/Email/Usuário *</Label>
@@ -283,19 +278,16 @@ export default function SenhasPage() {
         <Card className="glass border-border shadow-md overflow-hidden gap-0 py-0">
           <div className="px-5 py-4 bg-muted/40 border-b border-border flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium text-foreground">Filtrar por categoria:</span>
-            <select
+            <FormSelect
               value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="h-9 rounded-lg border border-input bg-card px-3 text-sm text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+              onValueChange={setFilterCategory}
+              triggerClassName="h-9"
               aria-label="Filtrar por categoria"
-            >
-              <option value="TODAS">Todas</option>
-              {categories.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: "TODAS", label: "Todas" },
+                ...categories.map((cat) => ({ value: cat, label: cat })),
+              ]}
+            />
             <span className="text-xs text-muted-foreground font-medium">
               {filteredPasswords.length} {filteredPasswords.length === 1 ? "acesso" : "acessos"}
             </span>

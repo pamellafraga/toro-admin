@@ -17,7 +17,7 @@
   --secondary-foreground: #101010;
   --muted: #F3F0E9;
   --muted-foreground: #5c5c5c;
-  --accent: rgba(227, 219, 204, 0.6);
+  --accent: #E3DBCC;
   --accent-foreground: #101010;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
@@ -88,6 +88,30 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  select {
+    accent-color: var(--primary);
+    color-scheme: light;
+  }
+
+  ::selection {
+    background-color: #E3DBCC;
+    color: #101010;
+  }
+}
+
+/* Itens de lista (Radix Select, Dropdown, etc.) — destaque Nude, não azul do SO */
+[data-slot="select-item"][data-highlighted],
+[data-slot="dropdown-menu-item"][data-highlighted],
+[data-slot="dropdown-menu-sub-trigger"][data-highlighted],
+[data-slot="command-item"][data-highlighted] {
+  background-color: #E3DBCC !important;
+  color: #101010 !important;
+}
+
+[data-slot="select-item"][data-state="checked"] {
+  background-color: #F3F0E9;
+  color: #101010;
 }
 
 /* Cards / blocos: glassmorphism sutil, sombras neutras e difusas (como na referência) */
