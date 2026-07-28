@@ -93,8 +93,8 @@ export function AppSidebar({
       mobile ? "gap-3 px-3 py-2 text-sm" : "text-sm",
       showLabels && !compact ? "gap-3 px-3 py-2.5" : compact ? "gap-3 px-3 py-2 text-sm" : "justify-center p-2.5",
       isActive
-        ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5",
+        ? "bg-[#FDFCF8] text-[#101010] font-semibold shadow-sm ring-1 ring-[#E3DBCC]/60"
+        : "text-[#FDFCF8] hover:bg-white/10 hover:text-[#FDFCF8] hover:translate-x-0.5",
     )
 
   return (
@@ -135,7 +135,7 @@ export function AppSidebar({
                   onClick={mobile ? closeMobile : undefined}
                   className={linkClass(isActive)}
                 >
-                  <item.icon className={cn("h-4 w-4 shrink-0 transition-transform duration-200 group-hover/nav:scale-110", isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground")} />
+                  <item.icon className={cn("h-4 w-4 shrink-0 transition-transform duration-200 group-hover/nav:scale-110", isActive ? "text-[#101010]" : "text-[#FDFCF8]/90")} />
                   {showLabels && <span className="truncate">{item.label}</span>}
                 </Link>
               </li>
@@ -168,7 +168,7 @@ export function AppSidebar({
                       onClick={() => setConfigOpen((o) => !o)}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
+                        "text-[#FDFCF8] hover:bg-white/10 hover:text-[#FDFCF8]",
                       )}
                     >
                       <Settings className="h-4 w-4 shrink-0" />

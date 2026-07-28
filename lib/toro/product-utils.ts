@@ -1,6 +1,10 @@
 export type ToroStoreStatus = "disponivel" | "esgotado"
 export type ToroGender = "feminino" | "masculino"
 
+import { resolveProductImageUrl } from "@/lib/toro/product-image-url"
+
+export { resolveProductImageUrl, TORO_SITE_URL } from "@/lib/toro/product-image-url"
+
 export interface ToroProductMetadata {
   gender?: ToroGender
   category?: string
@@ -16,16 +20,6 @@ export interface ToroProductMetadata {
   rating?: number
   description?: string
   shipping?: Record<string, number>
-}
-
-export const TORO_SITE_URL =
-  process.env.TORO_SITE_URL?.trim() || process.env.NEXT_PUBLIC_TORO_SITE_URL?.trim() || "https://toro-green.vercel.app"
-
-export function resolveProductImageUrl(imagePath?: string | null): string {
-  if (!imagePath?.trim()) return ""
-  const path = imagePath.trim()
-  if (path.startsWith("http://") || path.startsWith("https://")) return path
-  return `${TORO_SITE_URL}${path.startsWith("/") ? path : `/${path}`}`
 }
 
 export function getTotalStock(metadata?: ToroProductMetadata | null): number {
