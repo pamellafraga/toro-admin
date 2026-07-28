@@ -1,6 +1,5 @@
 import { randomUUID } from "crypto"
 import { query, queryMany, queryOne } from "@/lib/db/pool"
-import { DEFAULT_COMPANY_EXPENSES } from "@/lib/company-expenses/default-expenses"
 
 export type CompanyExpenseRow = {
   id: string
@@ -66,31 +65,8 @@ async function findExpenseById(id: string): Promise<CompanyExpenseRow | null> {
   return queryOne<CompanyExpenseRow>(`${EXPENSE_SELECT} WHERE id = ? LIMIT 1`, [id])
 }
 
-async function ensureDefaultExpensesPresent(): Promise<void> {
-  for (const item of DEFAULT_COMPANY_EXPENSES) {
-    await queryOne(
-      `INSERT IGNORE INTO company_expenses
-         (id, name, category, currency, value_usd, value_brl, due_date, due_month, billing_period, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        item.id,
-        item.name,
-        item.category,
-        item.currency,
-        item.value_usd,
-        item.value_brl,
-        item.due_date,
-        item.due_month,
-        item.billing_period,
-        item.notes,
-      ],
-    )
-  }
-}
-
 export async function listCompanyExpenses(): Promise<CompanyExpenseRow[]> {
   await ensureCompanyExpensesSchema()
-  await ensureDefaultExpensesPresent()
   return queryMany<CompanyExpenseRow>(`${EXPENSE_SELECT} ORDER BY category, name`)
 }
 
