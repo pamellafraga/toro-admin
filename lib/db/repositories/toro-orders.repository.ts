@@ -63,6 +63,88 @@ export async function findOrderByNumber(orderNumber: string): Promise<ToroOrderR
   ])
 }
 
+export async function generateManualOrderNumber(): Promise<string> {
+  const date = new Date()
+  const ymd = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
+  const prefix = `MAN-${ymd}`
+  const rows = await queryMany<{ order_number: string }>(
+    `SELECT order_number FROM toro_orders WHERE order_number LIKE ? ORDER BY order_number DESC LIMIT 1`,
+    [`${prefix}-%`],
+  )
+  const last = rows[0]?.order_number
+  const seq = last ? parseInt(last.split("-").pop() || "0", 10) + 1 : 1
+  return `${prefix}-${String(seq).padStart(4, "0")}`
+}
+
+export interface ManualToroOrderInput {
+  customerName: string
+  customerEmail?: string | null
+  customerPhone?: string | null
+  customerCpfCnpj?: string | null
+  items: ToroOrderItem[]
+  subtotal: number
+  shipping: number
+  discount: number
+  total: number
+  paymentMethod?: string | null
+  paymentStatus?: string
+  orderStatus?: string
+  notes?: string | null
+  decrementStock?: boolean
+}
+
+export async function createManualToroOrder(input: ManualToroOrderInput): Promise<ToroOrderRow> {
+  const customerName = input.customerName.trim()
+  if (!customerName) throw new Error("Nome do cliente é obrigatório.")
+  if (!input.items.length) throw new Error("Adicione ao menos um produto ao pedido.")
+
+  for (const item of input.items) {
+    if (!item.productId || !item.size || item.quantity <= 0) {
+      throw new Error("Cada item precisa de produto, tamanho e quantidade válidos.")
+    }
+  }
+
+  const orderNumber = await generateManualOrderNumber()
+  const order = await createToroOrder({
+    orderNumber,
+    customerName,
+    customerEmail: input.customerEmail?.trim() || null,
+    customerPhone: input.customerPhone?.trim() || null,
+    customerCpfCnpj: input.customerCpfCnpj?.trim() || null,
+    items: input.items,
+    subtotal: input.subtotal,
+    shipping: input.shipping,
+    discount: input.discount,
+    total: input.total,
+    paymentMethod: input.paymentMethod?.trim() || "manual",
+    paymentStatus: input.paymentStatus ?? "approved",
+    orderStatus: input.orderStatus ?? "paid",
+    statusHistory: [
+      {
+        status: input.orderStatus ?? "paid",
+        at: new Date().toISOString(),
+        note: "Pedido registrado manualmente no painel",
+      },
+    ],
+    metadata: {
+      source: "manual",
+      notes: input.notes?.trim() || null,
+    },
+  })
+
+  if (input.decrementStock !== false) {
+    for (const item of input.items) {
+      try {
+        await decrementProductStock(item.productId, item.size, item.quantity)
+      } catch {
+        // estoque best-effort
+      }
+    }
+  }
+
+  return order
+}
+
 export async function createToroOrder(input: CreateToroOrderInput): Promise<ToroOrderRow> {
   const id = randomUUID()
   await queryOne(
