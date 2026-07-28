@@ -66,6 +66,20 @@ CREATE TABLE IF NOT EXISTS toro_orders (
   KEY idx_toro_orders_customer_email (customer_email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Clientes cadastrados manualmente no painel
+CREATE TABLE IF NOT EXISTS toro_store_customers (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NULL,
+  phone VARCHAR(64) NULL,
+  cpf_cnpj VARCHAR(32) NULL,
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_toro_store_customers_email (email),
+  KEY idx_toro_store_customers_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Imagens enviadas pelo painel
 CREATE TABLE IF NOT EXISTS toro_product_images (
   id CHAR(36) NOT NULL PRIMARY KEY,

@@ -15,11 +15,24 @@ import {
   List,
   ShieldAlert,
   User,
+  Plus,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { formatToroPrice } from "@/lib/products/catalog"
 import { formatCpfCnpjForDisplayOrDash } from "@/lib/clients/cpf-cnpj-display"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import type { StoreCustomerSegment } from "@/lib/db/repositories/toro-customers.repository"
 
 const SITE_URL = "https://toro-green.vercel.app"
@@ -39,6 +52,8 @@ type StoreCustomer = {
   last_payment_status: string | null
   last_order_total: number
   segment: StoreCustomerSegment
+  source?: "checkout" | "manual"
+  notes?: string | null
 }
 
 const SEGMENT_TABS: { id: "all" | StoreCustomerSegment; label: string; class: string }[] = [
@@ -86,8 +101,17 @@ export default function ClientesPage() {
   const [search, setSearch] = useState("")
   const [filterTab, setFilterTab] = useState<"all" | StoreCustomerSegment>("all")
   const [view, setView] = useState<"list" | "grid">("list")
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    cpf_cnpj: "",
+    notes: "",
+  })
 
-  const { data, error, isLoading } = useSWR("store-customers", fetchCustomers)
+  const { data, error, isLoading, mutate } = useSWR("store-customers", fetchCustomers)
   const customers = data?.customers ?? []
   const warning = data?.warning
 
@@ -114,6 +138,54 @@ export default function ClientesPage() {
     })
   }, [customers, search, filterTab])
 
+  const resetForm = () => {
+    setForm({ name: "", email: "", phone: "", cpf_cnpj: "", notes: "" })
+  }
+
+  const handleCreateCustomer = async () => {
+    if (!form.name.trim()) {
+      toast.error("Informe o nome do cliente.")
+      return
+    }
+    if (!form.email.trim() && !form.phone.trim() && !form.cpf_cnpj.trim()) {
+      toast.error("Informe ao menos e-mail, telefone ou CPF/CNPJ.")
+      return
+    }
+
+    setSaving(true)
+    try {
+      const res = await fetch("/api/store-customers", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name.trim(),
+          email: form.email.trim() || null,
+          phone: form.phone.trim() || null,
+          cpf_cnpj: form.cpf_cnpj.trim() || null,
+          notes: form.notes.trim() || null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Erro ao cadastrar cliente")
+
+      await mutate(
+        (prev) => ({
+          customers: [json.customer, ...(prev?.customers ?? [])],
+          warning: prev?.warning,
+        }),
+        { revalidate: true },
+      )
+      toast.success("Cliente cadastrado!")
+      resetForm()
+      setDialogOpen(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao cadastrar cliente.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!hasPermission("clientes") && !isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20">
@@ -126,15 +198,109 @@ export default function ClientesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Compradores cadastrados via checkout em{" "}
-          <a href={SITE_URL} target="_blank" rel="noopener noreferrer" className="underline">
-            toro-green.vercel.app
-          </a>
-          . Cada linha agrupa os pedidos do mesmo cliente.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Clientes</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Compradores do site{" "}
+            <a href={SITE_URL} target="_blank" rel="noopener noreferrer" className="underline">
+              toro-green.vercel.app
+            </a>{" "}
+            e cadastros manuais. Cada linha agrupa os pedidos do mesmo cliente.
+          </p>
+        </div>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open)
+            if (!open) resetForm()
+          }}
+        >
+          <DialogTrigger asChild>
+            <Button className="gap-2 shrink-0 bg-[#101010] text-[#FDFCF8] hover:bg-[#101010]/90">
+              <Plus className="h-4 w-4" />
+              Adicionar cliente
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Novo cliente</DialogTitle>
+              <DialogDescription>
+                Cadastre manualmente um cliente que ainda não comprou no site.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <Label htmlFor="customer-name">Nome *</Label>
+                <Input
+                  id="customer-name"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="Nome completo"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-email">E-mail</Label>
+                <Input
+                  id="customer-email"
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                  placeholder="cliente@email.com"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-phone">Telefone</Label>
+                <Input
+                  id="customer-phone"
+                  value={form.phone}
+                  onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
+                  placeholder="(11) 99999-9999"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-cpf">CPF / CNPJ</Label>
+                <Input
+                  id="customer-cpf"
+                  value={form.cpf_cnpj}
+                  onChange={(e) => setForm((p) => ({ ...p, cpf_cnpj: e.target.value }))}
+                  placeholder="000.000.000-00"
+                  className="mt-1"
+                />
+              </div>
+              <div>
+                <Label htmlFor="customer-notes">Observações</Label>
+                <Input
+                  id="customer-notes"
+                  value={form.notes}
+                  onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                  placeholder="Opcional"
+                  className="mt-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                * Informe ao menos e-mail, telefone ou CPF/CNPJ.
+              </p>
+              <Button
+                onClick={handleCreateCustomer}
+                disabled={saving}
+                className="w-full bg-[#101010] text-[#FDFCF8] hover:bg-[#101010]/90"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando…
+                  </>
+                ) : (
+                  "Salvar cliente"
+                )}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -225,9 +391,9 @@ export default function ClientesPage() {
       {!isLoading && !error && customers.length === 0 && (
         <div className="glass rounded-xl border border-dashed border-[#E3DBCC] p-12 text-center">
           <Users className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum cliente da loja ainda.</p>
+          <p className="text-sm text-muted-foreground">Nenhum cliente cadastrado ainda.</p>
           <p className="text-xs text-muted-foreground mt-1">
-            Quando alguém finalizar uma compra no site, aparecerá aqui automaticamente.
+            Use <strong>Adicionar cliente</strong> ou aguarde uma compra no site.
           </p>
         </div>
       )}
@@ -258,6 +424,11 @@ export default function ClientesPage() {
                         <p className="text-xs text-muted-foreground font-mono">
                           {formatCpfCnpjForDisplayOrDash(client.cpf_cnpj)}
                         </p>
+                        {client.source === "manual" && (
+                          <span className="mt-0.5 inline-flex rounded-full bg-[#F3F0E9] px-1.5 py-0.5 text-[9px] font-semibold uppercase text-[#101010]">
+                            Manual
+                          </span>
+                        )}
                       </div>
                     </div>
                   </td>
@@ -288,13 +459,19 @@ export default function ClientesPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted-foreground">
-                    <p className="font-mono">{client.last_order_number ?? "—"}</p>
-                    <p>{formatToroPrice(Number(client.last_order_total))}</p>
-                    <p className="mt-0.5">
-                      {PAYMENT_LABELS[client.last_payment_status ?? ""] ?? client.last_payment_status} ·{" "}
-                      {ORDER_STATUS_LABELS[client.last_order_status ?? ""] ?? client.last_order_status}
-                    </p>
-                    <p>{format(new Date(client.last_order_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                    {client.last_order_number ? (
+                      <>
+                        <p className="font-mono">{client.last_order_number}</p>
+                        <p>{formatToroPrice(Number(client.last_order_total))}</p>
+                        <p className="mt-0.5">
+                          {PAYMENT_LABELS[client.last_payment_status ?? ""] ?? client.last_payment_status} ·{" "}
+                          {ORDER_STATUS_LABELS[client.last_order_status ?? ""] ?? client.last_order_status}
+                        </p>
+                        <p>{format(new Date(client.last_order_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                      </>
+                    ) : (
+                      <p>Sem pedidos · cadastro manual</p>
+                    )}
                   </td>
                 </tr>
               ))}
