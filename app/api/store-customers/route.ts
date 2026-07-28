@@ -44,6 +44,13 @@ export async function POST(request: NextRequest) {
       email: body.email ? String(body.email) : null,
       phone: body.phone ? String(body.phone) : null,
       cpf_cnpj: body.cpf_cnpj ? String(body.cpf_cnpj) : null,
+      zip_code: body.zip_code ? String(body.zip_code) : null,
+      address: body.address ? String(body.address) : null,
+      address_number: body.address_number ? String(body.address_number) : null,
+      address_complement: body.address_complement ? String(body.address_complement) : null,
+      district: body.district ? String(body.district) : null,
+      city: body.city ? String(body.city) : null,
+      state: body.state ? String(body.state) : null,
       notes: body.notes ? String(body.notes) : null,
     })
 

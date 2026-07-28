@@ -3,7 +3,17 @@ import { queryMany, queryOne } from "@/lib/db/pool"
 
 export type StoreCustomerSegment = "comprou" | "pendente" | "recorrente" | "cancelado" | "novo"
 
-export interface StoreCustomerRow {
+export interface StoreCustomerAddress {
+  zip_code: string | null
+  address: string | null
+  address_number: string | null
+  address_complement: string | null
+  district: string | null
+  city: string | null
+  state: string | null
+}
+
+export interface StoreCustomerRow extends StoreCustomerAddress {
   customer_key: string
   name: string | null
   email: string | null
@@ -21,7 +31,7 @@ export interface StoreCustomerRow {
   notes?: string | null
 }
 
-export interface ManualStoreCustomerInput {
+export interface ManualStoreCustomerInput extends StoreCustomerAddress {
   name: string
   email?: string | null
   phone?: string | null
@@ -61,6 +71,26 @@ function customerKey(order: {
   })
 }
 
+const MANUAL_CUSTOMER_ADDRESS_COLUMNS: [string, string][] = [
+  ["zip_code", "VARCHAR(16) NULL"],
+  ["address", "VARCHAR(255) NULL"],
+  ["address_number", "VARCHAR(32) NULL"],
+  ["address_complement", "VARCHAR(128) NULL"],
+  ["district", "VARCHAR(128) NULL"],
+  ["city", "VARCHAR(128) NULL"],
+  ["state", "CHAR(2) NULL"],
+]
+
+async function ensureManualCustomerAddressColumns(): Promise<void> {
+  for (const [column, definition] of MANUAL_CUSTOMER_ADDRESS_COLUMNS) {
+    try {
+      await queryOne(`ALTER TABLE toro_store_customers ADD COLUMN ${column} ${definition}`)
+    } catch {
+      // coluna já existe
+    }
+  }
+}
+
 async function ensureManualCustomersTable(): Promise<void> {
   await queryOne(`
     CREATE TABLE IF NOT EXISTS toro_store_customers (
@@ -69,6 +99,13 @@ async function ensureManualCustomersTable(): Promise<void> {
       email VARCHAR(255) NULL,
       phone VARCHAR(64) NULL,
       cpf_cnpj VARCHAR(32) NULL,
+      zip_code VARCHAR(16) NULL,
+      address VARCHAR(255) NULL,
+      address_number VARCHAR(32) NULL,
+      address_complement VARCHAR(128) NULL,
+      district VARCHAR(128) NULL,
+      city VARCHAR(128) NULL,
+      state CHAR(2) NULL,
       notes TEXT NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -76,6 +113,27 @@ async function ensureManualCustomersTable(): Promise<void> {
       KEY idx_toro_store_customers_phone (phone)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
+  await ensureManualCustomerAddressColumns()
+}
+
+function mapManualCustomerAddress(row: {
+  zip_code?: string | null
+  address?: string | null
+  address_number?: string | null
+  address_complement?: string | null
+  district?: string | null
+  city?: string | null
+  state?: string | null
+}): StoreCustomerAddress {
+  return {
+    zip_code: row.zip_code?.trim() || null,
+    address: row.address?.trim() || null,
+    address_number: row.address_number?.trim() || null,
+    address_complement: row.address_complement?.trim() || null,
+    district: row.district?.trim() || null,
+    city: row.city?.trim() || null,
+    state: row.state?.trim().toUpperCase() || null,
+  }
 }
 
 async function listManualStoreCustomers(): Promise<StoreCustomerRow[]> {
@@ -87,10 +145,19 @@ async function listManualStoreCustomers(): Promise<StoreCustomerRow[]> {
       email: string | null
       phone: string | null
       cpf_cnpj: string | null
+      zip_code: string | null
+      address: string | null
+      address_number: string | null
+      address_complement: string | null
+      district: string | null
+      city: string | null
+      state: string | null
       notes: string | null
       created_at: string
     }>(`
-      SELECT id, name, email, phone, cpf_cnpj, notes, created_at
+      SELECT id, name, email, phone, cpf_cnpj,
+             zip_code, address, address_number, address_complement,
+             district, city, state, notes, created_at
       FROM toro_store_customers
       ORDER BY created_at DESC
       LIMIT 5000
@@ -106,6 +173,7 @@ async function listManualStoreCustomers(): Promise<StoreCustomerRow[]> {
       email: row.email?.trim() || null,
       phone: row.phone?.trim() || null,
       cpf_cnpj: row.cpf_cnpj?.trim() || null,
+      ...mapManualCustomerAddress(row),
       order_count: 0,
       paid_count: 0,
       total_spent: 0,
@@ -132,6 +200,7 @@ export async function createManualStoreCustomer(input: ManualStoreCustomerInput)
   const phone = input.phone?.trim() || null
   const cpf_cnpj = input.cpf_cnpj?.trim() || null
   const notes = input.notes?.trim() || null
+  const addressFields = mapManualCustomerAddress(input)
 
   if (!email && !phone && !cpf_cnpj) {
     throw new Error("Informe ao menos e-mail, telefone ou CPF/CNPJ.")
@@ -164,9 +233,25 @@ export async function createManualStoreCustomer(input: ManualStoreCustomerInput)
 
   const id = randomUUID()
   await queryOne(
-    `INSERT INTO toro_store_customers (id, name, email, phone, cpf_cnpj, notes)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [id, name, email, phone, cpf_cnpj, notes],
+    `INSERT INTO toro_store_customers
+       (id, name, email, phone, cpf_cnpj,
+        zip_code, address, address_number, address_complement, district, city, state, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      name,
+      email,
+      phone,
+      cpf_cnpj,
+      addressFields.zip_code,
+      addressFields.address,
+      addressFields.address_number,
+      addressFields.address_complement,
+      addressFields.district,
+      addressFields.city,
+      addressFields.state,
+      notes,
+    ],
   )
 
   const row = await queryOne<{
@@ -175,10 +260,20 @@ export async function createManualStoreCustomer(input: ManualStoreCustomerInput)
     email: string | null
     phone: string | null
     cpf_cnpj: string | null
+    zip_code: string | null
+    address: string | null
+    address_number: string | null
+    address_complement: string | null
+    district: string | null
+    city: string | null
+    state: string | null
     notes: string | null
     created_at: string
   }>(
-    `SELECT id, name, email, phone, cpf_cnpj, notes, created_at FROM toro_store_customers WHERE id = ?`,
+    `SELECT id, name, email, phone, cpf_cnpj,
+            zip_code, address, address_number, address_complement,
+            district, city, state, notes, created_at
+     FROM toro_store_customers WHERE id = ?`,
     [id],
   )
   if (!row) throw new Error("Falha ao cadastrar cliente.")
@@ -193,6 +288,7 @@ export async function createManualStoreCustomer(input: ManualStoreCustomerInput)
     email: row.email,
     phone: row.phone,
     cpf_cnpj: row.cpf_cnpj,
+    ...mapManualCustomerAddress(row),
     order_count: 0,
     paid_count: 0,
     total_spent: 0,
@@ -243,6 +339,13 @@ export async function listStoreCustomers(): Promise<StoreCustomerRow[]> {
         email: o.customer_email?.trim() || null,
         phone: o.customer_phone?.trim() || null,
         cpf_cnpj: o.customer_cpf_cnpj?.trim() || null,
+        zip_code: null,
+        address: null,
+        address_number: null,
+        address_complement: null,
+        district: null,
+        city: null,
+        state: null,
         order_count: 0,
         paid_count: 0,
         total_spent: 0,

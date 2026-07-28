@@ -20,6 +20,7 @@ import {
 import { useAuth } from "@/lib/auth-context"
 import { formatToroPrice } from "@/lib/products/catalog"
 import { formatCpfCnpjForDisplayOrDash } from "@/lib/clients/cpf-cnpj-display"
+import { formatCep } from "@/lib/format/br"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -43,6 +44,13 @@ type StoreCustomer = {
   email: string | null
   phone: string | null
   cpf_cnpj: string | null
+  zip_code: string | null
+  address: string | null
+  address_number: string | null
+  address_complement: string | null
+  district: string | null
+  city: string | null
+  state: string | null
   order_count: number
   paid_count: number
   total_spent: number
@@ -103,11 +111,19 @@ export default function ClientesPage() {
   const [view, setView] = useState<"list" | "grid">("list")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [cepLoading, setCepLoading] = useState(false)
   const [form, setForm] = useState({
     name: "",
     email: "",
     phone: "",
     cpf_cnpj: "",
+    zip_code: "",
+    address: "",
+    address_number: "",
+    address_complement: "",
+    district: "",
+    city: "",
+    state: "",
     notes: "",
   })
 
@@ -139,7 +155,47 @@ export default function ClientesPage() {
   }, [customers, search, filterTab])
 
   const resetForm = () => {
-    setForm({ name: "", email: "", phone: "", cpf_cnpj: "", notes: "" })
+    setForm({
+      name: "",
+      email: "",
+      phone: "",
+      cpf_cnpj: "",
+      zip_code: "",
+      address: "",
+      address_number: "",
+      address_complement: "",
+      district: "",
+      city: "",
+      state: "",
+      notes: "",
+    })
+  }
+
+  const handleCepBlur = async () => {
+    const raw = form.zip_code.replace(/\D/g, "")
+    if (raw.length !== 8) return
+
+    setCepLoading(true)
+    try {
+      const res = await fetch(`/api/geo/cep?value=${encodeURIComponent(raw)}`)
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "CEP não encontrado.")
+        return
+      }
+      setForm((prev) => ({
+        ...prev,
+        zip_code: data.cep ? formatCep(data.cep) : prev.zip_code,
+        address: data.street || prev.address,
+        district: data.district || prev.district,
+        city: data.city || prev.city,
+        state: (data.state || prev.state || "").toUpperCase(),
+      }))
+    } catch {
+      toast.error("Erro ao consultar CEP.")
+    } finally {
+      setCepLoading(false)
+    }
   }
 
   const handleCreateCustomer = async () => {
@@ -149,6 +205,10 @@ export default function ClientesPage() {
     }
     if (!form.email.trim() && !form.phone.trim() && !form.cpf_cnpj.trim()) {
       toast.error("Informe ao menos e-mail, telefone ou CPF/CNPJ.")
+      return
+    }
+    if (form.zip_code.replace(/\D/g, "").length === 8 && !form.address_number.trim()) {
+      toast.error("Informe o número da residência.")
       return
     }
 
@@ -163,6 +223,13 @@ export default function ClientesPage() {
           email: form.email.trim() || null,
           phone: form.phone.trim() || null,
           cpf_cnpj: form.cpf_cnpj.trim() || null,
+          zip_code: form.zip_code.trim() || null,
+          address: form.address.trim() || null,
+          address_number: form.address_number.trim() || null,
+          address_complement: form.address_complement.trim() || null,
+          district: form.district.trim() || null,
+          city: form.city.trim() || null,
+          state: form.state.trim() || null,
           notes: form.notes.trim() || null,
         }),
       })
@@ -222,7 +289,7 @@ export default function ClientesPage() {
               Adicionar cliente
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Novo cliente</DialogTitle>
               <DialogDescription>
@@ -271,6 +338,94 @@ export default function ClientesPage() {
                   className="mt-1"
                 />
               </div>
+
+              <div className="rounded-lg border border-[#E3DBCC]/70 bg-[#F3F0E9]/40 p-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[#101010]">Endereço</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="customer-cep">CEP</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        id="customer-cep"
+                        value={form.zip_code}
+                        onChange={(e) => setForm((p) => ({ ...p, zip_code: formatCep(e.target.value) }))}
+                        onBlur={handleCepBlur}
+                        placeholder="00000-000"
+                      />
+                      {cepLoading && (
+                        <Loader2 className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                      )}
+                    </div>
+                    <p className="mt-1 text-[10px] text-muted-foreground">Busca automática ao sair do campo</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="customer-address">Logradouro</Label>
+                    <Input
+                      id="customer-address"
+                      value={form.address}
+                      onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                      placeholder="Rua, avenida..."
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="customer-number">Número *</Label>
+                    <Input
+                      id="customer-number"
+                      value={form.address_number}
+                      onChange={(e) => setForm((p) => ({ ...p, address_number: e.target.value }))}
+                      placeholder="123"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer-complement">Complemento</Label>
+                    <Input
+                      id="customer-complement"
+                      value={form.address_complement}
+                      onChange={(e) => setForm((p) => ({ ...p, address_complement: e.target.value }))}
+                      placeholder="Apto, bloco..."
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer-district">Bairro</Label>
+                    <Input
+                      id="customer-district"
+                      value={form.district}
+                      onChange={(e) => setForm((p) => ({ ...p, district: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <Label htmlFor="customer-city">Cidade</Label>
+                    <Input
+                      id="customer-city"
+                      value={form.city}
+                      onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="customer-state">UF</Label>
+                    <Input
+                      id="customer-state"
+                      value={form.state}
+                      onChange={(e) =>
+                        setForm((p) => ({ ...p, state: e.target.value.toUpperCase().slice(0, 2) }))
+                      }
+                      placeholder="SP"
+                      maxLength={2}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="customer-notes">Observações</Label>
                 <Input
