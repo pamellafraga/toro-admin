@@ -35,7 +35,7 @@ const ADMIN_PROFILE: Profile = {
   name: "Admin",
   role: "admin",
   is_active: true,
-  permissions: ["home", "chamados", "produtos", "clientes", "seguradoras", "financeiro", "relatorios", "notificacoes", "atividades", "usuarios", "admin"] as Permission[],
+  permissions: ["home", "chamados", "produtos", "estoque", "clientes", "seguradoras", "financeiro", "relatorios", "notificacoes", "atividades", "usuarios", "admin"] as Permission[],
   avatar_url: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),

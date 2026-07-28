@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'comercial' | 'marketing' | 'captacao' | 'financeiro' | 'custom'
 
-export type Permission = 'home' | 'chamados' | 'produtos' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios' | 'admin'
+export type Permission = 'home' | 'chamados' | 'produtos' | 'estoque' | 'clientes' | 'seguradoras' | 'financeiro' | 'chat' | 'relatorios' | 'notificacoes' | 'atividades' | 'usuarios' | 'admin'
 
 /** Chamados de suporte interno (ferramentas dos clientes → painel da TI). */
 export type SupportTicketStatus = 'aberto' | 'em_andamento' | 'resolvido' | 'fechado'
@@ -150,11 +150,11 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin: ['home', 'chamados', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'relatorios', 'notificacoes', 'atividades', 'usuarios', 'admin'],
+  admin: ['home', 'chamados', 'produtos', 'estoque', 'clientes', 'seguradoras', 'financeiro', 'relatorios', 'notificacoes', 'atividades', 'usuarios', 'admin'],
   comercial: ['home', 'produtos', 'clientes'],
   marketing: ['home', 'seguradoras', 'notificacoes'],
   captacao: ['home', 'seguradoras', 'clientes', 'notificacoes'],
-  financeiro: ['home', 'produtos', 'clientes', 'financeiro', 'relatorios', 'notificacoes'],
+  financeiro: ['home', 'produtos', 'estoque', 'clientes', 'financeiro', 'relatorios', 'notificacoes'],
   custom: ['home'],
 }
 
@@ -162,6 +162,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   home: 'Home',
   chamados: 'SAC',
   produtos: 'Produtos',
+  estoque: 'Estoque',
   clientes: 'Clientes',
   seguradoras: 'Seguradoras',
   chat: 'Chat Interno',

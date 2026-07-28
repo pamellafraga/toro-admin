@@ -80,6 +80,29 @@ CREATE TABLE IF NOT EXISTS toro_store_customers (
   KEY idx_toro_store_customers_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Encomendas à costureira / fábrica (controle de estoque)
+CREATE TABLE IF NOT EXISTS toro_factory_orders (
+  id CHAR(36) NOT NULL PRIMARY KEY,
+  product_slug VARCHAR(100) NOT NULL,
+  product_name VARCHAR(255) NOT NULL,
+  supplier_name VARCHAR(255) NOT NULL,
+  stock_by_size JSON NOT NULL,
+  quantity_total INT NOT NULL DEFAULT 0,
+  unit_cost DECIMAL(12,2) NULL,
+  total_cost DECIMAL(12,2) NULL,
+  ordered_at DATE NOT NULL,
+  expected_at DATE NULL,
+  received_at DATE NULL,
+  status ENUM('encomendado', 'em_producao', 'a_caminho', 'recebido', 'cancelado') NOT NULL DEFAULT 'encomendado',
+  stock_applied TINYINT(1) NOT NULL DEFAULT 0,
+  notes TEXT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY idx_factory_orders_status (status),
+  KEY idx_factory_orders_product (product_slug),
+  KEY idx_factory_orders_ordered (ordered_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Imagens enviadas pelo painel
 CREATE TABLE IF NOT EXISTS toro_product_images (
   id CHAR(36) NOT NULL PRIMARY KEY,

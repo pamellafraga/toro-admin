@@ -158,6 +158,29 @@ export async function updateToroProduct(
   return findToroProductBySlug(slug)
 }
 
+export async function incrementProductStockBySize(
+  slugOrExternalId: string,
+  stockBySize: Record<string, number>,
+): Promise<void> {
+  const row = await findToroProductBySlug(slugOrExternalId)
+  if (!row) throw new Error("Produto não encontrado.")
+
+  const metadata: ToroProductMetadata = { ...row.metadata }
+  const current = { ...(metadata.stockBySize ?? {}) }
+  for (const [size, qty] of Object.entries(stockBySize)) {
+    if (qty <= 0) continue
+    current[size] = (current[size] ?? 0) + qty
+  }
+  metadata.stockBySize = current
+  metadata.stockTotal = getTotalStock(metadata)
+  const product_status = computeStoreStatus(metadata.stockTotal, row.product_status)
+
+  await queryOne(
+    `UPDATE products SET product_status = ?, metadata = ? WHERE id = ?`,
+    [product_status, JSON.stringify(metadata), row.id],
+  )
+}
+
 export async function syncToroProductAvailability(slugOrExternalId: string): Promise<void> {
   const row = await findToroProductBySlug(slugOrExternalId)
   if (!row) return
