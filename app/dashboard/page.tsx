@@ -5,7 +5,7 @@ import { StatCard } from "@/components/dashboard/stat-card"
 import { RevenueChart } from "@/components/dashboard/revenue-chart"
 import { ProductsPieChart } from "@/components/dashboard/products-pie-chart"
 import { RecentActivity } from "@/components/dashboard/recent-activity"
-import { Users, Package, FileText, TrendingUp, Clock } from "lucide-react"
+import { Users, Package, FileText, TrendingUp } from "lucide-react"
 import useSWR from "swr"
 import { fetchDashboardOverview } from "@/lib/dashboard/fetch-overview"
 
@@ -27,37 +27,31 @@ export default function DashboardHome() {
         <StatCard
           title="Clientes"
           value={stats?.totalClients ?? 0}
-          subtitle="Ver todos os clientes"
+          subtitle="Compradores cadastrados"
           icon={Users}
           href={hasPermission("clientes") ? "/dashboard/clientes" : undefined}
         />
         <StatCard
-          title="Testes em andamento"
-          value={stats?.trialsInProgress ?? 0}
-          subtitle="LicitaPregão e demais produtos"
-          icon={Clock}
-          href={hasPermission("produtos") ? "/dashboard/produtos/liticapro" : undefined}
+          title="Pedidos"
+          value={stats?.totalOrders ?? 0}
+          subtitle="Compras do site Toro"
+          icon={Package}
+          href={hasPermission("financeiro") ? "/dashboard/pedidos" : undefined}
         />
         <StatCard
-          title="Ferramentas ativas"
-          value={stats?.activeTools ?? 0}
-          subtitle="Produtos no ar"
-          icon={Package}
+          title="Produtos"
+          value={8}
+          subtitle="Catálogo toro-green.vercel.app"
+          icon={TrendingUp}
           href={hasPermission("produtos") ? "/dashboard/produtos" : undefined}
         />
         <StatCard
-          title="Receita Mensal"
+          title="Receita"
           value={`R$ ${(stats?.monthlyRevenue ?? 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-          subtitle={`${stats?.activeContracts ?? 0} contratações ativas · ${stats?.totalContracts ?? 0} totais`}
-          icon={TrendingUp}
+          subtitle="Vendas registradas"
+          icon={FileText}
           valueClassName="text-primary"
-          href={
-            hasPermission("financeiro")
-              ? "/dashboard/financeiro"
-              : hasPermission("produtos")
-                ? "/dashboard/produtos"
-                : undefined
-          }
+          href={hasPermission("financeiro") ? "/dashboard/financeiro" : undefined}
         />
       </div>
 

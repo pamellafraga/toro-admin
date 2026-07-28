@@ -1,12 +1,17 @@
 "use client"
 
 import { useState } from "react"
-import { Monitor, Search, Loader2 } from "lucide-react"
+import { Shirt, Loader2, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth-context"
-import { getProductsAlphabetically, type ProductCatalogEntry } from "@/lib/products/catalog"
+import {
+  getProductsAlphabetically,
+  formatToroPrice,
+  getTotalStock,
+  type ProductCatalogEntry,
+} from "@/lib/products/catalog"
 
 type ProductStatus = "no_ar" | "pausado" | "desativado"
 
@@ -17,78 +22,30 @@ const PRODUCT_STATUS_OPTIONS: { value: ProductStatus; label: string }[] = [
 ]
 
 const PRODUCT_STATUS_STYLE: Record<ProductStatus, string> = {
-  no_ar: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-  pausado: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-  desativado: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  no_ar: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+  pausado: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+  desativado: "bg-zinc-500/15 text-zinc-600 border-zinc-500/30",
 }
 
-const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
-  no_ar: "No ar",
-  pausado: "Pausado",
-  desativado: "Desativado",
-}
-
-const CARD_GRADIENTS = [
-  "from-sky-500/20 to-sky-600/5 border-sky-500/20",
-  "from-violet-500/20 to-violet-600/5 border-violet-500/20",
-]
-
-type ProductStatusBucket = "aguardando_produto" | "contratado" | "trial" | "inativo"
-
-function getProductStatusBucket(status: string | null | undefined): ProductStatusBucket {
-  const t = (status ?? "").toLowerCase().trim()
-  if (t === "trial") return "trial"
-  if (t === "aguardando_produto") return "aguardando_produto"
-  if (t === "ativa" || t === "active") return "contratado"
-  return "inativo"
-}
-
-function countByProductBucket(contracts: { status: string }[]) {
-  const counts = { aguardando: 0, contratado: 0, trial: 0, inativo: 0 }
-  for (const c of contracts) {
-    const bucket = getProductStatusBucket(c.status)
-    if (bucket === "aguardando_produto") counts.aguardando++
-    else if (bucket === "contratado") counts.contratado++
-    else if (bucket === "trial") counts.trial++
-    else counts.inativo++
-  }
-  return counts
-}
-
-function ProductIcon({ entry, className }: { entry: ProductCatalogEntry; className?: string }) {
-  if (entry.slug === "liticapro") return <Search className={className} />
-  return <Monitor className={className} />
-}
+const SITE_URL = "https://toro-green.vercel.app"
 
 export default function ProdutosPage() {
-  const { isAdmin, isComercial } = useAuth()
-  /** Evita o select voltar ao valor antigo enquanto o PATCH não conclui */
+  const { isAdmin } = useAuth()
   const [statusOverrides, setStatusOverrides] = useState<Partial<Record<string, ProductStatus>>>({})
   const [savingSlug, setSavingSlug] = useState<string | null>(null)
 
-  const { data, isLoading, mutate: mutateSwr } = useSWR("api-all-products", async () => {
-    const results = await Promise.all(
-      getProductsAlphabetically().map(async (entry) => {
-        const res = await fetch(`/api/products/${entry.slug}/contracts`, {
-          cache: "no-store",
-          credentials: "include",
-        })
-        const json = await res.json()
-        return {
-          entry,
-          product: json.product as { id: string; name: string; description: string; product_status?: string } | null,
-          contracts: (json.contracts ?? []) as { status: string; monthly_value: number }[],
-        }
-      }),
-    )
-    return results
+  const catalog = getProductsAlphabetically()
+
+  const { data, isLoading, mutate } = useSWR("toro-products", async () => {
+    const res = await fetch("/api/products", { credentials: "include", cache: "no-store" })
+    if (!res.ok) return { products: [] as Array<{ slug?: string; product_status?: string; price?: number; metadata?: Record<string, unknown> }> }
+    return res.json() as Promise<{ products: Array<{ slug?: string; product_status?: string; price?: number; metadata?: Record<string, unknown> }> }>
   })
 
-  const updateProductStatus = async (slug: string, newStatus: ProductStatus) => {
-    const previous = statusOverrides[slug] ?? (data?.find((d) => d.entry.slug === slug)?.product?.product_status as ProductStatus) ?? "no_ar"
-    setStatusOverrides((prev) => ({ ...prev, [slug]: newStatus }))
-    setSavingSlug(slug)
+  const dbBySlug = new Map((data?.products ?? []).map((p) => [p.slug, p]))
 
+  const updateProductStatus = async (slug: string, newStatus: ProductStatus) => {
+    setSavingSlug(slug)
     try {
       const res = await fetch(`/api/products/${slug}`, {
         method: "PATCH",
@@ -96,182 +53,139 @@ export default function ProdutosPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ product_status: newStatus }),
       })
-      const json = (await res.json().catch(() => ({}))) as {
-        error?: string
-        product?: { product_status?: string }
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        throw new Error((j as { error?: string }).error || "Erro ao atualizar")
       }
-      if (!res.ok) throw new Error(json.error || "Erro ao atualizar")
-
-      const savedStatus = (json.product?.product_status as ProductStatus) ?? newStatus
-
-      await mutateSwr(
-        (current) =>
-          current?.map((item) =>
-            item.entry.slug === slug
-              ? {
-                  ...item,
-                  product: item.product
-                    ? { ...item.product, product_status: savedStatus }
-                    : {
-                        id: slug,
-                        name: item.entry.name,
-                        description: item.entry.description,
-                        product_status: savedStatus,
-                      },
-                }
-              : item,
-          ) ?? current,
-        { revalidate: true },
-      )
-
-      setStatusOverrides((prev) => {
-        const next = { ...prev }
-        delete next[slug]
-        return next
-      })
-      toast.success("Status do produto atualizado.")
-    } catch (e: unknown) {
-      setStatusOverrides((prev) => ({ ...prev, [slug]: previous }))
-      toast.error(e instanceof Error ? e.message : "Erro ao atualizar status")
+      setStatusOverrides((prev) => ({ ...prev, [slug]: newStatus }))
+      await mutate()
+      toast.success("Status atualizado.")
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao atualizar")
     } finally {
       setSavingSlug(null)
     }
   }
 
-  const rows = (data ?? [])
-    .map(({ entry, product, contracts }, index) => {
-    const { aguardando, contratado, trial, inativo } = countByProductBucket(contracts)
-    const total = contracts.length
-    const monthlyValue = contracts
-      .filter((c) => {
-        const b = getProductStatusBucket(c.status)
-        return b === "contratado" || b === "aguardando_produto"
-      })
-      .reduce((sum, c) => sum + Number(c.monthly_value), 0)
-
-    return {
-      entry,
-      gradient: CARD_GRADIENTS[index % CARD_GRADIENTS.length],
-      id: product?.id ?? entry.slug,
-      name: product?.name ?? entry.name,
-      description: product?.description ?? entry.description,
-      planosLabel: entry.planosLabel,
-      aguardando,
-      contratado,
-      trial,
-      inativo,
-      total,
-      monthlyValue: `R$ ${monthlyValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`,
-      productStatus:
-        statusOverrides[entry.slug] ??
-        ((product?.product_status as ProductStatus) ?? "no_ar"),
-      isSaving: savingSlug === entry.slug,
-    }
+  const rows = catalog.map((entry) => {
+    const db = dbBySlug.get(entry.slug)
+    const stock = db?.metadata?.stockBySize
+      ? Object.values(db.metadata.stockBySize as Record<string, number>).reduce((a, b) => a + b, 0)
+      : getTotalStock(entry)
+    const status = statusOverrides[entry.slug] ?? ((db?.product_status as ProductStatus) ?? "no_ar")
+    return { entry, stock, status, price: db?.price ?? entry.price }
   })
-    .sort((a, b) => a.name.localeCompare(b.name, "pt-BR", { sensitivity: "base" }))
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Produtos</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          LicitaPregão (licitações públicas) e SEGURA (gestão de apólices).
-        </p>
-        {isComercial && (
-          <p className="text-xs text-amber-400/90 mt-1">Contadores e totais são da sua história inteira (todas as vendas registradas por você).</p>
-        )}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Produtos</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Catálogo sincronizado com o site{" "}
+            <a href={SITE_URL} target="_blank" rel="noopener noreferrer" className="underline">
+              toro-green.vercel.app
+            </a>
+            . As compras são feitas na loja online.
+          </p>
+        </div>
+        <a
+          href={SITE_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted/50"
+        >
+          Ver loja <ExternalLink className="h-4 w-4" />
+        </a>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        {rows.map((productRow) => (
-          <Link key={productRow.entry.slug} href={`/dashboard/produtos/${productRow.entry.slug}`}>
-            <div className={`group glass rounded-xl border bg-gradient-to-br ${productRow.gradient} p-6 hover:glow-blue transition-all cursor-pointer`}>
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 group-hover:bg-primary/20 transition-colors mb-4">
-                <ProductIcon entry={productRow.entry} className="h-6 w-6 text-primary" />
-              </div>
-              <h3 className="text-lg font-bold text-foreground mb-1">{productRow.name}</h3>
-              <p className="text-sm text-muted-foreground mb-1">{productRow.description}</p>
-              <p className="text-xs text-muted-foreground/90 mb-4">{productRow.planosLabel}</p>
-              <div className="grid grid-cols-4 gap-2 pt-4 border-t border-border/50">
-                {isLoading ? (
-                  <div className="col-span-4 flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="text-xs">Carregando...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="text-center min-w-0">
-                      <p className="text-lg font-bold text-amber-400">{productRow.aguardando}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">Aguardando produto</p>
-                    </div>
-                    <div className="text-center min-w-0">
-                      <p className="text-lg font-bold text-emerald-400">{productRow.contratado}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">Contratado</p>
-                    </div>
-                    <div className="text-center min-w-0">
-                      <p className="text-lg font-bold text-sky-400">{productRow.trial}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">Teste grátis</p>
-                    </div>
-                    <div className="text-center min-w-0">
-                      <p className="text-lg font-bold text-muted-foreground">{productRow.inativo}</p>
-                      <p className="text-[10px] text-muted-foreground leading-tight">Inativo</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </Link>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {rows.map(({ entry, stock, status, price }) => (
+          <ProductCard
+            key={entry.slug}
+            entry={entry}
+            stock={stock}
+            status={status}
+            price={price}
+            isAdmin={isAdmin}
+            isSaving={savingSlug === entry.slug}
+            onStatusChange={(s) => updateProductStatus(entry.slug, s)}
+          />
         ))}
       </div>
 
-      <div className="glass rounded-xl border border-border/50 overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/50 bg-muted/20">
-              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Produto</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contratados</th>
-              {isAdmin && <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Valor Mensal</th>}
-              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
-              <th className="text-left px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((productRow) => (
-              <tr
-                key={productRow.entry.slug}
-                className="cursor-pointer hover:bg-muted/10 transition-colors border-b border-border/30"
-                onClick={() => { window.location.href = `/dashboard/produtos/${productRow.entry.slug}` }}
-              >
-                <td className="px-6 py-4 font-semibold text-foreground underline-offset-2 hover:underline">{productRow.name}</td>
-                <td className="px-6 py-4 text-foreground">{isLoading ? "—" : productRow.contratado}</td>
-                {isAdmin && <td className="px-6 py-4 text-foreground">{isLoading ? "—" : productRow.monthlyValue}</td>}
-                <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                  {isAdmin ? (
-                    <select
-                      value={productRow.productStatus}
-                      disabled={productRow.isSaving}
-                      onChange={(e) => updateProductStatus(productRow.entry.slug, e.target.value as ProductStatus)}
-                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium focus:border-primary focus:outline-none cursor-pointer disabled:opacity-60 ${PRODUCT_STATUS_STYLE[productRow.productStatus]}`}
-                    >
-                      {PRODUCT_STATUS_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${PRODUCT_STATUS_STYLE[productRow.productStatus]}`}>
-                      {PRODUCT_STATUS_LABELS[productRow.productStatus]}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4">
-                  <Link href={`/dashboard/produtos/${productRow.entry.slug}`} onClick={(e) => e.stopPropagation()}>
-                    <button className="rounded-lg bg-primary px-4 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition-colors">Ver assinantes</button>
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {isLoading && (
+        <div className="flex items-center gap-2 text-muted-foreground text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" /> Sincronizando com o banco…
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ProductCard({
+  entry,
+  stock,
+  status,
+  price,
+  isAdmin,
+  isSaving,
+  onStatusChange,
+}: {
+  entry: ProductCatalogEntry
+  stock: number
+  status: ProductStatus
+  price: number
+  isAdmin: boolean
+  isSaving: boolean
+  onStatusChange: (s: ProductStatus) => void
+}) {
+  const siteProductUrl = `${SITE_URL}/produto/${entry.slug}`
+
+  return (
+    <div className="glass rounded-xl border border-border/50 overflow-hidden">
+      <div className="aspect-[4/3] bg-[#F3F0E9] flex items-center justify-center border-b border-border/30">
+        <Shirt className="h-12 w-12 text-[#101010]/20" />
+      </div>
+      <div className="p-5 space-y-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            {entry.category} · {entry.gender === "feminino" ? "Feminino" : "Masculino"}
+          </p>
+          <h3 className="text-lg font-semibold text-foreground">{entry.name}</h3>
+          <p className="text-sm font-medium text-foreground mt-1">{formatToroPrice(price)}</p>
+        </div>
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">Estoque total</span>
+          <span className={stock === 0 ? "text-destructive font-medium" : "text-foreground font-medium"}>
+            {stock} un.
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          {isAdmin ? (
+            <select
+              value={status}
+              disabled={isSaving}
+              onChange={(e) => onStatusChange(e.target.value as ProductStatus)}
+              className={`rounded-lg border px-2 py-1 text-xs font-medium ${PRODUCT_STATUS_STYLE[status]}`}
+            >
+              {PRODUCT_STATUS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          ) : (
+            <span className={`rounded-full border px-2.5 py-0.5 text-xs ${PRODUCT_STATUS_STYLE[status]}`}>
+              {PRODUCT_STATUS_OPTIONS.find((o) => o.value === status)?.label}
+            </span>
+          )}
+          <Link
+            href={siteProductUrl}
+            target="_blank"
+            className="text-xs text-primary underline-offset-2 hover:underline"
+          >
+            Ver no site
+          </Link>
+        </div>
       </div>
     </div>
   )

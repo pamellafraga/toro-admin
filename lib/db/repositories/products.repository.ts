@@ -56,19 +56,39 @@ export async function findOrCreateProductFromCatalog(catalog: ProductCatalogEntr
   const existing = await findProductBySlug(catalog.slug)
   if (existing) return existing
 
+  const metadata = {
+    category: (catalog as { category?: string }).category,
+    gender: (catalog as { gender?: string }).gender,
+    image: (catalog as { image?: string }).image,
+    stockBySize: (catalog as { stockBySize?: Record<string, number> }).stockBySize,
+    sizes: (catalog as { sizes?: string[] }).sizes,
+    collectionLine: (catalog as { collectionLine?: string }).collectionLine,
+    tag: (catalog as { tag?: string }).tag,
+    bestSeller: (catalog as { bestSeller?: boolean }).bestSeller,
+    isLaunch: (catalog as { isLaunch?: boolean }).isLaunch,
+  }
+
   const row = await queryOne<ProductRow>(
-    `INSERT INTO products (name, description, icon, slug, product_status, is_active)
-     VALUES ($1, $2, $3, $4, 'no_ar', true)
+    `INSERT INTO products (name, description, icon, slug, external_id, price, product_status, is_active, metadata)
+     VALUES ($1, $2, $3, $4, $5, $6, 'no_ar', true, $7::jsonb)
      RETURNING id, name, description, icon, slug, product_status, monthly_price`,
-    [catalog.name, catalog.description, catalog.icon, catalog.slug],
+    [
+      catalog.name,
+      catalog.description,
+      catalog.icon,
+      catalog.slug,
+      catalog.slug,
+      (catalog as { price?: number }).price ?? null,
+      JSON.stringify(metadata),
+    ],
   )
   if (!row) throw new Error(`Falha ao criar produto ${catalog.name}.`)
   return row
 }
 
 export async function listProducts(): Promise<ProductRow[]> {
-  return queryMany<ProductRow>(
-    `SELECT id, name, description, icon, slug, product_status, monthly_price
+  return queryMany<ProductRow & { price?: number; metadata?: Record<string, unknown> }>(
+    `SELECT id, name, description, icon, slug, product_status, monthly_price, price, metadata
      FROM products
      WHERE slug IS NOT NULL
      ORDER BY name`,
