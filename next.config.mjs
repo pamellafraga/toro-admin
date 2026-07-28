@@ -5,6 +5,9 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "toro-green.vercel.app", pathname: "/products/**" },
+    ],
   },
   async headers() {
     return [

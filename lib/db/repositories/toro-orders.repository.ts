@@ -134,4 +134,6 @@ export async function decrementProductStock(productId: string, size: string, qua
      WHERE external_id = $1 OR slug = $1`,
     [productId, JSON.stringify(updated)],
   )
+  const { syncToroProductAvailability } = await import("@/lib/db/repositories/toro-products.repository")
+  await syncToroProductAvailability(productId)
 }

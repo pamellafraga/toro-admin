@@ -54,23 +54,37 @@ export async function findProductBySlug(slug: string): Promise<ProductRow | null
 
 export async function findOrCreateProductFromCatalog(catalog: ProductCatalogEntry): Promise<ProductRow> {
   const existing = await findProductBySlug(catalog.slug)
-  if (existing) return existing
 
   const metadata = {
     category: (catalog as { category?: string }).category,
     gender: (catalog as { gender?: string }).gender,
     image: (catalog as { image?: string }).image,
+    hoverImage: (catalog as { hoverImage?: string }).hoverImage,
     stockBySize: (catalog as { stockBySize?: Record<string, number> }).stockBySize,
     sizes: (catalog as { sizes?: string[] }).sizes,
     collectionLine: (catalog as { collectionLine?: string }).collectionLine,
     tag: (catalog as { tag?: string }).tag,
     bestSeller: (catalog as { bestSeller?: boolean }).bestSeller,
     isLaunch: (catalog as { isLaunch?: boolean }).isLaunch,
+    description: (catalog as { description?: string }).description,
+    shipping: (catalog as { shipping?: unknown }).shipping,
+  }
+
+  if (existing) {
+    await queryOne(
+      `UPDATE products SET
+        external_id = COALESCE(external_id, $2),
+        price = COALESCE(price, $3),
+        metadata = COALESCE(metadata, '{}'::jsonb) || $4::jsonb
+       WHERE id = $1`,
+      [existing.id, catalog.slug, (catalog as { price?: number }).price ?? null, JSON.stringify(metadata)],
+    )
+    return existing
   }
 
   const row = await queryOne<ProductRow>(
     `INSERT INTO products (name, description, icon, slug, external_id, price, product_status, is_active, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, 'no_ar', true, $7::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, 'disponivel', true, $7::jsonb)
      RETURNING id, name, description, icon, slug, product_status, monthly_price`,
     [
       catalog.name,

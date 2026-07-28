@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server"
 import { isAdmin } from "@/lib/api/auth"
 import { handleApiError, jsonError, jsonForbidden, jsonOk } from "@/lib/api/response"
-import { findProductBySlug, updateProductStatus } from "@/lib/db/repositories/products.repository"
-import { getProductBySlug } from "@/lib/products/catalog"
+import { updateToroProduct } from "@/lib/db/repositories/toro-products.repository"
+import { mapRowToPublicProduct } from "@/lib/toro/product-utils"
 
 export const dynamic = "force-dynamic"
 
@@ -11,27 +11,31 @@ export async function PATCH(
   { params }: { params: Promise<{ slug: string }> },
 ) {
   try {
-    if (!isAdmin(req)) return jsonForbidden("Apenas administradores podem alterar o status do produto")
+    if (!isAdmin(req)) return jsonForbidden("Apenas administradores podem editar produtos.")
 
     const { slug } = await params
-    const catalog = getProductBySlug(slug)
-    if (!catalog) return jsonError("Produto não encontrado.", 404)
-
     const body = await req.json()
-    const { product_status } = body as { product_status?: string }
-    if (!product_status || !["no_ar", "pausado", "desativado"].includes(product_status)) {
-      return jsonError("product_status deve ser no_ar, pausado ou desativado", 400)
-    }
 
-    const productRow = await findProductBySlug(catalog.slug)
-    if (!productRow?.id) return jsonError("Produto não encontrado", 404)
+    const statusRaw = body.status ?? body.product_status
+    const status =
+      statusRaw === "esgotado" || statusRaw === "disponivel" ? statusRaw : undefined
 
-    const updated = await updateProductStatus(productRow.id, product_status)
-    if (!updated) return jsonError("Produto não encontrado após atualização.", 500)
+    const updated = await updateToroProduct(slug, {
+      name: body.name !== undefined ? String(body.name).trim() : undefined,
+      price: body.price !== undefined ? Number(body.price) : undefined,
+      status,
+      stockTotal: body.stockTotal !== undefined ? Math.max(0, Number(body.stockTotal)) : undefined,
+      gender: body.gender === "masculino" || body.gender === "feminino" ? body.gender : undefined,
+      category: body.category !== undefined ? String(body.category).trim() : undefined,
+      image: body.image !== undefined ? String(body.image).trim() : undefined,
+      description: body.description !== undefined ? String(body.description) : undefined,
+    })
 
-    return jsonOk({ success: true, product: updated })
+    if (!updated) return jsonError("Produto não encontrado.", 404)
+
+    return jsonOk({ success: true, product: mapRowToPublicProduct(updated) })
   } catch (err) {
     console.error("Erro ao atualizar produto:", err)
-    return handleApiError(err, "Erro ao atualizar")
+    return handleApiError(err, "Erro ao atualizar produto.")
   }
 }

@@ -1,9 +1,3 @@
-import {
-  STEFANIE_ORIGEM_CAPTACAO,
-  STEFANIE_ORIGEM_COMERCIAL,
-  XPRESS_ORIGEM_CAPTACAO_VALUES,
-  origemCaptacaoForComercial,
-} from "@/lib/constants/origem-captacao"
 import { queryMany, queryOne } from "@/lib/db/pool"
 
 export type ClientesListView =
@@ -14,10 +8,27 @@ export type ClientesListView =
   | "comercial-geral"
   | "comercial-meu"
 
-const ORIGENS_EXCLUIDAS_ABA_GERAL = [
-  ...STEFANIE_ORIGEM_CAPTACAO,
-  ...XPRESS_ORIGEM_CAPTACAO_VALUES,
-]
+const TORO_CLIENTS_SQL = `SELECT DISTINCT c.*
+ FROM clients c
+ WHERE lower(trim(COALESCE(c.origem_captacao, ''))) IN ('toro loja', 'toro')
+    OR c.email IN (
+      SELECT DISTINCT customer_email FROM toro_orders
+      WHERE customer_email IS NOT NULL AND trim(customer_email) <> ''
+    )
+ ORDER BY c.created_at ASC, c.name ASC
+ LIMIT 10000`
+
+async function listToroClients(): Promise<ClientRow[]> {
+  try {
+    return await queryMany<ClientRow>(TORO_CLIENTS_SQL)
+  } catch {
+    return queryMany<ClientRow>(
+      `SELECT * FROM clients
+       WHERE lower(trim(COALESCE(origem_captacao, ''))) IN ('toro loja', 'toro')
+       ORDER BY created_at ASC, name ASC LIMIT 10000`,
+    )
+  }
+}
 
 type ClientRow = {
   id: string
@@ -42,65 +53,18 @@ export async function listClientsForDashboard(
   view: ClientesListView,
   comercialDisplayName?: string | null,
 ): Promise<ClientRow[]> {
-  if (view === "geral-todos") {
-    return queryMany<ClientRow>(
-      `SELECT * FROM clients ORDER BY created_at ASC, name ASC LIMIT 10000`,
-    )
+  if (
+    view === "geral-todos" ||
+    view === "geral" ||
+    view === "comercial-geral" ||
+    view === "comercial-meu" ||
+    view === "stefanie" ||
+    view === "xpress-solutions"
+  ) {
+    return listToroClients()
   }
 
-  if (view === "comercial-geral") {
-    return queryMany<ClientRow>(
-      `SELECT * FROM clients
-       WHERE TRIM(COALESCE(origem_captacao, '')) = ''
-       ORDER BY created_at ASC, name ASC
-       LIMIT 10000`,
-    )
-  }
-
-  if (view === "comercial-meu" && comercialDisplayName) {
-    const origem = origemCaptacaoForComercial(comercialDisplayName)
-    return queryMany<ClientRow>(
-      `SELECT * FROM clients WHERE origem_captacao = $1 ORDER BY created_at ASC, name ASC LIMIT 10000`,
-      [origem],
-    )
-  }
-
-  if (view === "stefanie") {
-    return queryMany<ClientRow>(
-      `SELECT * FROM clients c
-       WHERE c.origem_captacao = ANY($1::text[])
-          OR c.id IN (
-            SELECT DISTINCT client_id FROM contracts WHERE origem_comercial = $2
-          )
-       ORDER BY c.created_at ASC, c.name ASC
-       LIMIT 10000`,
-      [STEFANIE_ORIGEM_CAPTACAO, STEFANIE_ORIGEM_COMERCIAL],
-    )
-  }
-
-  if (view === "xpress-solutions") {
-    return queryMany<ClientRow>(
-      `SELECT * FROM clients c
-       WHERE lower(trim(COALESCE(c.origem_captacao, ''))) = 'xpress solutions'
-          OR c.origem_captacao = ANY($1::text[])
-          OR lower(trim(COALESCE(c.liticapro_data->>'origem_captacao', ''))) = 'xpress solutions'
-       ORDER BY c.created_at ASC, c.name ASC
-       LIMIT 10000`,
-      [XPRESS_ORIGEM_CAPTACAO_VALUES],
-    )
-  }
-
-  // Aba Geral (admin): website, compras manuais etc. — exceto Stefanie e Xpress Solutions
-  return queryMany<ClientRow>(
-    `SELECT * FROM clients c
-     WHERE COALESCE(c.origem_captacao, '') <> ALL($1::text[])
-       AND c.id NOT IN (
-         SELECT DISTINCT client_id FROM contracts WHERE origem_comercial = $2
-       )
-     ORDER BY c.created_at ASC, c.name ASC
-     LIMIT 10000`,
-    [ORIGENS_EXCLUIDAS_ABA_GERAL, STEFANIE_ORIGEM_COMERCIAL],
-  )
+  return []
 }
 
 export async function deleteClient(id: string): Promise<void> {

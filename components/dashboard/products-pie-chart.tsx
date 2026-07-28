@@ -4,15 +4,16 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import useSWR from "swr"
 import { fetchDashboardOverview } from "@/lib/dashboard/fetch-overview"
 
-const COLORS = ["#005176", "#006992", "#0ea5e9", "#a78bfa", "#34d399"]
+/** Paleta Toro: Obsidian, Nude, Ivory, Off white, muted */
+const COLORS = ["#101010", "#E3DBCC", "#F3F0E9", "#8a8278", "#5c5c5c", "#C4BAA8"]
 
 export function ProductsPieChart() {
   const { data } = useSWR("dashboard-overview", fetchDashboardOverview)
-  const chartData = data?.contractsByProduct ?? []
+  const chartData = data?.salesByProduct ?? []
 
   return (
     <div className="glass rounded-xl p-6">
-      <h3 className="mb-4 text-lg font-semibold text-foreground">Contratações por Produto</h3>
+      <h3 className="mb-4 text-lg font-semibold text-foreground">Vendas por Produto</h3>
       <div className="h-60">
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
@@ -37,14 +38,14 @@ export function ProductsPieChart() {
                   borderRadius: "8px",
                   color: "var(--card-foreground)",
                   fontSize: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  boxShadow: "0 4px 12px rgba(16, 16, 16, 0.08)",
                 }}
               />
             </PieChart>
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted-foreground text-center px-4">
-            Nenhuma contratação ativa ou em teste por produto
+            Nenhuma venda registrada ainda
           </div>
         )}
       </div>

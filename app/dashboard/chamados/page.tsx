@@ -20,9 +20,9 @@ const STATUS_OPTIONS: { value: SupportTicketStatus | ""; label: string }[] = [
 ]
 
 const STATUS_STYLE: Record<SupportTicketStatus, string> = {
-  aberto: "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30",
-  em_andamento: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
-  resolvido: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+  aberto: "bg-[#F3F0E9] text-[#101010] border-[#E3DBCC]",
+  em_andamento: "bg-[#E3DBCC]/40 text-[#101010] border-[#E3DBCC]",
+  resolvido: "bg-[#101010]/10 text-[#101010] border-[#E3DBCC]",
   fechado: "bg-muted text-muted-foreground border-border",
 }
 

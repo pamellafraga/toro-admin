@@ -89,9 +89,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#101010]">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(227,219,204,0.08),transparent_60%)]" />
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
+        style={{ backgroundImage: "url('/images/login-gym-bg.png')" }}
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[#101010]/70" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#101010]/40 via-transparent to-[#101010]/85" aria-hidden="true" />
       <div className="relative z-10 w-full max-w-[420px] px-5">
-        <div className="overflow-hidden rounded-3xl border border-[#E3DBCC]/20 bg-[#FDFCF8] shadow-2xl">
+        <div className="overflow-hidden rounded-3xl border border-[#E3DBCC]/25 bg-[#FDFCF8]/95 shadow-2xl backdrop-blur-sm">
           <div className="px-8 py-10 sm:px-10 sm:py-12">
             <div className="mb-8 flex justify-center">
               <Image
@@ -129,7 +135,7 @@ export default function ForgotPasswordPage() {
                       onChange={(e) => setUsername(e.target.value)}
                       placeholder="Ex.: Roberto"
                       autoComplete="username"
-                      className="h-12 w-full rounded-xl border border-[#1e3a5f]/60 bg-[#070e20]/80 pl-11 pr-4 text-sm text-[#e2e8f0] placeholder:text-[#475569] focus:border-[#0ea5e9]/40 focus:outline-none"
+                      className="h-12 w-full rounded-xl border border-[#E3DBCC] bg-[#F3F0E9]/50 pl-11 pr-4 text-sm text-[#101010] placeholder:text-[#9a9a9a] focus:border-[#101010]/30 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -141,7 +147,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-500 to-sky-600 font-semibold text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="h-12 w-full rounded-xl bg-[#101010] font-semibold text-[#FDFCF8] shadow-lg hover:bg-[#2a2a2a] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar código por e-mail"}
                 </button>
@@ -149,7 +155,7 @@ export default function ForgotPasswordPage() {
             ) : (
               <form onSubmit={handleResetPassword} className="flex flex-col gap-5">
                 {message && (
-                  <div className="rounded-xl border border-sky-500/20 bg-sky-500/10 px-4 py-3 text-sm text-sky-200">
+                  <div className="rounded-xl border border-[#E3DBCC] bg-[#F3F0E9] px-4 py-3 text-sm text-[#101010]">
                     {message}
                   </div>
                 )}
@@ -165,7 +171,7 @@ export default function ForgotPasswordPage() {
                     value={code}
                     onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                     placeholder="000000"
-                    className="h-12 w-full rounded-xl border border-[#1e3a5f]/60 bg-[#070e20]/80 px-4 text-center text-lg tracking-[0.4em] text-[#e2e8f0] placeholder:text-[#475569] focus:border-[#0ea5e9]/40 focus:outline-none"
+                    className="h-12 w-full rounded-xl border border-[#E3DBCC] bg-[#F3F0E9]/50 px-4 text-center text-lg tracking-[0.4em] text-[#101010] placeholder:text-[#9a9a9a] focus:border-[#101010]/30 focus:outline-none"
                   />
                 </div>
                 <div className="flex flex-col gap-2">
@@ -181,7 +187,7 @@ export default function ForgotPasswordPage() {
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="Mínimo 6 caracteres"
                       minLength={6}
-                      className="h-12 w-full rounded-xl border border-[#1e3a5f]/60 bg-[#070e20]/80 pl-11 pr-4 text-sm text-[#e2e8f0] placeholder:text-[#475569] focus:border-[#0ea5e9]/40 focus:outline-none"
+                      className="h-12 w-full rounded-xl border border-[#E3DBCC] bg-[#F3F0E9]/50 pl-11 pr-4 text-sm text-[#101010] placeholder:text-[#9a9a9a] focus:border-[#101010]/30 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -197,7 +203,7 @@ export default function ForgotPasswordPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Repita a nova senha"
-                      className="h-12 w-full rounded-xl border border-[#1e3a5f]/60 bg-[#070e20]/80 pl-11 pr-4 text-sm text-[#e2e8f0] placeholder:text-[#475569] focus:border-[#0ea5e9]/40 focus:outline-none"
+                      className="h-12 w-full rounded-xl border border-[#E3DBCC] bg-[#F3F0E9]/50 pl-11 pr-4 text-sm text-[#101010] placeholder:text-[#9a9a9a] focus:border-[#101010]/30 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -209,14 +215,14 @@ export default function ForgotPasswordPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="h-12 w-full rounded-xl bg-gradient-to-r from-sky-500 to-sky-600 font-semibold text-white shadow-lg hover:shadow-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="h-12 w-full rounded-xl bg-[#101010] font-semibold text-[#FDFCF8] shadow-lg hover:bg-[#2a2a2a] disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Redefinir senha"}
                 </button>
                 <button
                   type="button"
                   onClick={() => { setStep(1); setError(""); setCode(""); setNewPassword(""); setConfirmPassword(""); }}
-                  className="text-sm text-[#0ea5e9] hover:text-sky-300"
+                  className="text-sm text-[#101010] hover:underline"
                 >
                   Usar outro usuário
                 </button>

@@ -38,16 +38,16 @@ export function StatCard({
             </p>
           )}
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 transition-all duration-300 group-hover:bg-primary/20 group-hover:scale-110 group-hover:shadow-[0_0_16px_rgba(0,81,118,0.3)]">
-          <Icon className="h-5 w-5 text-primary transition-transform duration-300 group-hover:scale-110" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#F3F0E9] transition-all duration-300 group-hover:bg-[#E3DBCC] group-hover:scale-110">
+          <Icon className="h-5 w-5 text-[#101010] transition-transform duration-300 group-hover:scale-110" />
         </div>
       </div>
     </>
   )
 
   const cardClass = cn(
-    "glass rounded-xl p-4 lg:p-5 glow-blue-sm hover:glow-blue transition-all duration-300 group block",
-    "hover:-translate-y-1 hover:border-primary/30",
+    "glass rounded-xl p-4 lg:p-5 glow-blue-sm transition-all duration-300 group block",
+    "hover:-translate-y-1 hover:border-[#E3DBCC]",
     href ? "cursor-pointer active:scale-[0.99]" : "cursor-default",
     className,
   )

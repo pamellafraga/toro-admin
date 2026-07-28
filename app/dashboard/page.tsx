@@ -40,7 +40,7 @@ export default function DashboardHome() {
         />
         <StatCard
           title="Produtos"
-          value={8}
+          value={stats?.totalProducts ?? 8}
           subtitle="Catálogo toro-green.vercel.app"
           icon={TrendingUp}
           href={hasPermission("produtos") ? "/dashboard/produtos" : undefined}
@@ -67,11 +67,11 @@ export default function DashboardHome() {
       {!hasPermission("produtos") && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <StatCard
-            title="Contratações ativas"
-            value={stats?.activeContracts ?? 0}
-            subtitle={`${stats?.totalContracts ?? 0} contratos no total`}
+            title="Pedidos"
+            value={stats?.totalOrders ?? 0}
+            subtitle="Compras do site Toro"
             icon={FileText}
-            href={hasPermission("produtos") ? "/dashboard/produtos" : undefined}
+            href={hasPermission("financeiro") ? "/dashboard/pedidos" : undefined}
           />
         </div>
       )}

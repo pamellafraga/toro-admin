@@ -76,15 +76,21 @@ function LoginForm() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#101010]">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(227,219,204,0.08),transparent_60%)]" />
-      <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#E3DBCC]/30 to-transparent" />
+      {/* Fundo editorial — academia premium */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-cover bg-center bg-no-repeat scale-105"
+        style={{ backgroundImage: "url('/images/login-gym-bg.png')" }}
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0 bg-[#101010]/70" aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#101010]/40 via-transparent to-[#101010]/85" aria-hidden="true" />
 
       <div
         className={`relative z-10 w-full max-w-[420px] px-5 transition-all duration-700 ${
           mounted ? "translate-y-0 opacity-100" : "translate-y-8 opacity-0"
         }`}
       >
-        <div className="overflow-hidden rounded-3xl border border-[#E3DBCC]/20 bg-[#FDFCF8] shadow-2xl">
+        <div className="overflow-hidden rounded-3xl border border-[#E3DBCC]/25 bg-[#FDFCF8]/95 shadow-2xl backdrop-blur-sm">
           <div className="relative px-8 py-10 sm:px-10 sm:py-12">
             <div className="mb-10 flex flex-col items-center gap-3">
               <Image
@@ -224,8 +230,12 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-[#101010]">
-          <Loader2 className="h-8 w-8 animate-spin text-[#E3DBCC]" />
+        <div className="relative flex min-h-screen items-center justify-center bg-[#101010]">
+          <div
+            className="absolute inset-0 bg-cover bg-center opacity-40"
+            style={{ backgroundImage: "url('/images/login-gym-bg.png')" }}
+          />
+          <Loader2 className="relative z-10 h-8 w-8 animate-spin text-[#E3DBCC]" />
         </div>
       }
     >
