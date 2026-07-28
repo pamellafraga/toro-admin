@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { queryMany, queryOne } from "@/lib/db/pool"
 import {
   computeStoreStatus,
@@ -20,7 +21,7 @@ export interface ToroProductRow {
   is_active?: boolean
 }
 
-const TORO_PRODUCTS_WHERE = `external_id IS NOT NULL AND metadata->>'gender' IS NOT NULL`
+const TORO_PRODUCTS_WHERE = `external_id IS NOT NULL AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.gender')) IS NOT NULL`
 
 export async function listToroProducts(): Promise<ToroProductRow[]> {
   const rows = await queryMany<ToroProductRow & { metadata: unknown }>(
@@ -36,9 +37,9 @@ export async function findToroProductBySlug(slug: string): Promise<ToroProductRo
   const row = await queryOne<ToroProductRow & { metadata: unknown }>(
     `SELECT id, name, description, slug, external_id, price, product_status, metadata, is_active
      FROM products
-     WHERE (slug = $1 OR external_id = $1) AND ${TORO_PRODUCTS_WHERE}
+     WHERE (slug = ? OR external_id = ?) AND ${TORO_PRODUCTS_WHERE}
      LIMIT 1`,
-    [slug],
+    [slug, slug],
   )
   if (!row) return null
   return { ...row, metadata: parseMetadata(row.metadata) }
@@ -47,7 +48,7 @@ export async function findToroProductBySlug(slug: string): Promise<ToroProductRo
 async function nextSlugForGender(gender: ToroGender): Promise<string> {
   const prefix = gender === "feminino" ? "f" : "m"
   const rows = await queryMany<{ slug: string | null }>(
-    `SELECT slug FROM products WHERE slug LIKE $1`,
+    `SELECT slug FROM products WHERE slug LIKE ?`,
     [`${prefix}-%`],
   )
   const nums = rows
@@ -92,14 +93,16 @@ export async function createToroProduct(input: {
     collectionLine: "Elite Black",
   }
 
-  const row = await queryOne<ToroProductRow & { metadata: unknown }>(
-    `INSERT INTO products (name, description, icon, slug, external_id, price, product_status, is_active, metadata)
-     VALUES ($1, $2, 'shirt', $3, $3, $4, $5, true, $6::jsonb)
-     RETURNING id, name, description, slug, external_id, price, product_status, metadata, is_active`,
-    [input.name, input.description ?? "", slug, input.price, product_status, JSON.stringify(metadata)],
+  const id = randomUUID()
+  await queryOne(
+    `INSERT INTO products (id, name, description, icon, slug, external_id, price, product_status, is_active, metadata)
+     VALUES (?, ?, ?, 'shirt', ?, ?, ?, ?, 1, ?)`,
+    [id, input.name, input.description ?? "", slug, slug, input.price, product_status, JSON.stringify(metadata)],
   )
+
+  const row = await findToroProductBySlug(slug)
   if (!row) throw new Error("Falha ao criar produto.")
-  return { ...row, metadata: parseMetadata(row.metadata) }
+  return row
 }
 
 export async function updateToroProduct(
@@ -134,26 +137,25 @@ export async function updateToroProduct(
   const stockTotal = getTotalStock(metadata)
   const product_status = computeStoreStatus(stockTotal, input.status ?? existing.product_status)
 
-  const row = await queryOne<ToroProductRow & { metadata: unknown }>(
+  await queryOne(
     `UPDATE products SET
-      name = COALESCE($2, name),
-      price = COALESCE($3, price),
-      product_status = $4,
-      metadata = $5::jsonb,
-      description = COALESCE($6, description)
-     WHERE id = $1
-     RETURNING id, name, description, slug, external_id, price, product_status, metadata, is_active`,
+      name = COALESCE(?, name),
+      price = COALESCE(?, price),
+      product_status = ?,
+      metadata = ?,
+      description = COALESCE(?, description)
+     WHERE id = ?`,
     [
-      existing.id,
       input.name ?? null,
       input.price ?? null,
       product_status,
       JSON.stringify(metadata),
       input.description ?? null,
+      existing.id,
     ],
   )
-  if (!row) return null
-  return { ...row, metadata: parseMetadata(row.metadata) }
+
+  return findToroProductBySlug(slug)
 }
 
 export async function syncToroProductAvailability(slugOrExternalId: string): Promise<void> {
@@ -161,10 +163,10 @@ export async function syncToroProductAvailability(slugOrExternalId: string): Pro
   if (!row) return
   const stockTotal = getTotalStock(row.metadata)
   const product_status = computeStoreStatus(stockTotal, row.product_status)
-  await queryOne(
-    `UPDATE products SET product_status = $2,
-      metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{stockTotal}', to_jsonb($3::int), true)
-     WHERE id = $1`,
-    [row.id, product_status, stockTotal],
-  )
+  const metadata = { ...row.metadata, stockTotal }
+  await queryOne(`UPDATE products SET product_status = ?, metadata = ? WHERE id = ?`, [
+    product_status,
+    JSON.stringify(metadata),
+    row.id,
+  ])
 }

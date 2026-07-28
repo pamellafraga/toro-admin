@@ -1,4 +1,6 @@
+import { randomUUID } from "crypto"
 import { queryMany, queryOne } from "@/lib/db/pool"
+import { parseMetadata } from "@/lib/toro/product-utils"
 
 export interface ToroOrderRow {
   id: string
@@ -56,21 +58,21 @@ export interface CreateToroOrderInput {
 }
 
 export async function findOrderByNumber(orderNumber: string): Promise<ToroOrderRow | null> {
-  return queryOne<ToroOrderRow>(
-    `SELECT * FROM toro_orders WHERE order_number = $1 LIMIT 1`,
-    [orderNumber.trim()],
-  )
+  return queryOne<ToroOrderRow>(`SELECT * FROM toro_orders WHERE order_number = ? LIMIT 1`, [
+    orderNumber.trim(),
+  ])
 }
 
 export async function createToroOrder(input: CreateToroOrderInput): Promise<ToroOrderRow> {
-  const row = await queryOne<ToroOrderRow>(
+  const id = randomUUID()
+  await queryOne(
     `INSERT INTO toro_orders (
-      order_number, site_user_id, customer_name, customer_email, customer_phone, customer_cpf_cnpj,
+      id, order_number, site_user_id, customer_name, customer_email, customer_phone, customer_cpf_cnpj,
       items, subtotal, shipping, discount, total, coupon_code, address,
       payment_method, payment_status, order_status, tracking_code, status_history, metadata
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-    RETURNING *`,
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [
+      id,
       input.orderNumber,
       input.siteUserId ?? null,
       input.customerName ?? null,
@@ -92,15 +94,14 @@ export async function createToroOrder(input: CreateToroOrderInput): Promise<Toro
       JSON.stringify(input.metadata ?? {}),
     ],
   )
+
+  const row = await queryOne<ToroOrderRow>(`SELECT * FROM toro_orders WHERE id = ? LIMIT 1`, [id])
   if (!row) throw new Error("Falha ao registrar pedido.")
   return row
 }
 
 export async function listToroOrders(limit = 100): Promise<ToroOrderRow[]> {
-  return queryMany<ToroOrderRow>(
-    `SELECT * FROM toro_orders ORDER BY created_at DESC LIMIT $1`,
-    [limit],
-  )
+  return queryMany<ToroOrderRow>(`SELECT * FROM toro_orders ORDER BY created_at DESC LIMIT ?`, [limit])
 }
 
 export async function updateToroOrderStatus(
@@ -109,31 +110,34 @@ export async function updateToroOrderStatus(
   paymentStatus?: string,
   trackingCode?: string,
 ): Promise<ToroOrderRow | null> {
-  return queryOne<ToroOrderRow>(
+  await queryOne(
     `UPDATE toro_orders SET
-      order_status = $2,
-      payment_status = COALESCE($3, payment_status),
-      tracking_code = COALESCE($4, tracking_code)
-     WHERE order_number = $1
-     RETURNING *`,
-    [orderNumber, orderStatus, paymentStatus ?? null, trackingCode ?? null],
+      order_status = ?,
+      payment_status = COALESCE(?, payment_status),
+      tracking_code = COALESCE(?, tracking_code)
+     WHERE order_number = ?`,
+    [orderStatus, paymentStatus ?? null, trackingCode ?? null, orderNumber],
   )
+  return findOrderByNumber(orderNumber)
 }
 
 export async function decrementProductStock(productId: string, size: string, quantity: number): Promise<void> {
-  const row = await queryOne<{ metadata: { stockBySize?: Record<string, number> } }>(
-    `SELECT metadata FROM products WHERE external_id = $1 OR slug = $1 LIMIT 1`,
-    [productId],
+  const row = await queryOne<{ metadata: unknown }>(
+    `SELECT metadata FROM products WHERE external_id = ? OR slug = ? LIMIT 1`,
+    [productId, productId],
   )
-  const stockBySize = row?.metadata?.stockBySize
+  const meta = parseMetadata(row?.metadata)
+  const stockBySize = meta.stockBySize
   if (!stockBySize || stockBySize[size] == null) return
 
   const updated = { ...stockBySize, [size]: Math.max(0, stockBySize[size] - quantity) }
-  await queryOne(
-    `UPDATE products SET metadata = jsonb_set(COALESCE(metadata, '{}'::jsonb), '{stockBySize}', $2::jsonb, true)
-     WHERE external_id = $1 OR slug = $1`,
-    [productId, JSON.stringify(updated)],
-  )
+  const metadata = { ...meta, stockBySize: updated }
+  await queryOne(`UPDATE products SET metadata = ? WHERE external_id = ? OR slug = ?`, [
+    JSON.stringify(metadata),
+    productId,
+    productId,
+  ])
+
   const { syncToroProductAvailability } = await import("@/lib/db/repositories/toro-products.repository")
   await syncToroProductAvailability(productId)
 }

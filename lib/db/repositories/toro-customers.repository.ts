@@ -26,36 +26,75 @@ export function computeStoreCustomerSegment(row: StoreCustomerRow): StoreCustome
   return "novo"
 }
 
+function customerKey(order: {
+  customer_email: string | null
+  customer_cpf_cnpj: string | null
+  order_number: string
+}): string {
+  const email = order.customer_email?.trim().toLowerCase()
+  if (email) return email
+  const cpf = order.customer_cpf_cnpj?.replace(/\D/g, "")
+  if (cpf) return cpf
+  return `pedido-${order.order_number}`
+}
+
 export async function listStoreCustomers(): Promise<StoreCustomerRow[]> {
-  const rows = await queryMany<StoreCustomerRow>(`
-    WITH base AS (
-      SELECT
-        *,
-        COALESCE(
-          NULLIF(lower(trim(customer_email)), ''),
-          NULLIF(regexp_replace(COALESCE(customer_cpf_cnpj, ''), '[^0-9]', '', 'g'), ''),
-          'pedido-' || order_number
-        ) AS customer_key
-      FROM toro_orders
-    )
-    SELECT
-      customer_key,
-      MAX(customer_name) AS name,
-      MAX(NULLIF(trim(customer_email), '')) AS email,
-      MAX(NULLIF(trim(customer_phone), '')) AS phone,
-      MAX(NULLIF(trim(customer_cpf_cnpj), '')) AS cpf_cnpj,
-      COUNT(*)::int AS order_count,
-      COUNT(*) FILTER (WHERE payment_status = 'approved')::int AS paid_count,
-      COALESCE(SUM(CASE WHEN payment_status = 'approved' THEN total ELSE 0 END), 0)::float AS total_spent,
-      MAX(created_at)::text AS last_order_at,
-      (array_agg(order_number ORDER BY created_at DESC))[1] AS last_order_number,
-      (array_agg(order_status ORDER BY created_at DESC))[1] AS last_order_status,
-      (array_agg(payment_status ORDER BY created_at DESC))[1] AS last_payment_status,
-      (array_agg(total ORDER BY created_at DESC))[1]::float AS last_order_total
-    FROM base
-    GROUP BY customer_key
-    ORDER BY MAX(created_at) DESC
+  const orders = await queryMany<{
+    order_number: string
+    customer_name: string | null
+    customer_email: string | null
+    customer_phone: string | null
+    customer_cpf_cnpj: string | null
+    payment_status: string
+    order_status: string
+    total: number
+    created_at: string
+  }>(`
+    SELECT order_number, customer_name, customer_email, customer_phone, customer_cpf_cnpj,
+           payment_status, order_status, total, created_at
+    FROM toro_orders
+    ORDER BY created_at DESC
     LIMIT 5000
   `)
-  return rows
+
+  const map = new Map<string, StoreCustomerRow & { _orders: typeof orders }>()
+
+  for (const o of orders) {
+    const key = customerKey(o)
+    let row = map.get(key)
+    if (!row) {
+      row = {
+        customer_key: key,
+        name: o.customer_name,
+        email: o.customer_email?.trim() || null,
+        phone: o.customer_phone?.trim() || null,
+        cpf_cnpj: o.customer_cpf_cnpj?.trim() || null,
+        order_count: 0,
+        paid_count: 0,
+        total_spent: 0,
+        last_order_at: o.created_at,
+        last_order_number: o.order_number,
+        last_order_status: o.order_status,
+        last_payment_status: o.payment_status,
+        last_order_total: Number(o.total),
+        _orders: [],
+      }
+      map.set(key, row)
+    }
+
+    row.order_count += 1
+    if (o.payment_status === "approved") {
+      row.paid_count += 1
+      row.total_spent += Number(o.total)
+    }
+    if (o.customer_name && !row.name) row.name = o.customer_name
+    if (o.customer_email?.trim() && !row.email) row.email = o.customer_email.trim()
+    if (o.customer_phone?.trim() && !row.phone) row.phone = o.customer_phone.trim()
+    if (o.customer_cpf_cnpj?.trim() && !row.cpf_cnpj) row.cpf_cnpj = o.customer_cpf_cnpj.trim()
+    row._orders.push(o)
+  }
+
+  return Array.from(map.values())
+    .map(({ _orders, ...row }) => row)
+    .sort((a, b) => (a.last_order_at < b.last_order_at ? 1 : -1))
 }

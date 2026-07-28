@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { queryOne } from "@/lib/db/pool"
 
 export interface LogActivityInput {
@@ -10,9 +11,10 @@ export interface LogActivityInput {
 
 export async function insertActivityLog(input: LogActivityInput): Promise<void> {
   await queryOne(
-    `INSERT INTO activity_log (user_id, user_name, action, entity_type, entity_id, details)
-     VALUES (NULL, $1, $2, $3, $4, $5::jsonb)`,
+    `INSERT INTO activity_log (id, user_id, user_name, action, entity_type, entity_id, details)
+     VALUES (?, NULL, ?, ?, ?, ?, ?)`,
     [
+      randomUUID(),
       input.user_name,
       input.action,
       input.entity_type ?? "",

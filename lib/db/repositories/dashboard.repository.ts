@@ -1,5 +1,6 @@
 import { queryMany, queryOne } from "@/lib/db/pool"
 import { TORO_PRODUCT_CATALOG } from "@/lib/products/catalog"
+import type { ToroOrderItem } from "@/lib/db/repositories/toro-orders.repository"
 
 const MONTH_LABELS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"] as const
 
@@ -33,56 +34,75 @@ const EMPTY: DashboardOverview = {
   recentActivities: [],
 }
 
-/** Dashboard Toro — apenas pedidos e clientes da loja online (ignora legado Xpress). */
+function parseOrderItems(raw: unknown): ToroOrderItem[] {
+  if (Array.isArray(raw)) return raw as ToroOrderItem[]
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+/** Dashboard Toro — pedidos e clientes da loja online */
 export async function getDashboardOverview(): Promise<DashboardOverview> {
   try {
     const [ordersRow, clientsRow, revenueRow] = await Promise.all([
-      queryOne<{ count: string }>(`SELECT COUNT(*)::text AS count FROM toro_orders`),
+      queryOne<{ count: string }>(`SELECT CAST(COUNT(*) AS CHAR) AS count FROM toro_orders`),
       queryOne<{ count: string }>(
-        `SELECT COUNT(DISTINCT customer_email)::text AS count
+        `SELECT CAST(COUNT(DISTINCT customer_email) AS CHAR) AS count
          FROM toro_orders
-         WHERE customer_email IS NOT NULL AND trim(customer_email) <> ''`,
+         WHERE customer_email IS NOT NULL AND TRIM(customer_email) <> ''`,
       ),
       queryOne<{ total: string }>(
-        `SELECT COALESCE(SUM(total), 0)::text AS total
+        `SELECT CAST(COALESCE(SUM(total), 0) AS CHAR) AS total
          FROM toro_orders
          WHERE payment_status IN ('approved', 'pending')`,
       ),
     ])
 
     const revenueRows = await queryMany<{ month: number; receita: string }>(
-      `SELECT EXTRACT(MONTH FROM created_at)::int AS month,
-              COALESCE(SUM(total), 0)::text AS receita
+      `SELECT MONTH(created_at) AS month,
+              CAST(COALESCE(SUM(total), 0) AS CHAR) AS receita
        FROM toro_orders
        WHERE payment_status IN ('approved', 'pending')
-         AND created_at >= date_trunc('year', CURRENT_DATE)
-       GROUP BY 1
-       ORDER BY 1`,
+         AND created_at >= DATE_FORMAT(CURRENT_DATE, '%Y-01-01')
+       GROUP BY MONTH(created_at)
+       ORDER BY MONTH(created_at)`,
     )
 
-    const revenueMap = new Map(revenueRows.map((r) => [r.month, Number(r.receita)]))
+    const revenueMap = new Map(revenueRows.map((r) => [Number(r.month), Number(r.receita)]))
     const revenueByMonth = MONTH_LABELS.map((label, i) => ({
       month: label,
       receita: revenueMap.get(i + 1) ?? 0,
     }))
 
-    const productRows = await queryMany<{ name: string; value: string }>(
-      `SELECT COALESCE(NULLIF(trim(item->>'productName'), ''), item->>'productId') AS name,
-              SUM((item->>'quantity')::int)::text AS value
-       FROM toro_orders o,
-            LATERAL jsonb_array_elements(o.items) AS item
-       GROUP BY 1
-       HAVING SUM((item->>'quantity')::int) > 0
-       ORDER BY SUM((item->>'quantity')::int) DESC`,
+    const orderRows = await queryMany<{ items: unknown }>(
+      `SELECT items FROM toro_orders WHERE JSON_LENGTH(items) > 0`,
     )
+    const productTotals = new Map<string, number>()
+    for (const row of orderRows) {
+      for (const item of parseOrderItems(row.items)) {
+        const name = (item.productName?.trim() || item.productId || "Produto").trim()
+        const qty = Number(item.quantity) || 0
+        if (qty <= 0) continue
+        productTotals.set(name, (productTotals.get(name) ?? 0) + qty)
+      }
+    }
+    const salesByProduct = Array.from(productTotals.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
 
     let recentActivities: DashboardOverview["recentActivities"] = []
     try {
       recentActivities = await queryMany(
-        `SELECT id, user_name, action, entity_type, created_at::text
+        `SELECT id, user_name, action, entity_type, CAST(created_at AS CHAR) AS created_at
          FROM activity_log
          WHERE entity_type IN ('toro_order', 'toro_product', 'toro_client')
-            OR action ILIKE '%toro%'
+            OR action LIKE '%toro%'
          ORDER BY created_at DESC
          LIMIT 8`,
       )
@@ -98,10 +118,7 @@ export async function getDashboardOverview(): Promise<DashboardOverview> {
         monthlyRevenue: Number(revenueRow?.total ?? 0),
       },
       revenueByMonth,
-      salesByProduct: productRows.map((r) => ({
-        name: r.name,
-        value: Number(r.value),
-      })),
+      salesByProduct,
       recentActivities,
     }
   } catch {
