@@ -3,41 +3,41 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Xpress Solutions - Paleta minimalista: fundo frio suave, azul em destaque, sidebar azul escura */
+/* Toro — moda fitness: Off white, Ivory, Nude, Obsidian */
 :root {
-  --background: #e5e9f0;
-  --foreground: #1e293b;
-  --card: #ffffff;
-  --card-foreground: #1e293b;
-  --popover: #ffffff;
-  --popover-foreground: #1e293b;
-  --primary: #005176;
-  --primary-foreground: #ffffff;
-  --secondary: #dde2ea;
-  --secondary-foreground: #334155;
-  --muted: #dde2ea;
-  --muted-foreground: #64748b;
-  --accent: rgba(0, 81, 118, 0.08);
-  --accent-foreground: #005176;
+  --background: #FDFCF8;
+  --foreground: #101010;
+  --card: #FDFCF8;
+  --card-foreground: #101010;
+  --popover: #FDFCF8;
+  --popover-foreground: #101010;
+  --primary: #101010;
+  --primary-foreground: #FDFCF8;
+  --secondary: #F3F0E9;
+  --secondary-foreground: #101010;
+  --muted: #F3F0E9;
+  --muted-foreground: #5c5c5c;
+  --accent: rgba(227, 219, 204, 0.6);
+  --accent-foreground: #101010;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --border: #e2e8f0;
-  --input: #e2e8f0;
-  --ring: #005176;
-  --chart-1: #005176;
-  --chart-2: #006992;
+  --border: #E3DBCC;
+  --input: #E3DBCC;
+  --ring: #101010;
+  --chart-1: #101010;
+  --chart-2: #E3DBCC;
   --chart-3: #a78bfa;
   --chart-4: #fb923c;
   --chart-5: #f59e0b;
   --radius: 0.5rem;
-  --sidebar: #005176;
-  --sidebar-foreground: #ffffff;
-  --sidebar-primary: #006992;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgba(255, 255, 255, 0.12);
-  --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgba(255, 255, 255, 0.12);
-  --sidebar-ring: #006992;
+  --sidebar: #101010;
+  --sidebar-foreground: #FDFCF8;
+  --sidebar-primary: #E3DBCC;
+  --sidebar-primary-foreground: #101010;
+  --sidebar-accent: rgba(253, 252, 248, 0.1);
+  --sidebar-accent-foreground: #FDFCF8;
+  --sidebar-border: rgba(253, 252, 248, 0.12);
+  --sidebar-ring: #E3DBCC;
 }
 
 @theme inline {
@@ -224,7 +224,7 @@ input:focus,
 textarea:focus,
 select:focus {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: 0 0 0 3px rgba(0, 81, 118, 0.25);
+  box-shadow: 0 0 0 3px rgba(16, 16, 16, 0.15);
   border-color: var(--primary);
 }
 

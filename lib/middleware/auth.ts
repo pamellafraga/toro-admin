@@ -17,6 +17,12 @@ export function handleAuthMiddleware(request: NextRequest): NextResponse | null 
   const { pathname } = request.nextUrl
   const authenticated = hasLocalAuth(request)
 
+  if (pathname === "/dashboard/chat") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/dashboard"
+    return NextResponse.redirect(url)
+  }
+
   if (pathname.startsWith("/dashboard") && !authenticated) {
     const url = request.nextUrl.clone()
     url.pathname = "/login"

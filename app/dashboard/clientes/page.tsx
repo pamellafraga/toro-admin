@@ -645,7 +645,7 @@ export default function ClientesPage() {
   return (
     <div className="flex flex-col gap-4 lg:gap-6">
       <div>
-        <h1 className="text-xl font-bold text-foreground tracking-tight mb-1.5 lg:text-3xl lg:mb-2">Contatos</h1>
+        <h1 className="text-xl font-bold text-foreground tracking-tight mb-1.5 lg:text-3xl lg:mb-2">Clientes</h1>
         {isComercial ? (
           <>
             <p className="text-sm text-foreground/90 mb-0.5">Aba Geral: Contatos sem origem. Coloque sua origem no contato para ele ir para sua lista.</p>

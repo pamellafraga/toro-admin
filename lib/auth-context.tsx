@@ -35,7 +35,7 @@ const ADMIN_PROFILE: Profile = {
   name: "Admin",
   role: "admin",
   is_active: true,
-  permissions: ["home", "produtos", "clientes", "seguradoras", "financeiro", "chat", "relatorios", "notificacoes", "atividades", "usuarios", "admin"] as Permission[],
+  permissions: ["home", "chamados", "produtos", "clientes", "seguradoras", "financeiro", "relatorios", "notificacoes", "atividades", "usuarios", "admin"] as Permission[],
   avatar_url: null,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -44,7 +44,7 @@ const ADMIN_PROFILE: Profile = {
 function isLocallyAuthenticated(): boolean {
   try {
     // Checar localStorage
-    const localAuth = localStorage.getItem("xpress_auth")
+    const localAuth = localStorage.getItem("toro_auth")
     if (localAuth) {
       const parsed = JSON.parse(localAuth)
       if (parsed.authenticated || parsed.user) return true
@@ -52,7 +52,7 @@ function isLocallyAuthenticated(): boolean {
   } catch {}
   try {
     // Checar cookie
-    if (document.cookie.includes("xpress_auth=")) return true
+    if (document.cookie.includes("toro_auth=")) return true
   } catch {}
   return false
 }
@@ -75,14 +75,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       let loginUsername = ""
       try {
         let parsed: { user?: string; displayName?: string; role?: string } = {}
-        const raw = localStorage.getItem("xpress_auth")
+        const raw = localStorage.getItem("toro_auth")
         if (raw) {
           try {
             parsed = JSON.parse(raw)
           } catch {}
         }
         if (!parsed.role && typeof document !== "undefined") {
-          const cookieMatch = document.cookie.match(/xpress_auth=([^;]+)/)
+          const cookieMatch = document.cookie.match(/toro_auth=([^;]+)/)
           if (cookieMatch) {
             try {
               const decoded = decodeURIComponent(cookieMatch[1].trim())

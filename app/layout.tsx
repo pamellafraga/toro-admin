@@ -8,21 +8,20 @@ import './globals.css'
 const _inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Xpress Solutions - Dashboard',
-  description: 'Painel administrativo Xpress Solutions - Gestao de produtos SaaS',
+  title: 'Toro — Painel Administrativo',
+  description: 'Painel administrativo Toro — Loja de moda fitness',
   robots: { index: false, follow: false, googleBot: { index: false, follow: false } },
-  applicationName: 'Xpress Solutions',
+  applicationName: 'Toro Admin',
   appleWebApp: {
     capable: true,
-    title: 'Xpress',
+    title: 'Toro',
     statusBarStyle: 'black-translucent',
   },
   icons: {
     icon: [
-      { url: '/icon.png', sizes: '512x512', type: 'image/png' },
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/logo.png', sizes: '512x512', type: 'image/png' },
     ],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    apple: [{ url: '/logo.png', sizes: '180x180', type: 'image/png' }],
   },
   formatDetection: {
     telephone: false,
@@ -30,7 +29,7 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  themeColor: '#050a18',
+  themeColor: '#101010',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
@@ -51,9 +50,9 @@ export default function RootLayout({
           position="top-right"
           toastOptions={{
             style: {
-              background: '#0a1128',
-              border: '1px solid #1e3a5f',
-              color: '#e2e8f0',
+              background: '#101010',
+              border: '1px solid #E3DBCC',
+              color: '#FDFCF8',
             },
           }}
         />

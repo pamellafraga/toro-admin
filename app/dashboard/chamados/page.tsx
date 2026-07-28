@@ -92,12 +92,11 @@ export default function ChamadosPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-2xl font-bold text-foreground">Chamados de suporte</h2>
+        <h2 className="text-2xl font-bold text-foreground">SAC — Atendimento ao Cliente</h2>
         <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-          Solicitações internas dos clientes pelas ferramentas (quando o chat de suporte estiver integrado, os pedidos
-          aparecerão aqui). Use o token{" "}
-          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">CHAMADOS_INGEST_TOKEN</code> nas APIs das
-          ferramentas para abrir chamados automaticamente.
+          Solicitações de clientes da loja Toro. Use o token{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">CHAMADOS_INGEST_TOKEN</code> nas integrações
+          para abrir tickets automaticamente.
         </p>
       </div>
 

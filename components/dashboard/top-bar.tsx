@@ -7,11 +7,10 @@ import Link from "next/link"
 
 const PAGE_TITLES: Record<string, string> = {
   "/dashboard": "Home",
-  "/dashboard/chamados": "Chamados",
+  "/dashboard/chamados": "SAC",
   "/dashboard/produtos": "Produtos",
-  "/dashboard/clientes": "Contatos",
+  "/dashboard/clientes": "Clientes",
   "/dashboard/seguradoras": "Marketing",
-  "/dashboard/chat": "Chat Interno",
   "/dashboard/financeiro": "Financeiro",
   "/dashboard/nfe": "NF-e",
   "/dashboard/relatorios": "Relatórios",
@@ -35,8 +34,8 @@ export function TopBar({ onOpenMobileMenu }: { onOpenMobileMenu?: () => void }) 
 
         <Link href="/dashboard" className="hidden shrink-0 items-center lg:flex">
           <Image
-            src="/logox.png"
-            alt="Xpress Solutions"
+            src="/logo.png"
+            alt="Toro"
             width={120}
             height={40}
             className="h-8 w-auto object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.25)] hover:opacity-90 transition-opacity"

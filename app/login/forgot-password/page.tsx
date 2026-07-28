@@ -88,15 +88,15 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020817]">
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-sky-500/5 to-transparent" />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#101010]">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(227,219,204,0.08),transparent_60%)]" />
       <div className="relative z-10 w-full max-w-[420px] px-5">
-        <div className="overflow-hidden rounded-3xl border border-sky-500/15 bg-gradient-to-br from-slate-950 to-slate-900 shadow-2xl">
+        <div className="overflow-hidden rounded-3xl border border-[#E3DBCC]/20 bg-[#FDFCF8] shadow-2xl">
           <div className="px-8 py-10 sm:px-10 sm:py-12">
             <div className="mb-8 flex justify-center">
               <Image
-                src="/logox.png"
-                alt="Xpress Solutions"
+                src="/logo.png"
+                alt="Toro"
                 width={180}
                 height={58}
                 className="object-contain"
@@ -104,9 +104,9 @@ export default function ForgotPasswordPage() {
               />
             </div>
 
-            <div className="mb-6 flex items-center gap-2 text-[#94a3b8]">
-              <KeyRound className="h-5 w-5 text-[#0ea5e9]" />
-              <h1 className="text-lg font-semibold text-[#e2e8f0]">
+            <div className="mb-6 flex items-center gap-2 text-[#5c5c5c]">
+              <KeyRound className="h-5 w-5 text-[#101010]" />
+              <h1 className="text-lg font-semibold text-[#101010]">
                 {step === 1 ? "Esqueci minha senha" : "Código e nova senha"}
               </h1>
             </div>

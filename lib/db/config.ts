@@ -10,8 +10,8 @@ export interface DatabaseConfig {
 
 export function getDatabaseConfig(): DatabaseConfig {
   const host = process.env.DATABASE_HOST?.trim()
-  const database = process.env.DATABASE_NAME?.trim() || "admxpress"
-  const user = process.env.DATABASE_USER?.trim() || "admxpress"
+  const database = process.env.DATABASE_NAME?.trim() || "toro_admin"
+  const user = process.env.DATABASE_USER?.trim() || "toro_admin"
   const password = process.env.DATABASE_PASSWORD ?? ""
 
   if (!host) {

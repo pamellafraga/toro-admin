@@ -5,14 +5,12 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { createClient } from "@/lib/supabase/client"
-import { useChatUnreadCount } from "@/hooks/use-chat-unread"
 import { cn } from "@/lib/utils"
 import {
   Home,
   Headphones,
   Package,
   Users,
-  MessageCircle,
   FileText,
   Bell,
   Activity,
@@ -31,17 +29,23 @@ import type { Permission } from "@/lib/types"
 
 const navItems: { label: string; href: string; icon: typeof Home; permission: Permission }[] = [
   { label: "Home", href: "/dashboard", icon: Home, permission: "home" },
-  { label: "Chamados", href: "/dashboard/chamados", icon: Headphones, permission: "chamados" },
+  { label: "SAC", href: "/dashboard/chamados", icon: Headphones, permission: "chamados" },
   { label: "Produtos", href: "/dashboard/produtos", icon: Package, permission: "produtos" },
-  { label: "Contatos", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
+  { label: "Clientes", href: "/dashboard/clientes", icon: Users, permission: "clientes" },
   { label: "Financeiro", href: "/dashboard/financeiro", icon: DollarSign, permission: "financeiro" },
   { label: "NF-e", href: "/dashboard/nfe", icon: InvoiceIcon, permission: "financeiro" },
-  { label: "Chat Interno", href: "/dashboard/chat", icon: MessageCircle, permission: "chat" },
+  { label: "Gastos da Empresa", href: "/dashboard/gastos-empresa", icon: CreditCard, permission: "admin" },
+]
+
+const configItems: { label: string; href: string; icon: typeof Users; permission: Permission }[] = [
+  { label: "Usuários", href: "/dashboard/usuarios", icon: Users, permission: "usuarios" },
+  { label: "Sistemas", href: "/dashboard/senhas", icon: Key, permission: "admin" },
   { label: "Relatórios", href: "/dashboard/relatorios", icon: FileText, permission: "relatorios" },
   { label: "Notificações", href: "/dashboard/notificacoes", icon: Bell, permission: "notificacoes" },
   { label: "Atividades", href: "/dashboard/atividades", icon: Activity, permission: "atividades" },
-  { label: "Gastos da Empresa", href: "/dashboard/gastos-empresa", icon: CreditCard, permission: "admin" },
 ]
+
+const CONFIG_PATHS = configItems.map((item) => item.href)
 
 type AppSidebarProps = {
   collapsed?: boolean
@@ -61,31 +65,16 @@ export function AppSidebar({
   const router = useRouter()
   const { profile, hasPermission, isAdmin } = useAuth()
   const supabase = createClient()
-  const chatUnreadCount = useChatUnreadCount()
-  const [notificationUnread, setNotificationUnread] = useState(0)
+  const [configOpen, setConfigOpen] = useState(CONFIG_PATHS.some((path) => pathname.startsWith(path)))
+  const showLabels = mobile || !collapsed
+  const closeMobile = () => onMobileClose?.()
 
-  useEffect(() => {
-    const fetchUnread = async () => {
-      try {
-        const res = await fetch("/api/notifications?count=unread", {
-          credentials: "include",
-          cache: "no-store",
-        })
-        if (!res.ok) return
-        const json = (await res.json()) as { count?: number }
-        setNotificationUnread(json.count ?? 0)
-      } catch {
-        setNotificationUnread(0)
-      }
-    }
-    fetchUnread()
-    const interval = setInterval(fetchUnread, 30000)
-    return () => clearInterval(interval)
-  }, [profile?.id])
+  const filteredNav = navItems.filter((item) => hasPermission(item.permission))
+  const filteredConfig = configItems.filter((item) => hasPermission(item.permission))
 
   const handleLogout = async () => {
-    localStorage.removeItem("xpress_auth")
-    localStorage.removeItem("xpress_remember")
+    localStorage.removeItem("toro_auth")
+    localStorage.removeItem("toro_remember")
     try {
       await fetch("/api/logout", { method: "POST" })
     } catch {}
@@ -96,10 +85,15 @@ export function AppSidebar({
     router.refresh()
   }
 
-  const filteredNav = navItems.filter((item) => hasPermission(item.permission))
-  const [configOpen, setConfigOpen] = useState(pathname.startsWith("/dashboard/usuarios") || pathname.startsWith("/dashboard/senhas"))
-  const showLabels = mobile || !collapsed
-  const closeMobile = () => onMobileClose?.()
+  const linkClass = (isActive: boolean, compact = false) =>
+    cn(
+      "group/nav flex items-center rounded-lg font-medium transition-all duration-200",
+      mobile ? "gap-3 px-3 py-2 text-sm" : "text-sm",
+      showLabels && !compact ? "gap-3 px-3 py-2.5" : compact ? "gap-3 px-3 py-2 text-sm" : "justify-center p-2.5",
+      isActive
+        ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
+        : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5",
+    )
 
   return (
     <aside
@@ -131,72 +125,39 @@ export function AppSidebar({
             const isActive =
               pathname === item.href ||
               (item.href !== "/dashboard" && pathname.startsWith(item.href))
-            const isChat = item.href === "/dashboard/chat"
-            const showUnread = isChat && chatUnreadCount > 0
             return (
               <li key={item.href}>
                 <Link
                   href={item.href}
                   title={!showLabels ? item.label : undefined}
                   onClick={mobile ? closeMobile : undefined}
-                  className={cn(
-                    "group/nav flex items-center rounded-lg font-medium transition-all duration-200",
-                    mobile ? "gap-3 px-3 py-2 text-sm" : "text-sm",
-                    showLabels ? "gap-3 px-3 py-2.5" : "justify-center p-2.5",
-                    isActive
-                      ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-                      : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
-                  )}
+                  className={linkClass(isActive)}
                 >
-                  <span className="relative inline-flex shrink-0">
-                    <item.icon className={cn("h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110", isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground")} />
-                    {showUnread && (
-                      <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground ring-2 ring-sidebar">
-                        {chatUnreadCount > 99 ? "99+" : chatUnreadCount}
-                      </span>
-                    )}
-                  </span>
+                  <item.icon className={cn("h-4 w-4 shrink-0 transition-transform duration-200 group-hover/nav:scale-110", isActive ? "text-sidebar-primary-foreground" : "text-sidebar-foreground")} />
                   {showLabels && <span className="truncate">{item.label}</span>}
                 </Link>
               </li>
             )
           })}
 
-          {isAdmin && (
+          {isAdmin && filteredConfig.length > 0 && (
             <>
               {!showLabels && !mobile ? (
-                <>
-                  <li>
-                    <Link
-                      href="/dashboard/usuarios"
-                      onClick={mobile ? closeMobile : undefined}
-                      title="Configurações – Usuários"
-                      className={cn(
-                        "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
-                        pathname.startsWith("/dashboard/usuarios")
-                          ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                      )}
-                    >
-                      <Users className="h-4 w-4" />
-                    </Link>
-                  </li>
-                  <li>
-                    <Link
-                      href="/dashboard/senhas"
-                      onClick={mobile ? closeMobile : undefined}
-                      title="Configurações – Sistemas"
-                      className={cn(
-                        "group/nav flex items-center justify-center rounded-lg p-2.5 text-sm font-medium transition-all duration-200",
-                        pathname.startsWith("/dashboard/senhas")
-                          ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                      )}
-                    >
-                      <Key className="h-4 w-4" />
-                    </Link>
-                  </li>
-                </>
+                filteredConfig.map((item) => {
+                  const isActive = pathname.startsWith(item.href)
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        onClick={mobile ? closeMobile : undefined}
+                        title={`Configurações – ${item.label}`}
+                        className={linkClass(isActive)}
+                      >
+                        <item.icon className="h-4 w-4" />
+                      </Link>
+                    </li>
+                  )
+                })
               ) : (
                 <>
                   <li>
@@ -205,7 +166,7 @@ export function AppSidebar({
                       onClick={() => setConfigOpen((o) => !o)}
                       className={cn(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                        "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground",
                       )}
                     >
                       <Settings className="h-4 w-4 shrink-0" />
@@ -213,42 +174,23 @@ export function AppSidebar({
                       <ChevronDown className={cn("h-4 w-4 shrink-0 transition-transform", configOpen && "rotate-180")} />
                     </button>
                   </li>
-                  {configOpen && (
-                    <>
-                      <li className="pl-6">
-                        <Link
-                          href="/dashboard/usuarios"
-                          onClick={mobile ? closeMobile : undefined}
-                          title="Usuários"
-                          className={cn(
-                            "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                            pathname.startsWith("/dashboard/usuarios")
-                              ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
-                          )}
-                        >
-                          <Users className="h-4 w-4 shrink-0" />
-                          <span className="truncate">Usuários</span>
-                        </Link>
-                      </li>
-                      <li className="pl-6">
-                        <Link
-                          href="/dashboard/senhas"
-                          onClick={mobile ? closeMobile : undefined}
-                          title="Sistemas (login, senha, link das ferramentas)"
-                          className={cn(
-                            "group/nav flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200",
-                            pathname.startsWith("/dashboard/senhas")
-                              ? "bg-sidebar-primary/30 text-sidebar-primary-foreground"
-                              : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-0.5"
-                          )}
-                        >
-                          <Key className="h-4 w-4 shrink-0" />
-                          <span className="truncate">Sistemas</span>
-                        </Link>
-                      </li>
-                    </>
-                  )}
+                  {configOpen &&
+                    filteredConfig.map((item) => {
+                      const isActive = pathname.startsWith(item.href)
+                      return (
+                        <li key={item.href} className="pl-6">
+                          <Link
+                            href={item.href}
+                            onClick={mobile ? closeMobile : undefined}
+                            title={item.label}
+                            className={linkClass(isActive, true)}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            <span className="truncate">{item.label}</span>
+                          </Link>
+                        </li>
+                      )
+                    })}
                 </>
               )}
             </>
@@ -256,42 +198,22 @@ export function AppSidebar({
         </ul>
       </nav>
 
-      {/* Sair em cima, Notificações embaixo; depois usuário logado */}
       <div className={cn("border-t border-sidebar-border space-y-2 shrink-0", mobile ? "p-2" : "p-3")}>
-        <div className="flex flex-col gap-1">
-          <button
-            onClick={() => {
-              closeMobile()
-              void handleLogout()
-            }}
-            title={!showLabels ? "Sair" : undefined}
-            className={cn(
-              "group/logout flex w-full items-center text-sm font-medium text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
-              showLabels ? "gap-3 px-3 py-2.5" : "justify-center p-2.5",
-            )}
-          >
-            <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/logout:scale-110 group-hover/logout:-translate-x-0.5" />
-            {showLabels && <span>Sair</span>}
-          </button>
-          <Link
-            href="/dashboard/notificacoes"
-            onClick={mobile ? closeMobile : undefined}
-            title={!showLabels ? "Notificações" : undefined}
-            className={cn(
-              "group/bell relative flex w-full items-center rounded-lg text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-primary transition-all duration-200",
-              showLabels ? "gap-2 px-3 py-2.5" : "justify-center p-2.5",
-            )}
-          >
-            <Bell className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/bell:scale-110" />
-            {showLabels && <span>Notificações</span>}
-            {notificationUnread > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-sidebar">
-                {notificationUnread > 9 ? "9+" : notificationUnread}
-              </span>
-            )}
-          </Link>
-        </div>
-        {/* Usuário logado: nome + perfil (para todos os usuários) */}
+        <button
+          onClick={() => {
+            closeMobile()
+            void handleLogout()
+          }}
+          title={!showLabels ? "Sair" : undefined}
+          className={cn(
+            "group/logout flex w-full items-center text-sm font-medium text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 rounded-lg",
+            showLabels ? "gap-3 px-3 py-2.5" : "justify-center p-2.5",
+          )}
+        >
+          <LogOut className="h-4 w-4 shrink-0 transition-transform duration-200 group-hover/logout:scale-110 group-hover/logout:-translate-x-0.5" />
+          {showLabels && <span>Sair</span>}
+        </button>
+
         <div
           className={cn(
             "flex items-center rounded-lg border border-sidebar-border/50 bg-sidebar-accent/50 p-2",
@@ -311,7 +233,6 @@ export function AppSidebar({
         </div>
       </div>
 
-      {/* Botão minimizar / expandir */}
       {onToggleCollapse && !mobile && (
         <button
           type="button"

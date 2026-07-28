@@ -25,9 +25,9 @@ export default function DashboardHome() {
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
         <StatCard
-          title="Contatos"
+          title="Clientes"
           value={stats?.totalClients ?? 0}
-          subtitle="Ver todos os contatos"
+          subtitle="Ver todos os clientes"
           icon={Users}
           href={hasPermission("clientes") ? "/dashboard/clientes" : undefined}
         />

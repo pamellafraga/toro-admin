@@ -150,19 +150,19 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 }
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  admin: ['home', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'chat', 'relatorios', 'notificacoes', 'atividades', 'usuarios', 'admin'],
-  comercial: ['home', 'produtos', 'clientes', 'chat'],
-  marketing: ['home', 'seguradoras', 'chat', 'notificacoes'],
-  captacao: ['home', 'seguradoras', 'clientes', 'chat', 'notificacoes'],
+  admin: ['home', 'chamados', 'produtos', 'clientes', 'seguradoras', 'financeiro', 'relatorios', 'notificacoes', 'atividades', 'usuarios', 'admin'],
+  comercial: ['home', 'produtos', 'clientes'],
+  marketing: ['home', 'seguradoras', 'notificacoes'],
+  captacao: ['home', 'seguradoras', 'clientes', 'notificacoes'],
   financeiro: ['home', 'produtos', 'clientes', 'financeiro', 'relatorios', 'notificacoes'],
   custom: ['home'],
 }
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   home: 'Home',
-  chamados: 'Chamados',
+  chamados: 'SAC',
   produtos: 'Produtos',
-  clientes: 'Contatos',
+  clientes: 'Clientes',
   seguradoras: 'Seguradoras',
   chat: 'Chat Interno',
   financeiro: 'Financeiro',

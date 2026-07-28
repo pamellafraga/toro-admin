@@ -28,16 +28,11 @@ create trigger dashboard_users_updated_at
   before update on public.dashboard_users
   for each row execute function public.set_dashboard_users_updated_at();
 
--- Seed: 2 admins (Admin, Pamella) e 2 comerciais (Lisete, Stefanie)
--- Senha Admin/Pamella: Xpress@101029
--- Senha Lisete: Lisete2026 | Senha Stefanie: Stefanie2026
+-- Seed: usuário admin Toro
+-- Senha: toro@101029
 insert into public.dashboard_users (username, password_hash, role, display_name)
 values
-  ('Admin', '004337285807f7743d82a633a3ca0c825ab00303fb88a27245690867397215da', 'admin', 'Admin'),
-  ('Pamella', '004337285807f7743d82a633a3ca0c825ab00303fb88a27245690867397215da', 'admin', 'Pamella'),
-  ('Roberto', '004337285807f7743d82a633a3ca0c825ab00303fb88a27245690867397215da', 'admin', 'Roberto'),
-  ('Lisete', '490a7fbdccffa5419b4e3e403332d66b8fa0efef53d2e9e8aa366430fb170cdc', 'comercial', 'Lisete'),
-  ('Stefanie', '697f60f318546d50ee5c81c70059bf3b541c988e0958bdb0199055bd10f52f93', 'comercial', 'Stefanie')
+  ('Toro', '8c5a17ecacc48131bdf1ba58a7fa974de370ed4c6d309f6509e831411736ceab', 'admin', 'Toro')
 on conflict (username) do update set
   password_hash = excluded.password_hash,
   role = excluded.role,

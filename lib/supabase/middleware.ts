@@ -34,7 +34,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser()
 
   // Check for local auth
-  const authCookie = request.cookies.get('xpress_auth')?.value
+  const authCookie = request.cookies.get('toro_auth')?.value
   const hasLocalAuth = authCookie ? JSON.parse(authCookie).authenticated : false
 
   // Redirect unauthenticated users to login

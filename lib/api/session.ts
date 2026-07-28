@@ -1,4 +1,4 @@
-export const AUTH_COOKIE = "xpress_auth"
+export const AUTH_COOKIE = "toro_auth"
 
 export interface AuthSession {
   user: string
