@@ -36,8 +36,6 @@ import {
   parseYearMonth,
   resolveFeeCurrency,
   sumMonthSpend,
-  sumMonthlyTotals,
-  sumOneTimeTotals,
 } from "@/lib/company-expenses/totals"
 import { buildExpenseMonthOptions } from "@/lib/company-expenses/month-options"
 import type { CompanyExpenseRow } from "@/lib/db/repositories/company-expenses.repository"
@@ -350,23 +348,9 @@ export default function GastoEmpresaPage() {
 
   const monthOptions = useMemo(() => buildExpenseMonthOptions(), [])
 
-  const { totalUsd: recurringUsd, totalBrl: recurringBrl } = useMemo(
-    () => sumMonthlyTotals(feesForDisplay, usdRate),
-    [feesForDisplay, usdRate],
-  )
-
   const { totalUsd, totalBrl, items: monthItems } = useMemo(
     () => sumMonthSpend(feesForDisplay, filterMonth, usdRate),
     [feesForDisplay, filterMonth, usdRate],
-  )
-
-  const monthSpendByOption = useMemo(
-    () =>
-      monthOptions.map((opt) => ({
-        ...opt,
-        ...sumMonthSpend(feesForDisplay, opt.value, usdRate),
-      })),
-    [feesForDisplay, monthOptions, usdRate],
   )
 
   const filterMonthLabel =
@@ -656,36 +640,6 @@ export default function GastoEmpresaPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-3 sm:p-4">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Gastos por mês
-        </p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {monthSpendByOption.map((row) => (
-            <button
-              key={row.value}
-              type="button"
-              onClick={() => setFilterMonth(row.value)}
-              className={cn(
-                "rounded-lg border px-3 py-2 text-left transition-colors hover:bg-secondary/60",
-                filterMonth === row.value
-                  ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                  : "border-border bg-background",
-              )}
-            >
-              <p className="text-[11px] font-medium text-foreground capitalize">{row.label}</p>
-              <p className="text-sm font-bold text-primary">R$ {row.totalBrl.toFixed(2)}</p>
-              <p className="text-[10px] text-muted-foreground">US ${row.totalUsd.toFixed(2)}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <p className="text-xs text-muted-foreground">
-        Recorrente (equiv. mensal): US ${recurringUsd.toFixed(2)} · R$ {recurringBrl.toFixed(2)}
-        {" · "}
-        Mensais contam todo mês desde fevereiro/2026; anuais só no mês de vencimento; vitalício só em fevereiro/2026.
-      </p>
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>
           Cotação USD/BRL: <strong className="text-foreground">R$ {usdRate.toFixed(4)}</strong>
