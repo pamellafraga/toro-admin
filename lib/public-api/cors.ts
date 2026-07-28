@@ -1,4 +1,4 @@
-import type { NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
 const DEFAULT_SITE_ORIGIN = "https://toro-green.vercel.app"
 

@@ -22,21 +22,21 @@ export function handleApiError(e: unknown, fallback = "Erro interno."): NextResp
 
   if (!isDatabaseConfigured()) {
     return jsonError(
-      "Banco PostgreSQL não configurado. Defina DATABASE_HOST nas variáveis de ambiente (Vercel ou .env.local) e execute os scripts em scripts/locaweb/.",
+      "Banco MySQL não configurado. Defina DATABASE_HOST nas variáveis de ambiente (Vercel ou .env.local).",
       503,
     )
   }
 
-  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection terminated/i.test(msg)) {
+  if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection terminated|ER_ACCESS_DENIED|Access denied for user/i.test(msg)) {
     return jsonError(
-      "Não foi possível conectar ao PostgreSQL. Verifique DATABASE_HOST, firewall da Locaweb e se o IP está liberado.",
+      "Não foi possível conectar ao MySQL. Verifique DATABASE_* no Vercel e libere acesso remoto ao IP do servidor (Locaweb → MySQL remoto ou usuário @%).",
       503,
     )
   }
 
-  if (/relation .* does not exist|undefined table|column .* does not exist/i.test(msg)) {
+  if (/relation .* does not exist|undefined table|column .* does not exist|doesn't exist/i.test(msg)) {
     return jsonError(
-      `Erro no banco: ${msg}. Execute os scripts SQL em scripts/locaweb/ na ordem (001 → 004).`,
+      `Erro no banco: ${msg}. Execute node scripts/run-mysql-setup.js no projeto.`,
       503,
     )
   }
