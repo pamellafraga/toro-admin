@@ -1,5 +1,11 @@
 import mysql, { type Pool, type PoolOptions, type RowDataPacket, type ResultSetHeader } from "mysql2/promise"
 import { getDatabaseConfig, isDatabaseConfigured } from "./config"
+import {
+  isPlanetScaleEnabled,
+  planetscaleQuery,
+  planetscaleQueryMany,
+  planetscaleQueryOne,
+} from "./planetscale-pool"
 
 let pool: Pool | null = null
 
@@ -69,6 +75,9 @@ export async function query<T extends RowDataPacket = RowDataPacket>(
   text: string,
   params: unknown[] = [],
 ): Promise<{ rows: T[]; insertId?: number; affectedRows?: number }> {
+  if (isPlanetScaleEnabled()) {
+    return planetscaleQuery<T>(text, params)
+  }
   const sql = toMysqlSql(text)
   const p = getPool()
   const [result, fields] = await p.execute(sql, params)
@@ -83,6 +92,9 @@ export async function queryOne<T extends RowDataPacket = RowDataPacket>(
   text: string,
   params?: unknown[],
 ): Promise<T | null> {
+  if (isPlanetScaleEnabled()) {
+    return planetscaleQueryOne<T>(text, params)
+  }
   const result = await query<T>(text, params)
   return result.rows[0] ?? null
 }
@@ -91,6 +103,9 @@ export async function queryMany<T extends RowDataPacket = RowDataPacket>(
   text: string,
   params?: unknown[],
 ): Promise<T[]> {
+  if (isPlanetScaleEnabled()) {
+    return planetscaleQueryMany<T>(text, params)
+  }
   const result = await query<T>(text, params)
   return result.rows
 }

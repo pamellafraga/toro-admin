@@ -11,3 +11,4 @@ tsconfig.tsbuildinfo
 storage/nfe-pdfs/
 .vercel
 .env*
+.env.cloud

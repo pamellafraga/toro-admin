@@ -22,14 +22,14 @@ export function handleApiError(e: unknown, fallback = "Erro interno."): NextResp
 
   if (!isDatabaseConfigured()) {
     return jsonError(
-      "Banco MySQL não configurado. Defina DATABASE_HOST nas variáveis de ambiente (Vercel ou .env.local).",
+      "Banco MySQL não configurado. Defina DATABASE_URL ou DATABASE_HOST no Vercel.",
       503,
     )
   }
 
   if (/ECONNREFUSED|ENOTFOUND|ETIMEDOUT|connection terminated|ER_ACCESS_DENIED|Access denied for user/i.test(msg)) {
     return jsonError(
-      "Não foi possível conectar ao MySQL. Verifique DATABASE_* no Vercel e libere acesso remoto ao IP do servidor (Locaweb → MySQL remoto ou usuário @%).",
+      "Não foi possível conectar ao MySQL. A Locaweb bloqueia o Vercel — use MySQL na nuvem (Railway/TiDB) com DATABASE_URL. Veja .env.cloud.example.",
       503,
     )
   }
